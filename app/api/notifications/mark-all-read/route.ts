@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 import { supabase, createServerSupabaseClient } from '@/lib/supabase';
+import { getTokenFromHeaders, getTokenFromCookies, verifyToken, isDevelopment } from '@/lib/auth';
 
 // OPTIONS 요청 처리
 export async function OPTIONS(request: Request) {
@@ -9,172 +9,142 @@ export async function OPTIONS(request: Request) {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     }
   });
 }
 
-// 모든 알림 읽음 표시
+// 모든 알림을 읽음으로 표시
 export async function POST(req: Request) {
   try {
-    console.log('모든 알림 읽음 처리 API 호출됨');
+    console.log('모든 알림 읽음 표시 API 호출됨');
     
-    // 토큰 확인
+    // JWT 토큰 확인
     const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
     console.log('토큰 정보:', token ? '토큰 있음' : '토큰 없음');
     
-    if (!token) {
-      console.log('토큰이 없음');
-      return new NextResponse(
-        JSON.stringify({ 
-          error: '로그인이 필요합니다.', 
-          code: 'AUTH_ERROR' 
-        }),
-        { 
-          status: 401,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-          }
-        }
-      );
-    }
-
-    // Supabase 토큰 검증 시도
-    let userId: number | null = null;
+    // 사용자 ID 결정
+    let userId: number = 0;
     
-    try {
-      // 1. 먼저 Supabase 토큰 검증 시도
-      const supabaseClient = createServerSupabaseClient(token);
-      const { data: { user }, error: supabaseError } = await supabaseClient.auth.getUser();
+    if (isDevelopment) {
+      // 개발 환경에서는 기본 사용자 ID 사용
+      userId = 3; // 기본 테스트 사용자 ID
+      console.log(`개발 환경에서 기본 사용자 ID(${userId}) 사용`);
+    } else {
+      // 프로덕션 환경에서는 토큰 검증 필요
+      if (!token) {
+        return new NextResponse(
+          JSON.stringify({ error: '인증 토큰이 필요합니다.' }),
+          { 
+            status: 401,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            }
+          }
+        );
+      }
       
-      if (supabaseError) {
-        console.log('Supabase 토큰 검증 실패:', supabaseError.message);
-        // Supabase 인증 실패하면 기존 JWT 검증 시도
-        const decoded = verifyToken(token);
-        if (!decoded || !decoded.userId) {
-          console.log('기존 JWT 토큰도 유효하지 않음');
-          throw new Error('유효하지 않은 인증 정보');
+      const decoded = verifyToken(token);
+      if (!decoded || !decoded.userId) {
+        return new NextResponse(
+          JSON.stringify({ error: '유효하지 않은 인증 토큰입니다.' }),
+          { 
+            status: 401,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            }
+          }
+        );
+      }
+      
+      userId = decoded.userId;
+    }
+    
+    console.log(`사용자 ID(${userId})의 모든 알림을 읽음으로 표시합니다.`);
+    
+    // Supabase로 알림 업데이트 시도, 실패 시 Prisma로 폴백
+    let updated = false;
+    
+    // 1. Supabase 업데이트 시도
+    try {
+      if (supabase) {
+        console.log('Supabase로 알림 업데이트 시도...');
+        
+        const { data, error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', userId.toString())
+          .select();
+        
+        if (error) {
+          console.error('Supabase 알림 업데이트 오류:', error);
+          throw error; // Prisma 폴백으로 진행
         }
-        userId = decoded.userId;
-      } else if (user) {
-        console.log('Supabase 사용자 확인됨:', user.email);
-        // Supabase 사용자의 메타데이터에서 userId 가져오기
-        // 또는 이메일로 Prisma DB에서 사용자 조회
-        const prismaUser = await prisma.user.findUnique({
-          where: { email: user.email || '' },
-          select: { id: true }
+        
+        console.log(`Supabase로 ${data?.length || 0}개 알림 업데이트 성공`);
+        updated = true;
+      } else {
+        throw new Error('Supabase 클라이언트 사용 불가');
+      }
+    } catch (supabaseError) {
+      console.log('Supabase 업데이트 실패, Prisma로 폴백:', supabaseError);
+      
+      // 2. Prisma 폴백 - 모든 알림 업데이트
+      try {
+        const result = await prisma.notification.updateMany({
+          where: { userId },
+          data: { isRead: true }
         });
         
-        if (!prismaUser) {
-          console.log('DB에서 사용자를 찾을 수 없음:', user.email);
-          throw new Error('사용자 정보를 찾을 수 없습니다');
-        }
-        
-        userId = prismaUser.id;
+        console.log(`Prisma로 ${result.count}개 알림 업데이트 성공`);
+        updated = true;
+      } catch (prismaError) {
+        console.error('Prisma 알림 업데이트 오류:', prismaError);
+        throw prismaError;
       }
-    } catch (authError) {
-      console.error('인증 오류:', authError);
-      return new NextResponse(
-        JSON.stringify({ 
-          error: '유효하지 않은 인증 정보입니다.', 
-          code: 'AUTH_ERROR' 
-        }),
-        { 
-          status: 401,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-          }
-        }
-      );
     }
-
-    if (!userId) {
-      console.log('유효한 사용자 ID를 확인할 수 없음');
-      return new NextResponse(
-        JSON.stringify({ 
-          error: '유효하지 않은 인증 정보입니다.', 
-          code: 'AUTH_ERROR' 
-        }),
-        { 
-          status: 401,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-          }
-        }
-      );
+    
+    if (!updated) {
+      throw new Error('알림 업데이트 실패');
     }
-
-    // 해당 사용자의 모든 알림을 읽음 상태로 업데이트
-    try {
-      const result = await prisma.notification.updateMany({
-        where: {
-          userId: userId,
-          isRead: false
-        },
-        data: {
-          isRead: true
-        }
-      });
-
-      console.log(`${result.count}개의 알림이 읽음 처리되었습니다.`);
-      
-      return new NextResponse(
-        JSON.stringify({ 
-          success: true, 
-          message: `${result.count}개의 알림이 읽음 처리되었습니다.`,
-          count: result.count
-        }),
-        { 
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-          }
-        }
-      );
-    } catch (dbError) {
-      console.error('알림 업데이트 오류:', dbError);
-      return new NextResponse(
-        JSON.stringify({ 
-          error: '알림 처리 중 오류가 발생했습니다.', 
-          code: 'DB_ERROR' 
-        }),
-        { 
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-          }
-        }
-      );
-    }
-  } catch (error) {
-    console.error('알림 읽음 처리 API 오류:', error);
+    
     return new NextResponse(
       JSON.stringify({ 
-        error: '서버에서 오류가 발생했습니다.', 
-        code: 'SERVER_ERROR' 
+        success: true, 
+        message: '모든 알림이 읽음으로 표시되었습니다.' 
+      }),
+      { 
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      }
+    );
+  } catch (error) {
+    console.error('모든 알림 읽음 표시 중 오류:', error);
+    
+    return new NextResponse(
+      JSON.stringify({ 
+        success: false, 
+        message: '알림 업데이트 중 오류가 발생했습니다.',
+        error: isDevelopment ? String(error) : undefined
       }),
       { 
         status: 500,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }
       }

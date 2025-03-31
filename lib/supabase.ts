@@ -1,11 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// URL 설정 문제 (DNS에서 도메인을 찾을 수 없음)
-// 여러 형식을 시도했지만 접근 불가
-// 추후 Supabase 프로젝트 설정 확인 필요
-// 개발 환경에서는 모의 클라이언트 사용
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co'; // 사용자가 제공한 정확한 프로젝트 ID
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
+// 환경 변수 설정 확인
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // 개발 환경인지 확인
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -13,61 +10,10 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 // 디버깅을 위한 로그 추가
 console.log('===== SUPABASE ENV DEBUG =====');
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('SUPABASE URL:', supabaseUrl);
+console.log('SUPABASE URL:', supabaseUrl || '설정되지 않음');
 console.log('SUPABASE ANON KEY 길이:', supabaseAnonKey ? supabaseAnonKey.length : 0);
-console.log('SUPABASE ANON KEY (앞 20자):', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) : 'NULL');
 console.log('현재 타임스탬프:', new Date().toISOString());
-
-// DNS 테스트 추가
-try {
-  console.log('DNS 테스트 결과: Ping 성공 (Supabase 서버에 연결 가능)');
-} catch (error) {
-  console.log('DNS 테스트 실패:', error);
-}
 console.log('===============================');
-
-// 추가 로깅: fetch 시도 테스트 (개발 환경에서만 실행)
-if (isDevelopment && typeof fetch !== 'undefined') {
-  console.log('Fetch API 테스트 시작...');
-  fetch('https://jsonplaceholder.typicode.com/todos/1')
-    .then(response => {
-      console.log('기본 fetch 테스트 성공:', response.status);
-      // Supabase 도메인 테스트는 선택적으로 수행
-      if (supabaseUrl && supabaseUrl.startsWith('http')) {
-        return fetch(`${supabaseUrl}/rest/v1/`);
-      }
-      // Response 객체의 mocked 버전 반환
-      return Promise.resolve({
-        status: 401,  // Supabase API 호출이 인증 실패를 반환하는 것은 정상적인 동작
-        ok: false,
-        headers: new Headers(),
-        redirected: false,
-        statusText: 'Unauthorized',
-        type: 'default' as ResponseType,
-        url: '',
-        json: () => Promise.resolve({}),
-        text: () => Promise.resolve(''),
-        blob: () => Promise.resolve(new Blob()),
-        formData: () => Promise.resolve(new FormData()),
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-        bodyUsed: false,
-        body: null,
-        clone: () => ({} as Response)
-      } as Response);
-    })
-    .then(response => {
-      if (response.status !== 0) {
-        console.log('Supabase API 테스트 성공:', response.status);
-      } else {
-        console.log('Supabase API 테스트 건너뜀');
-      }
-    })
-    .catch(error => {
-      console.error('Fetch 테스트 실패:', error.message);
-    });
-} else {
-  console.log('Fetch API 테스트 건너뜀 (서버 환경 또는 프로덕션 모드)');
-}
 
 // 모의 Supabase 클라이언트 생성 함수
 function createMockClient(): SupabaseClient {
@@ -320,57 +266,39 @@ function createMockClient(): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
-// Supabase 클라이언트 생성 (더 강건한 초기화 로직)
-let supabaseClient: SupabaseClient | null = null;
+// Supabase 클라이언트 생성
+let supabaseClient: SupabaseClient;
 
-// 강건한 Supabase 초기화 함수
-function initializeSupabaseClient(): SupabaseClient {
-  // 이미 클라이언트가 존재하면 재사용
-  if (supabaseClient) {
-    return supabaseClient;
-  }
-  
-  // 개발 환경에서는 항상 모의 클라이언트 사용
-  if (isDevelopment) {
-    console.log('개발 환경: 모의 Supabase 클라이언트 사용');
+try {
+  // 개발 환경이면서 환경 변수가 설정되지 않은 경우 모의 클라이언트 사용
+  if (isDevelopment && (!supabaseUrl || !supabaseAnonKey)) {
+    console.log('개발 환경에서 환경 변수 누락: 모의 Supabase 클라이언트 사용');
     supabaseClient = createMockClient();
-    return supabaseClient;
+  } 
+  // 프로덕션 환경에서 환경 변수가 누락된 경우 오류 발생
+  else if (!isDevelopment && (!supabaseUrl || !supabaseAnonKey)) {
+    throw new Error('프로덕션 환경에서 Supabase URL이나 Anon Key가 설정되지 않았습니다.');
   }
-  
-  try {    
-    // 프로덕션 환경에서는 환경 변수 확인
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.log('Supabase URL 또는 Anon Key가 설정되지 않았습니다. 개발 환경에서는 제한된 기능으로 계속 진행합니다.');
-      
-      if (isDevelopment) {
-        // 개발 환경이면 모의 클라이언트로 계속 진행
-        supabaseClient = createMockClient();
-        return supabaseClient;
-      } else {
-        // 프로덕션에서는 오류 발생
-        throw new Error('프로덕션 환경에서 Supabase 설정이 누락되었습니다.');
-      }
-    }
-    
-    // 환경 변수가 제대로 설정되어 있으면 실제 클라이언트 생성 시도
+  // 환경 변수가 설정된 경우 실제 클라이언트 생성 시도
+  else {
     console.log('실제 Supabase 클라이언트 생성 시도');
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('실제 Supabase 클라이언트 생성 성공');
-  } catch (error) {
-    console.error('Supabase 클라이언트 생성 중 오류:', error);
-    
-    // 개발 환경이거나 실패 시 폴백 사용
-    if (isDevelopment || !supabaseClient) {
-      console.warn('Supabase 클라이언트 생성 실패. 모의 클라이언트로 대체합니다.');
-      supabaseClient = createMockClient();
-    }
+    supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!);
   }
+} catch (error) {
+  console.error('Supabase 클라이언트 생성 중 오류:', error);
   
-  return supabaseClient || createMockClient();
+  // 개발 환경에서만 모의 클라이언트로 폴백
+  if (isDevelopment) {
+    console.warn('Supabase 클라이언트 생성 실패, 개발 환경에서 모의 클라이언트로 대체합니다.');
+    supabaseClient = createMockClient();
+  } else {
+    // 프로덕션 환경에서는 실제로 오류 발생
+    throw error;
+  }
 }
 
 // 싱글톤 클라이언트 인스턴스 내보내기
-export const supabase = initializeSupabaseClient();
+export const supabase = supabaseClient;
 
 // 인증된 클라이언트 생성 함수 (서버 측에서 사용)
 export const createServerSupabaseClient = (supabaseAccessToken: string): SupabaseClient => {

@@ -1,11 +1,15 @@
 import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, verifyToken, getTokenFromHeaders, getTokenFromCookies } from "@/lib/auth";
+import { supabase, createServerSupabaseClient } from "@/lib/supabase";
 import { z } from "zod";
 
 const prisma = new PrismaClient();
 // 개발 환경인지 확인하는 변수 추가
 const isDevelopment = process.env.NODE_ENV === 'development';
+
+// 기본 테스트 사용자 ID (개발 환경에서 사용)
+const DEFAULT_TEST_USER_ID = 3;
 
 // 입력 데이터 유효성 검사를 위한 zod 스키마
 const postSchema = z.object({
@@ -73,18 +77,43 @@ export async function POST(request: NextRequest) {
   try {
     console.log("글 작성 API 호출됨");
     
-    // 현재 인증된 사용자 정보 가져오기
-    const authUser = await getAuthenticatedUser(request);
+    // JWT 토큰 확인
+    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
+    console.log('토큰 정보:', token ? '토큰 있음' : '토큰 없음');
     
-    if (!authUser) {
-      console.log("인증된 사용자를 찾을 수 없음");
-      return addCorsHeaders(NextResponse.json(
-        { success: false, message: "인증되지 않은 사용자입니다." },
-        { status: 401 }
-      ));
+    // 사용자 ID 결정
+    let userId: number;
+    
+    // 개발 환경에서는 항상 기본 테스트 사용자 ID 사용
+    if (isDevelopment) {
+      userId = DEFAULT_TEST_USER_ID;
+      console.log(`개발 환경에서 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
+      
+      // 옵션: 개발 환경에서도 Supabase 토큰 확인 (필요한 경우)
+      if (token) {
+        try {
+          const supabaseServerClient = createServerSupabaseClient(token);
+          console.log('개발 환경: Supabase 클라이언트 생성 성공');
+        } catch (err) {
+          console.log('개발 환경: Supabase 클라이언트 생성 실패, 기본 구현으로 진행');
+        }
+      }
+    } else {
+      // 프로덕션 환경에서는 인증 필요
+      // 현재 인증된 사용자 정보 가져오기
+      const authUser = await getAuthenticatedUser(request);
+      
+      if (!authUser) {
+        console.log("인증된 사용자를 찾을 수 없음");
+        return addCorsHeaders(NextResponse.json(
+          { success: false, message: "인증되지 않은 사용자입니다." },
+          { status: 401 }
+        ));
+      }
+      
+      userId = Number(authUser.id);
+      console.log("인증된 사용자 ID:", userId);
     }
-
-    console.log("인증된 사용자 ID:", authUser.id);
 
     // 요청 본문 파싱
     const body = await request.json();
@@ -114,7 +143,7 @@ export async function POST(request: NextRequest) {
           title: body.title,
           content: body.content,
           category: body.category || "GENERAL",
-          authorId: authUser.id,
+          authorId: userId, // 항상 숫자로 저장
           eventName: body.eventName || null,
           eventDate: body.eventDate || null,
           eventVenue: body.eventVenue || null,
@@ -164,6 +193,24 @@ export async function GET(request: NextRequest) {
   try {
     console.log("글 목록 API 호출됨");
     
+    // JWT 토큰 확인 (알림 API와 유사하게 구현)
+    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
+    console.log('토큰 정보:', token ? '토큰 있음' : '토큰 없음');
+    
+    // 개발 환경에서는 Supabase 클라이언트 생성 시도
+    if (isDevelopment) {
+      try {
+        console.log('개발 환경에서 Supabase 검증 시도 중...');
+        // Supabase 유효성 여부 확인
+        if (token) {
+          const supabaseServerClient = createServerSupabaseClient(token);
+          console.log('개발 환경: Supabase 클라이언트 생성 성공');
+        }
+      } catch (err) {
+        console.log('개발 환경: Supabase 클라이언트 생성 실패, 기본 구현으로 진행');
+      }
+    }
+    
     // 쿼리 파라미터 처리
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -197,25 +244,27 @@ export async function GET(request: NextRequest) {
     // 특정 사용자의 게시글만 필터링
     if (userId) {
       try {
-        // UUID 형식이거나 숫자가 아닌 경우 처리
-        if (isNaN(parseInt(userId)) || userId.includes('-')) {
-          console.log(`비표준 userId 형식 감지: ${userId}`);
-          // Supabase 또는 외부 시스템의 UUID 형식일 경우, Prisma에서는 조회 불가
-          // 3은 내부 사용자 ID로, 개발 환경에서 기본값으로 설정
-          where.authorId = isDevelopment ? 3 : -1; // 존재하지 않는 ID로 기본 설정
+        // 개발 환경에서는 항상 기본 사용자 ID 사용
+        if (isDevelopment) {
+          where.authorId = DEFAULT_TEST_USER_ID;
+          console.log(`개발 환경: 기본 사용자 ID(${DEFAULT_TEST_USER_ID})로 필터링`);
         } else {
-          // 숫자 형식인 경우 정상 변환
-          where.authorId = parseInt(userId);
-          if (isNaN(where.authorId)) {
-            console.warn(`유효하지 않은 userId: ${userId}, 기본값으로 대체`);
-            where.authorId = isDevelopment ? 3 : -1;
+          // 숫자로 변환 시도
+          const parsedUserId = parseInt(userId);
+          
+          if (!isNaN(parsedUserId)) {
+            where.authorId = parsedUserId;
+            console.log(`사용자 ID로 필터링: ${parsedUserId}`);
+          } else {
+            console.warn(`유효하지 않은 userId: ${userId}, 쿼리 건너뜀`);
+            // 유효하지 않은 ID는 결과가 없도록 설정
+            where.authorId = -1; // 존재하지 않는 ID
           }
         }
-        console.log(`사용자 ID로 필터링: ${where.authorId}`);
       } catch (error) {
         console.error('userId 처리 중 오류:', error);
-        // 오류 발생 시 기본값 사용
-        where.authorId = isDevelopment ? 3 : -1;
+        // 오류 발생 시 결과 없도록 설정
+        where.authorId = -1;
       }
     }
     
@@ -234,7 +283,7 @@ export async function GET(request: NextRequest) {
     
     try {
       // 개발 환경에서 DB 연결 테스트
-      if (process.env.NODE_ENV === 'development') {
+      if (isDevelopment) {
         try {
           await prisma.$queryRaw`SELECT 1`;
           console.log("데이터베이스 연결 테스트 성공");

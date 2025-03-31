@@ -35,10 +35,15 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'supabase-refresh-s
 
 // 디버깅을 위한 로그 추가
 console.log('===== JWT ENV DEBUG =====');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('isDevelopment:', isDevelopment);
 console.log('JWT_SECRET 설정:', !!JWT_SECRET);
 console.log('JWT_SECRET 길이:', JWT_SECRET.length);
 console.log('JWT_SECRET 출처:', process.env.JWT_SECRET ? '환경 변수' : '하드코딩된 값');
 console.log('=========================');
+
+// 기본 테스트 사용자 ID (개발 환경에서 사용)
+const DEFAULT_TEST_USER_ID = 3;
 
 // NextAuth 옵션 설정
 export const authOptions: NextAuthOptions = {
@@ -94,48 +99,23 @@ export function generateRefreshToken(userId: number): string {
 
 // JWT 토큰 검증 함수 - 안전하게 처리하도록 수정
 export function verifyToken(token: string | null) {
+  // 토큰이 없는 경우
   if (!token) {
     console.log("토큰이 제공되지 않았습니다.");
     
     // 개발 환경에서는 기본 사용자로 진행
     if (isDevelopment) {
-      console.log("개발 환경에서는 기본 사용자 ID 사용");
-      return { userId: 3, name: '개발 테스트 사용자' };
+      console.log(`개발 환경에서는 기본 사용자 ID(${DEFAULT_TEST_USER_ID})를 사용`);
+      return { userId: DEFAULT_TEST_USER_ID, name: '개발 테스트 사용자' };
     }
     
     return null;
   }
   
-  // 개발 환경에서는 항상 성공 처리
+  // 개발 환경 처리 - 항상 기본 사용자 ID 반환
   if (isDevelopment) {
-    console.log("개발 환경에서 임시 토큰 검증 성공");
-    // 토큰에서 사용자 ID 추출 시도
-    try {
-      if (token.startsWith('dev-jwt-')) {
-        // 개발 환경 특수 토큰 처리
-        const parts = token.split('-');
-        if (parts.length >= 3) {
-          const userId = parseInt(parts[parts.length - 1]);
-          if (!isNaN(userId)) {
-            return { userId, name: '개발 테스트 사용자' };
-          }
-        }
-      }
-      
-      // 표준 JWT 토큰 검증 시도 - 실패해도 기본값 사용
-      try {
-        const decoded = jsonwebtoken.verify(token, JWT_SECRET) as { userId: number; name?: string };
-        return decoded;
-      } catch (verifyError) {
-        // 기본 사용자로 폴백
-        console.log("토큰 검증 실패, 개발 환경에서 기본 사용자 사용");
-        return { userId: 3, name: '개발 테스트 사용자' };
-      }
-    } catch (parseError) {
-      // 파싱 오류 발생 시 기본 사용자로 폴백
-      console.log("토큰 파싱 오류, 개발 환경에서 기본 사용자 사용");
-      return { userId: 3, name: '개발 테스트 사용자' };
-    }
+    console.log(`개발 환경에서 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
+    return { userId: DEFAULT_TEST_USER_ID, name: '개발 테스트 사용자' };
   }
   
   // 프로덕션 환경에서 표준 JWT 검증
@@ -159,31 +139,8 @@ export function verifyAccessToken(token: string) {
     
     // 개발 환경에서는 항상 성공 처리
     if (isDevelopment) {
-      console.log("개발 환경에서 토큰 검증 항상 성공 처리");
-      
-      // 토큰 형식 확인 (개발 토큰 패턴)
-      if (token.startsWith('dev-jwt-')) {
-        console.log("개발 환경 토큰 감지됨");
-        const parts = token.split('-');
-        if (parts.length >= 3) {
-          const userId = parseInt(parts[parts.length - 1]);
-          if (!isNaN(userId)) {
-            console.log("개발 환경 토큰 검증 성공, userId:", userId);
-            return { userId };
-          }
-        }
-      }
-      
-      // 표준 JWT 검증 시도
-      try {
-        const decoded = jsonwebtoken.verify(token, JWT_SECRET);
-        console.log("JWT 토큰 검증 성공", decoded);
-        return decoded;
-      } catch (error) {
-        // 개발 환경에서는 항상 성공 처리
-        console.log("개발 환경에서 토큰 검증 실패해도 성공 처리");
-        return { userId: 3 };
-      }
+      console.log(`개발 환경에서 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
+      return { userId: DEFAULT_TEST_USER_ID };
     }
     
     // 프로덕션 환경에서 표준 검증
@@ -195,8 +152,8 @@ export function verifyAccessToken(token: string) {
     
     // 개발 환경에서는 기본값 사용
     if (isDevelopment) {
-      console.log("개발 환경에서는 기본 사용자로 처리");
-      return { userId: 3 };
+      console.log(`개발 환경에서는 기본 사용자 ID(${DEFAULT_TEST_USER_ID})로 처리`);
+      return { userId: DEFAULT_TEST_USER_ID };
     }
     
     return null;
@@ -205,6 +162,12 @@ export function verifyAccessToken(token: string) {
 
 // 리프레시 토큰 유효성 검증
 export function verifyRefreshToken(token: string) {
+  // 개발 환경에서는 항상 성공 처리
+  if (isDevelopment) {
+    console.log(`개발 환경에서 리프레시 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
+    return { userId: DEFAULT_TEST_USER_ID };
+  }
+  
   try {
     return jsonwebtoken.verify(token, JWT_REFRESH_SECRET);
   } catch (error) {
@@ -239,6 +202,16 @@ export function getTokenFromCookies(request: Request): string | null {
  */
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
+    // 개발 환경에서는 항상 기본 사용자 정보 반환
+    if (isDevelopment) {
+      console.log(`개발 환경에서 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
+      return {
+        id: DEFAULT_TEST_USER_ID,
+        name: '개발 테스트 사용자',
+        email: 'test@example.com'
+      };
+    }
+    
     // 1. JWT 토큰 확인 (쿠키 또는 헤더에서)
     const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
     
@@ -289,6 +262,17 @@ export async function getAuthenticatedUser(request: NextRequest) {
     return user;
   } catch (error) {
     console.error('사용자 인증 확인 중 오류:', error);
+    
+    // 개발 환경에서는 오류가 발생해도 기본 사용자 정보 반환
+    if (isDevelopment) {
+      console.log(`개발 환경에서 오류 발생 시 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
+      return {
+        id: DEFAULT_TEST_USER_ID,
+        name: '개발 테스트 사용자',
+        email: 'test@example.com'
+      };
+    }
+    
     return null;
   }
 }

@@ -104,11 +104,11 @@ async function migrateUsers() {
             email: user.email,
             name: user.name,
             role: user.role,
-            profileImage: user.profileImage,
-            phoneNumber: user.phoneNumber,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-            bankInfo: user.bankInfo,
+            profile_image: user.profileImage,
+            phone_number: user.phoneNumber,
+            created_at: user.createdAt,
+            updated_at: user.updatedAt,
+            bank_info: user.bankInfo,
             auth_id: authUserId,
           }, { onConflict: 'id' });
 
@@ -151,16 +151,16 @@ async function migratePosts() {
             title: post.title,
             content: post.content,
             category: post.category,
-            createdAt: post.createdAt,
-            updatedAt: post.updatedAt,
-            authorId: post.authorId,
-            isDeleted: post.isDeleted,
-            viewCount: post.viewCount,
-            eventName: post.eventName,
-            eventDate: post.eventDate,
-            eventVenue: post.eventVenue,
-            ticketPrice: post.ticketPrice ? post.ticketPrice.toString() : null, // BigInt를 문자열로 변환
-            contactInfo: post.contactInfo,
+            created_at: post.createdAt,
+            updated_at: post.updatedAt,
+            user_id: post.authorId,
+            is_deleted: post.isDeleted,
+            view_count: post.viewCount,
+            event_name: post.eventName,
+            event_date: post.eventDate,
+            event_venue: post.eventVenue,
+            ticket_price: post.ticketPrice ? post.ticketPrice.toString() : null,
+            contact_info: post.contactInfo,
             status: post.status,
           }, { onConflict: 'id' });
 
@@ -199,13 +199,15 @@ async function migrateNotifications() {
         const { error } = await supabase
           .from('Notification')
           .upsert({
-            id: notification.id,
-            userId: notification.userId,
-            postId: notification.postId ? notification.postId.toString() : null, // BigInt를 문자열로 변환
+            id: notification.id.toString(), // ID를 문자열로 변환
+            user_id: notification.userId.toString(), // userId를 user_id로 변경
+            post_id: notification.postId ? notification.postId.toString() : null, // postId를 post_id로 변경
             message: notification.message,
             type: notification.type,
-            isRead: notification.isRead,
-            createdAt: notification.createdAt,
+            is_read: notification.isRead, // isRead를 is_read로 변경
+            created_at: notification.createdAt, // createdAt을 created_at으로 변경
+            // updatedAt이 없는 경우 createdAt 사용
+            updated_at: notification.createdAt
           }, { onConflict: 'id' });
 
         if (error) {
@@ -240,27 +242,19 @@ async function migratePurchases() {
     
     const promises = batch.map(async (purchase) => {
       try {
+        // 구매 스키마를 확인하고 필드를 매핑합니다
         const { error } = await supabase
           .from('Purchase')
           .upsert({
-            id: purchase.id,
-            orderNumber: purchase.orderNumber,
-            buyerId: purchase.buyerId,
-            sellerId: purchase.sellerId,
-            postId: purchase.postId ? purchase.postId.toString() : null, // BigInt를 문자열로 변환
-            quantity: purchase.quantity,
-            totalPrice: purchase.totalPrice.toString(), // BigInt를 문자열로 변환
+            id: purchase.id.toString(),
+            // 실제 Purchase 모델의 필드에 맞게 매핑
+            user_id: purchase.buyerId ? purchase.buyerId.toString() : null,  // buyerId를 user_id로 변경
+            post_id: purchase.postId ? purchase.postId.toString() : null,
+            price: purchase.totalPrice ? purchase.totalPrice.toString() : '0',  // totalPrice를 price로 변경
             status: purchase.status,
-            paymentMethod: purchase.paymentMethod,
-            selectedSeats: purchase.selectedSeats,
-            phoneNumber: purchase.phoneNumber,
-            ticketTitle: purchase.ticketTitle,
-            eventDate: purchase.eventDate,
-            eventVenue: purchase.eventVenue,
-            ticketPrice: purchase.ticketPrice ? purchase.ticketPrice.toString() : null, // BigInt를 문자열로 변환
-            imageUrl: purchase.imageUrl,
-            createdAt: purchase.createdAt,
-            updatedAt: purchase.updatedAt,
+            payment_method: purchase.paymentMethod,
+            created_at: purchase.createdAt,
+            updated_at: purchase.updatedAt
           }, { onConflict: 'id' });
 
         if (error) {
