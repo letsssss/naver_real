@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
+import { verifyToken, getTokenFromHeaders, getTokenFromCookies, isDevelopment } from '@/lib/auth';
 import { cors } from '@/lib/cors';
+import { supabase, createServerSupabaseClient } from '@/lib/supabase';
 
 // OPTIONS 요청 처리
 export async function OPTIONS(request: Request) {
@@ -279,17 +280,43 @@ export async function POST(req: Request) {
       );
     }
 
-    // 알림 생성 - Prisma 쿼리를 사용하여 Notification 모델에 접근
+    // 알림 생성 - Supabase 시도, 실패하면 Prisma로 폴백
     try {
-      const notification = await prisma.notification.create({
-        data: {
-          userId,
-          postId,
-          message,
-          type,
-        },
-      });
-
+      console.log('Supabase로 알림 생성 시도...');
+      
+      // Supabase 데이터 형식으로 변환
+      const notificationData = {
+        user_id: userId,
+        post_id: postId,
+        message,
+        type,
+        is_read: false
+      };
+      
+      const { data: supabaseNotification, error } = await supabase
+        .from('notifications')
+        .insert(notificationData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Supabase 알림 생성 오류:', error);
+        throw error; // Prisma 폴백으로 이동
+      }
+      
+      console.log('Supabase로 알림 생성 성공:', supabaseNotification);
+      
+      // Supabase 응답 형식을 앱 형식으로 변환
+      const notification = {
+        id: supabaseNotification.id,
+        userId: supabaseNotification.user_id,
+        postId: supabaseNotification.post_id,
+        message: supabaseNotification.message,
+        type: supabaseNotification.type,
+        isRead: supabaseNotification.is_read,
+        createdAt: new Date(supabaseNotification.created_at)
+      };
+      
       return NextResponse.json({ notification }, 
         { status: 201, headers: {
           'Access-Control-Allow-Origin': '*',
@@ -297,16 +324,32 @@ export async function POST(req: Request) {
           'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }}
       );
-    } catch (dbError) {
-      console.error('데이터베이스 쿼리 오류:', dbError);
-      return NextResponse.json(
-        { error: '알림 생성 중 데이터베이스 오류가 발생했습니다. 데이터베이스가 최신 상태인지 확인하세요.' },
-        { status: 500, headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }}
-      );
+      
+    } catch (supabaseError) {
+      console.log('Supabase 알림 생성 실패, Prisma 폴백 사용:', supabaseError);
+      
+      // Prisma 폴백
+      try {
+        const notification = await prisma.notification.create({
+          data: {
+            userId,
+            postId,
+            message,
+            type,
+          },
+        });
+
+        return NextResponse.json({ notification }, 
+          { status: 201, headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }}
+        );
+      } catch (prismaError) {
+        console.error('Prisma 알림 생성 오류:', prismaError);
+        throw prismaError;
+      }
     }
   } catch (error) {
     console.error('알림 생성 중 오류 발생:', error);
@@ -352,9 +395,21 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // 토큰 검증
-    const decoded = verifyToken(token);
-    if (!decoded || !decoded.userId) {
+    // JWT 토큰 검증만 사용하도록 수정
+    let userId: number | null = null;
+
+    try {
+      // JWT 토큰 검증
+      console.log('JWT 토큰 검증 시도...');
+      const decoded = verifyToken(token);
+      if (!decoded || !decoded.userId) {
+        console.log('JWT 토큰이 유효하지 않음');
+        throw new Error('유효하지 않은 인증 정보');
+      }
+      userId = decoded.userId;
+      console.log('JWT 인증 성공, 사용자 ID:', userId);
+    } catch (authError) {
+      console.error('인증 실패:', authError);
       return NextResponse.json(
         { error: '유효하지 않은 인증 정보입니다.' },
         { status: 401, headers: {
@@ -365,49 +420,129 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // 알림 소유자 확인
-    const notification = await prisma.notification.findUnique({
-      where: { id: notificationId },
-      select: { userId: true }
-    });
+    // Supabase로 알림 소유자 확인 및 업데이트 시도
+    try {
+      console.log('Supabase로 알림 확인 및 업데이트 시도...');
+      
+      // 알림 소유자 확인
+      const { data: notification, error: fetchError } = await supabase
+        .from('notifications')
+        .select('user_id')
+        .eq('id', notificationId)
+        .single();
+      
+      if (fetchError) {
+        console.error('Supabase 알림 조회 오류:', fetchError);
+        throw fetchError; // Prisma 폴백으로 이동
+      }
+      
+      if (!notification) {
+        return NextResponse.json(
+          { error: '알림을 찾을 수 없습니다.' },
+          { status: 404, headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }}
+        );
+      }
 
-    if (!notification) {
+      if (notification.user_id !== userId) {
+        return NextResponse.json(
+          { error: '이 알림에 대한 권한이 없습니다.' },
+          { status: 403, headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }}
+        );
+      }
+
+      // 읽음 상태 업데이트
+      const { data: updatedNotification, error: updateError } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+        .select()
+        .single();
+      
+      if (updateError) {
+        console.error('Supabase 알림 업데이트 오류:', updateError);
+        throw updateError; // Prisma 폴백으로 이동
+      }
+      
+      // Supabase 응답 형식을 앱 형식으로 변환
+      const formattedNotification = {
+        id: updatedNotification.id,
+        userId: updatedNotification.user_id,
+        postId: updatedNotification.post_id,
+        message: updatedNotification.message,
+        type: updatedNotification.type,
+        isRead: updatedNotification.is_read,
+        createdAt: new Date(updatedNotification.created_at)
+      };
+      
       return NextResponse.json(
-        { error: '알림을 찾을 수 없습니다.' },
-        { status: 404, headers: {
+        { success: true, notification: formattedNotification },
+        { status: 200, headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }}
       );
+      
+    } catch (supabaseError) {
+      console.log('Supabase 알림 업데이트 실패, Prisma 폴백 사용:', supabaseError);
+      
+      // Prisma 폴백
+      try {
+        // 알림 소유자 확인
+        const notification = await prisma.notification.findUnique({
+          where: { id: notificationId },
+          select: { userId: true }
+        });
+
+        if (!notification) {
+          return NextResponse.json(
+            { error: '알림을 찾을 수 없습니다.' },
+            { status: 404, headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            }}
+          );
+        }
+
+        if (notification.userId !== userId) {
+          return NextResponse.json(
+            { error: '이 알림에 대한 권한이 없습니다.' },
+            { status: 403, headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            }}
+          );
+        }
+
+        // 읽음 상태 업데이트
+        const updatedNotification = await prisma.notification.update({
+          where: { id: notificationId },
+          data: { isRead: true }
+        });
+
+        return NextResponse.json(
+          { success: true, notification: updatedNotification },
+          { status: 200, headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }}
+        );
+      } catch (prismaError) {
+        console.error('Prisma 알림 업데이트 오류:', prismaError);
+        throw prismaError;
+      }
     }
-
-    if (notification.userId !== decoded.userId) {
-      return NextResponse.json(
-        { error: '이 알림에 대한 권한이 없습니다.' },
-        { status: 403, headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }}
-      );
-    }
-
-    // 읽음 상태 업데이트
-    const updatedNotification = await prisma.notification.update({
-      where: { id: notificationId },
-      data: { isRead: true }
-    });
-
-    return NextResponse.json(
-      { success: true, notification: updatedNotification },
-      { status: 200, headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-      }}
-    );
-
   } catch (error) {
     console.error('알림 업데이트 오류:', error);
     return NextResponse.json(

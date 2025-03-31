@@ -110,8 +110,13 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
-      // 토큰 가져오기 (JWT 또는 Supabase)
-      const authToken = localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      // Supabase 토큰을 우선적으로 사용
+      let authToken = localStorage.getItem('supabase_token');
+      
+      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
+      if (!authToken) {
+        authToken = localStorage.getItem('token');
+      }
       
       const response = await fetch('/api/notifications', {
         method: 'GET',
@@ -180,8 +185,13 @@ export function NotificationDropdown() {
 
   const handleNotificationClick = async (id: number) => {
     try {
-      // 토큰 가져오기 (JWT 또는 Supabase)
-      const authToken = localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      // Supabase 토큰을 우선적으로 사용
+      let authToken = localStorage.getItem('supabase_token');
+      
+      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
+      if (!authToken) {
+        authToken = localStorage.getItem('token');
+      }
       
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
@@ -208,22 +218,25 @@ export function NotificationDropdown() {
 
   const markAllAsRead = async () => {
     try {
-      // 토큰 가져오기 (JWT 또는 Supabase)
-      const authToken = localStorage.getItem('token') || localStorage.getItem('supabase_token');
+      // Supabase 토큰을 우선적으로 사용
+      let authToken = localStorage.getItem('supabase_token');
       
-      const unreadNotifications = notifications.filter(n => !n.isRead)
-      await Promise.all(
-        unreadNotifications.map(notification =>
-          fetch('/api/notifications', {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': authToken ? `Bearer ${authToken}` : '',
-            },
-            body: JSON.stringify({ notificationId: notification.id }),
-          })
-        )
-      )
+      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
+      if (!authToken) {
+        authToken = localStorage.getItem('token');
+      }
+      
+      const response = await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('알림 상태 일괄 업데이트에 실패했습니다.')
+      }
 
       setNotifications(notifications.map(notification => ({ ...notification, isRead: true })))
     } catch (error) {

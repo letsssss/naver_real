@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { comparePassword, generateAccessToken, generateRefreshToken } from "@/lib/auth"
 import jwt from "jsonwebtoken"
-import { supabase } from "@/utils/supabaseClient"
+import { supabase } from "@/lib/supabase"
 
 // JWT 시크릿 키 정의
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
