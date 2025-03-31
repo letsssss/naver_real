@@ -26,15 +26,18 @@ declare module 'next-auth/jwt' {
 
 const prisma = new PrismaClient();
 
-// 하드코딩된 JWT 시크릿 키 (환경 변수 사용하지 않음)
-const JWT_SECRET = 'supabase-jwt-secret-key-for-development';
-const JWT_REFRESH_SECRET = 'supabase-refresh-secret-key-for-development';
+// 개발 환경인지 확인하는 함수
+export const isDevelopment = process.env.NODE_ENV === 'development';
+
+// 환경 변수에서 JWT 시크릿 키 가져오기 (폴백으로 하드코딩된 값 사용)
+const JWT_SECRET = process.env.JWT_SECRET || 'supabase-jwt-secret-key-for-development';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'supabase-refresh-secret-key-for-development';
 
 // 디버깅을 위한 로그 추가
 console.log('===== JWT ENV DEBUG =====');
 console.log('JWT_SECRET 설정:', !!JWT_SECRET);
 console.log('JWT_SECRET 길이:', JWT_SECRET.length);
-console.log('하드코딩된 값을 사용 중입니다.');
+console.log('JWT_SECRET 출처:', process.env.JWT_SECRET ? '환경 변수' : '하드코딩된 값');
 console.log('=========================');
 
 // NextAuth 옵션 설정
@@ -57,9 +60,6 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
-
-// 개발 환경인지 확인하는 함수
-export const isDevelopment = process.env.NODE_ENV === 'development';
 
 // 사용자 비밀번호를 해싱합니다.
 export async function hashPassword(password: string): Promise<string> {
@@ -96,46 +96,58 @@ export function generateRefreshToken(userId: number): string {
 export function verifyToken(token: string | null) {
   if (!token) {
     console.log("토큰이 제공되지 않았습니다.");
+    
+    // 개발 환경에서는 기본 사용자로 진행
+    if (isDevelopment) {
+      console.log("개발 환경에서는 기본 사용자 ID 사용");
+      return { userId: 3, name: '개발 테스트 사용자' };
+    }
+    
     return null;
   }
   
+  // 개발 환경에서는 항상 성공 처리
+  if (isDevelopment) {
+    console.log("개발 환경에서 임시 토큰 검증 성공");
+    // 토큰에서 사용자 ID 추출 시도
+    try {
+      if (token.startsWith('dev-jwt-')) {
+        // 개발 환경 특수 토큰 처리
+        const parts = token.split('-');
+        if (parts.length >= 3) {
+          const userId = parseInt(parts[parts.length - 1]);
+          if (!isNaN(userId)) {
+            return { userId, name: '개발 테스트 사용자' };
+          }
+        }
+      }
+      
+      // 표준 JWT 토큰 검증 시도 - 실패해도 기본값 사용
+      try {
+        const decoded = jsonwebtoken.verify(token, JWT_SECRET) as { userId: number; name?: string };
+        return decoded;
+      } catch (verifyError) {
+        // 기본 사용자로 폴백
+        console.log("토큰 검증 실패, 개발 환경에서 기본 사용자 사용");
+        return { userId: 3, name: '개발 테스트 사용자' };
+      }
+    } catch (parseError) {
+      // 파싱 오류 발생 시 기본 사용자로 폴백
+      console.log("토큰 파싱 오류, 개발 환경에서 기본 사용자 사용");
+      return { userId: 3, name: '개발 테스트 사용자' };
+    }
+  }
+  
+  // 프로덕션 환경에서 표준 JWT 검증
   try {
     console.log("JWT 토큰 검증 시도", token.substring(0, 10) + "...");
     
-    // 개발 환경에서 dev-jwt 형식 토큰 처리
-    if (isDevelopment && token.startsWith('dev-jwt-')) {
-      console.log("개발 환경 토큰 감지됨");
-      const parts = token.split('-');
-      if (parts.length >= 3) {
-        const userId = parseInt(parts[parts.length - 1]);
-        if (!isNaN(userId)) {
-          console.log("개발 환경 토큰 검증 성공, userId:", userId);
-          return { userId, name: '개발 테스트 사용자' };
-        }
-      }
-      console.log("개발 환경 토큰 형식 오류");
-      return null;
-    }
-
-    // 개발 환경에서 강제로 검증 성공 처리 (임시)
-    if (isDevelopment) {
-      console.log("개발 환경에서 임시로 토큰 검증 성공 처리");
-      return { userId: 3, name: '개발 테스트 사용자' };
-    }
-
     // 표준 JWT 토큰 검증
     const decoded = jsonwebtoken.verify(token, JWT_SECRET) as { userId: number; name?: string };
     console.log("JWT 토큰 검증 성공", decoded);
     return decoded;
   } catch (error) {
     console.error("JWT 토큰 검증 실패:", error);
-    
-    // 개발 환경에서는 임시로 성공 처리
-    if (isDevelopment) {
-      console.log("개발 환경이므로 임시 검증 성공 처리");
-      return { userId: 3, name: '개발 테스트 사용자' };
-    }
-    
     return null;
   }
 }
@@ -145,26 +157,48 @@ export function verifyAccessToken(token: string) {
   try {
     console.log("JWT 토큰 검증 시도");
     
-    // 개발 환경에서 dev-jwt 형식 토큰 처리
-    if (isDevelopment && token.startsWith('dev-jwt-')) {
-      console.log("개발 환경 토큰 감지됨");
-      const parts = token.split('-');
-      if (parts.length >= 3) {
-        const userId = parseInt(parts[parts.length - 1]);
-        if (!isNaN(userId)) {
-          console.log("개발 환경 토큰 검증 성공, userId:", userId);
-          return { userId };
+    // 개발 환경에서는 항상 성공 처리
+    if (isDevelopment) {
+      console.log("개발 환경에서 토큰 검증 항상 성공 처리");
+      
+      // 토큰 형식 확인 (개발 토큰 패턴)
+      if (token.startsWith('dev-jwt-')) {
+        console.log("개발 환경 토큰 감지됨");
+        const parts = token.split('-');
+        if (parts.length >= 3) {
+          const userId = parseInt(parts[parts.length - 1]);
+          if (!isNaN(userId)) {
+            console.log("개발 환경 토큰 검증 성공, userId:", userId);
+            return { userId };
+          }
         }
       }
-      return null;
+      
+      // 표준 JWT 검증 시도
+      try {
+        const decoded = jsonwebtoken.verify(token, JWT_SECRET);
+        console.log("JWT 토큰 검증 성공", decoded);
+        return decoded;
+      } catch (error) {
+        // 개발 환경에서는 항상 성공 처리
+        console.log("개발 환경에서 토큰 검증 실패해도 성공 처리");
+        return { userId: 3 };
+      }
     }
     
-    // 표준 JWT 토큰 검증
+    // 프로덕션 환경에서 표준 검증
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     console.log("JWT 토큰 검증 성공", decoded);
     return decoded;
   } catch (error) {
-    console.error("JWT 토큰 검증 실패:", error);
+    console.error("JWT 토큰 처리 중 오류:", error);
+    
+    // 개발 환경에서는 기본값 사용
+    if (isDevelopment) {
+      console.log("개발 환경에서는 기본 사용자로 처리");
+      return { userId: 3 };
+    }
+    
     return null;
   }
 }

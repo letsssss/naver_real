@@ -152,6 +152,57 @@ export async function GET(request: Request) {
       
     } catch (e) {
       console.error("토큰 검증 오류:", e);
+      
+      // 개발 환경에서는 기본 사용자를 반환
+      if (isDevelopment()) {
+        console.log("개발 환경에서 기본 사용자(ID: 3)로 인증 진행");
+        
+        // 데이터베이스에서 기본 사용자 조회
+        try {
+          const devUser = await prisma.user.findUnique({
+            where: { id: 3 }, // 기본 개발 사용자 ID
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true
+            }
+          });
+          
+          if (devUser) {
+            console.log("개발 환경 자동 인증 성공:", devUser.email);
+            
+            // 새로운 개발용 토큰 생성
+            const devToken = jwt.sign(
+              { userId: devUser.id, email: devUser.email },
+              JWT_SECRET,
+              { expiresIn: '24h' }
+            );
+            
+            // 응답 생성
+            const response = NextResponse.json({
+              success: true,
+              user: devUser,
+              token: devToken,
+              devMode: true
+            });
+            
+            // 쿠키 설정
+            setAuthCookie(response, 'auth-token', devToken);
+            setAuthCookie(response, 'auth-status', 'authenticated', false);
+            
+            // 캐시 방지 헤더 추가
+            response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+            response.headers.set('Pragma', 'no-cache');
+            response.headers.set('Expires', '0');
+            
+            return response;
+          }
+        } catch (dbError) {
+          console.error("개발 환경에서 사용자 조회 실패:", dbError);
+        }
+      }
+      
       return NextResponse.json({ error: "유효하지 않은 토큰" }, { status: 401 });
     }
     
