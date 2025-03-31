@@ -87,7 +87,13 @@ export default function Signup() {
         {/* Logo */}
         <div className="flex justify-center">
           <Link href="/">
-            <Image src="/placeholder.svg" alt="TICKETBAY" width={120} height={40} className="h-12 object-contain" />
+            <Image 
+              src="/easyticket-logo.png" 
+              alt="EasyTicket" 
+              width={300} 
+              height={100} 
+              className="h-24 object-contain cursor-pointer" 
+            />
           </Link>
         </div>
 
@@ -121,7 +127,7 @@ export default function Signup() {
         {/* Signup Form */}
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-lg font-medium text-gray-700">
               이메일
             </label>
             <Input 
@@ -129,28 +135,28 @@ export default function Signup() {
               type="email" 
               placeholder="example@email.com" 
               required 
-              className="w-full"
+              className="w-full h-14 text-lg px-4"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="block text-lg font-medium text-gray-700">
               이름
             </label>
             <Input 
               id="name" 
               type="text" 
               placeholder="이름을 입력해주세요" 
-              className="w-full"
+              className="w-full h-14 text-lg px-4"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-lg font-medium text-gray-700">
               비밀번호
             </label>
             <Input 
@@ -158,15 +164,15 @@ export default function Signup() {
               type="password" 
               placeholder="6자 이상 입력해주세요" 
               required 
-              className="w-full"
+              className="w-full h-14 text-lg px-4"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <p className="text-xs text-gray-500">최소 6자 이상의 비밀번호를 입력해주세요.</p>
+            <p className="text-sm text-gray-500">최소 6자 이상의 비밀번호를 입력해주세요.</p>
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="confirmPassword" className="block text-lg font-medium text-gray-700">
               비밀번호 확인
             </label>
             <Input
@@ -174,7 +180,7 @@ export default function Signup() {
               type="password"
               placeholder="비밀번호를 한번 더 입력해주세요"
               required
-              className="w-full"
+              className="w-full h-14 text-lg px-4"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
@@ -185,9 +191,9 @@ export default function Signup() {
               id="agree"
               checked={agreed}
               onCheckedChange={(checked) => setAgreed(checked as boolean)}
-              className="border-gray-300"
+              className="border-gray-300 h-5 w-5"
             />
-            <label htmlFor="agree" className="ml-2 text-sm text-gray-600">
+            <label htmlFor="agree" className="ml-2 text-base text-gray-600">
               <span className="font-medium text-gray-900">이용약관</span>과{" "}
               <span className="font-medium text-gray-900">개인정보 처리방침</span>에 동의합니다.
             </label>

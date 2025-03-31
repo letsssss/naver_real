@@ -54,11 +54,11 @@ export default function Login() {
         <div className="flex justify-center">
           <Link href="/">
             <Image
-              src="/placeholder.svg"
-              alt="TICKETBAY"
-              width={120}
-              height={40}
-              className="h-12 object-contain cursor-pointer"
+              src="/easyticket-logo.png"
+              alt="EasyTicket"
+              width={300}
+              height={100}
+              className="h-24 object-contain cursor-pointer"
             />
           </Link>
         </div>
