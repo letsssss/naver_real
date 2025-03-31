@@ -286,7 +286,7 @@ export default function TicketCancellationPage() {
               )}
               <button
                 onClick={() => router.push("/sell")}
-                className="px-4 py-2 bg-[#0061FF] text-white rounded-md hover:bg-[#0052D6] transition-colors whitespace-nowrap"
+                className="px-4 py-2 bg-[#0061FF] text-white rounded-xl hover:bg-[#0052D6] transition-colors whitespace-nowrap"
               >
                 취켓팅 등록
               </button>
