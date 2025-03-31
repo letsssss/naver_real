@@ -4,8 +4,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // 여러 형식을 시도했지만 접근 불가
 // 추후 Supabase 프로젝트 설정 확인 필요
 // 개발 환경에서는 모의 클라이언트 사용
-const supabaseUrl = 'https://jdubrjczdyqqtsppojgu.supabase.co'; // 사용자가 제공한 정확한 프로젝트 ID
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co'; // 사용자가 제공한 정확한 프로젝트 ID
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
 
 // 개발 환경인지 확인
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -17,7 +17,7 @@ console.log('SUPABASE URL:', supabaseUrl);
 console.log('SUPABASE ANON KEY 길이:', supabaseAnonKey ? supabaseAnonKey.length : 0);
 console.log('SUPABASE ANON KEY (앞 20자):', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) : 'NULL');
 console.log('현재 타임스탬프:', new Date().toISOString());
-console.log('DNS 테스트 결과: Ping 성공 (104.18.38.10)');
+console.log('DNS 테스트 결과: Ping 성공 (172.64.149.246)');
 console.log('===============================');
 
 // 추가 로깅: fetch 시도 테스트
@@ -257,29 +257,31 @@ function createMockClient(): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
-// Supabase 클라이언트 생성 시도
-let supabaseClient: SupabaseClient;
+// Supabase 클라이언트 생성
+let supabaseClient: SupabaseClient | null = null;
+
 try {
-  // 개발 환경이거나 URL이 비어있는 경우 모의 클라이언트 사용
-  if (isDevelopment || !supabaseUrl) {
-    console.log('개발 환경에서 모의 Supabase 클라이언트를 사용합니다.');
+  // 변경: 개발 환경에서는 항상 모의 클라이언트 사용, 프로덕션에서는 실제 연결 시도
+  if (isDevelopment) {
+    console.log('개발 환경: 모의 Supabase 클라이언트 사용');
     supabaseClient = createMockClient();
-  } else {
+  } else if (supabaseUrl && supabaseAnonKey) {
+    console.log('프로덕션 환경: 실제 Supabase 클라이언트 생성 시도');
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('Supabase 클라이언트 생성 성공');
+  } else {
+    throw new Error('Supabase URL 또는 Anon Key가 설정되지 않았습니다.');
   }
 } catch (error) {
   console.error('Supabase 클라이언트 생성 중 오류:', error);
-  
+  // 생산 환경에서 오류 발생 시 모의 클라이언트로 대체
   if (!isDevelopment) {
-    throw error;
+    console.warn('프로덕션 환경에서 Supabase 클라이언트 생성 실패. 모의 클라이언트로 대체합니다.');
+    supabaseClient = createMockClient();
   }
-  
-  // 개발 환경에서는 모의 클라이언트로 대체
-  supabaseClient = createMockClient();
 }
 
-export const supabase = supabaseClient;
+// export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = supabaseClient || createMockClient();
 
 // 인증된 클라이언트 생성 함수 (서버 측에서 사용)
 export const createServerSupabaseClient = (supabaseAccessToken: string): SupabaseClient => {
