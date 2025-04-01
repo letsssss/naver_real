@@ -363,13 +363,25 @@ export async function POST(req: Request) {
     // 가격 처리
     let ticketPrice = 0;
     try {
-      if (body.sections && body.sections.length > 0 && body.sections[0].price) {
+      // body에서 직접 ticketPrice 필드를 먼저 확인
+      if (body.ticketPrice) {
+        console.log('[게시물 API] 직접 전달된 ticketPrice 사용:', body.ticketPrice);
+        const priceStr = String(body.ticketPrice).replace(/[^0-9]/g, '');
+        ticketPrice = parseInt(priceStr, 10);
+      } 
+      // sections 배열에서 가격 정보 찾기
+      else if (body.sections && body.sections.length > 0 && body.sections[0].price) {
+        console.log('[게시물 API] sections[0].price에서 가격 추출:', body.sections[0].price);
         const priceStr = String(body.sections[0].price).replace(/[^0-9]/g, '');
         ticketPrice = parseInt(priceStr, 10);
-        
-        if (isNaN(ticketPrice)) {
-          ticketPrice = 0;
-        }
+      }
+      
+      // NaN인 경우 0으로 처리
+      if (isNaN(ticketPrice)) {
+        console.log('[게시물 API] 유효하지 않은 가격, 기본값 0 사용');
+        ticketPrice = 0;
+      } else {
+        console.log('[게시물 API] 최종 처리된 가격:', ticketPrice);
       }
     } catch (priceError) {
       console.error('[게시물 API] 가격 처리 오류:', priceError);
@@ -407,9 +419,15 @@ export async function POST(req: Request) {
       safePostData.event_date = body.concertDates[0].date;
     }
     
-    // 가격 처리
+    // 가격 처리 - 항상 정수형으로 변환해서 저장
     if (availableColumns.includes('ticket_price') && ticketPrice > 0) {
+      console.log('[게시물 API] ticket_price 필드에 가격 저장:', ticketPrice);
       safePostData.ticket_price = ticketPrice;
+      
+      // ticketPrice 필드도 추가 (일부 API에서 사용할 수 있음)
+      if (availableColumns.includes('ticketPrice')) {
+        safePostData.ticketPrice = ticketPrice;
+      }
     }
     
     // 소프트 삭제 플래그

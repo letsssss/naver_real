@@ -236,6 +236,10 @@ export default function TicketCancellationPage() {
       
       let successfulPost = null;
       
+      // 테스트 가격 설정 (명확한 숫자 값으로)
+      const testPrice = 120000;
+      console.log(`테스트 가격 설정: ${testPrice}원`);
+      
       // 각 카테고리를 순차적으로 시도
       for (const category of categories) {
         if (successfulPost) break;
@@ -249,9 +253,9 @@ export default function TicketCancellationPage() {
             date: '2024-04-15',
             time: '19:00',
             venue: '잠실종합운동장',
-            price: 120000,
+            price: testPrice,
             sections: [
-              { id: 'A', label: 'A석', price: 120000, available: true },
+              { id: 'A', label: 'A석', price: testPrice, available: true },
               { id: 'B', label: 'B석', price: 100000, available: true },
               { id: 'C', label: 'C석', price: 80000, available: true }
             ]
@@ -261,7 +265,8 @@ export default function TicketCancellationPage() {
           eventDate: '2024-04-15',
           eventVenue: '잠실종합운동장',
           status: 'ACTIVE',
-          ticketPrice: 120000
+          ticket_price: testPrice,    // 테스트 가격을 명시적으로 추가 (DB 스키마 필드명과 일치) 
+          ticketPrice: testPrice      // 프론트엔드 필드명도 추가
         };
         
         console.log(`[${category}] 테스트 게시물 생성 중:`, testPost);
@@ -307,6 +312,42 @@ export default function TicketCancellationPage() {
     } finally {
       setCreatingTestPost(false);
     }
+  };
+
+  // 티켓 가격 추출 helper 함수
+  const getTicketPrice = (ticket: Post): number => {
+    // 1. ticket_price 필드 확인 (데이터베이스 필드명)
+    if ((ticket as any).ticket_price && !isNaN(Number((ticket as any).ticket_price))) {
+      return Number((ticket as any).ticket_price);
+    }
+    
+    // 2. ticketPrice 필드 확인 (프론트엔드 필드명)
+    if (ticket.ticketPrice && !isNaN(Number(ticket.ticketPrice))) {
+      return Number(ticket.ticketPrice);
+    }
+    
+    // 3. 콘텐츠에서 가격 추출 시도
+    try {
+      if (typeof ticket.content === 'string' && ticket.content.startsWith('{')) {
+        const contentObj = JSON.parse(ticket.content);
+        
+        // 3.1 콘텐츠 객체의 price 필드 확인
+        if (contentObj.price && !isNaN(Number(contentObj.price))) {
+          return Number(contentObj.price);
+        }
+        
+        // 3.2 sections 배열에서 첫 번째 항목 확인
+        if (contentObj.sections && contentObj.sections.length > 0 && contentObj.sections[0].price) {
+          return Number(contentObj.sections[0].price);
+        }
+      }
+    } catch (e) {
+      // JSON 파싱 오류는 무시
+      console.log('콘텐츠 파싱 오류:', e);
+    }
+    
+    // 가격 정보가 없는 경우 기본값 0 반환
+    return 0;
   };
 
   return (
@@ -536,7 +577,7 @@ export default function TicketCancellationPage() {
                     </div>
                     <div className="flex justify-between items-center">
                       <div>
-                        <span className="font-medium text-black text-lg">{Number(ticket.ticketPrice || 0).toLocaleString()}원</span>
+                        <span className="font-medium text-[#FF2F6E] text-lg">{Number(getTicketPrice(ticket)).toLocaleString()}원</span>
                       </div>
                       <Button
                         className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium w-28 flex items-center justify-center transition-all"
