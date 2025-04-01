@@ -365,45 +365,71 @@ export function generateDevToken(userId: number, name: string = '개발 테스�
 }
 
 /**
- * 요청에서 토큰을 추출하고 검증합니다.
+ * 요청에서 인증 토큰을 검증하고 사용자 ID를 반환합니다.
  * @param req 요청 객체
  * @returns 검증된 사용자 정보 또는 null
  */
-export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean }> {
+export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
   // 개발 환경 감지
   const isDev = process.env.NODE_ENV === 'development';
+  console.log(`[인증] 요청 검증 시작 - 개발 환경: ${isDev}`);
   
   try {
     // 토큰 가져오기
     const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
+    console.log(`[인증] 토큰 추출 결과: ${token ? '토큰 있음' : '토큰 없음'}`);
     
     if (token) {
       try {
+        console.log(`[인증] 토큰 검증 시도...`);
         const decoded = await verifyToken(token);
         if (decoded && decoded.userId) {
           // 사용자 ID가 UUID인지 확인하고 문자열로 변환
           const userId = String(decoded.userId);
-          return { userId, authenticated: true };
+          console.log(`[인증] 토큰 검증 성공, userId: ${userId.substring(0, 8)}...`);
+          return { userId, authenticated: true, message: '토큰 검증 성공' };
+        } else {
+          console.warn('[인증] 토큰에서 userId를 찾을 수 없음:', decoded);
         }
       } catch (e) {
-        console.error('토큰 검증 실패:', e);
+        console.error('[인증] 토큰 검증 실패:', e instanceof Error ? e.message : e);
+        return { 
+          userId: '', 
+          authenticated: false, 
+          message: e instanceof Error ? e.message : '토큰 검증 실패'
+        };
       }
     }
     
     // 개발 환경에서는 기본 사용자 허용
     if (isDev) {
-      return { userId: '3', authenticated: true };
+      // UUID 형식의 기본 사용자 ID 사용 (Supabase 호환성)
+      const defaultUserId = '123e4567-e89b-12d3-a456-426614174000';
+      console.log(`[인증] 개발 환경: UUID 형식의 기본 사용자 ID ${defaultUserId.substring(0, 8)}... 사용`);
+      
+      // 개발 환경에서 토큰이 없는 경우 경고 로그 출력
+      if (!token) {
+        console.warn('[인증] 개발 환경: 토큰 없음. 테스트 사용자 ID로 진행합니다.');
+      }
+      
+      return { userId: defaultUserId, authenticated: true, message: '개발 환경 자동 인증' };
     }
     
-    return { userId: '', authenticated: false };
+    console.warn('[인증] 인증 실패: 토큰 없음 또는 검증 실패');
+    return { userId: '', authenticated: false, message: '인증되지 않은 요청' };
   } catch (e) {
-    console.error('인증 검증 과정에서 오류 발생:', e);
+    console.error('[인증] 검증 과정에서 오류 발생:', e);
     
     // 개발 환경에서는 기본 사용자 허용
     if (isDev) {
-      return { userId: '3', authenticated: true };
+      // UUID 형식의 기본 사용자 ID 사용 (Supabase 호환성)
+      const defaultUserId = '123e4567-e89b-12d3-a456-426614174000';
+      console.log(`[인증] 개발 환경: 오류 발생 시 UUID 형식 기본 사용자 ID ${defaultUserId.substring(0, 8)}... 사용`);
+      return { userId: defaultUserId, authenticated: true, message: '개발 환경 자동 인증 (오류 발생)' };
     }
     
-    return { userId: '', authenticated: false };
+    // 오류 메시지 구성
+    const errorMessage = e instanceof Error ? e.message : '인증 검증 중 알 수 없는 오류 발생';
+    return { userId: '', authenticated: false, message: errorMessage };
   }
 } 

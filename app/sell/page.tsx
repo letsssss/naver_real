@@ -232,23 +232,62 @@ export default function SellPage() {
       
       if (!response.ok) {
         // 서버에서 반환된 구체적인 오류 메시지 확인
-        if (result && result.errors) {
-          console.error("유효성 검사 오류:", result.errors);
-          
-          let errorMessage = "유효성 검사 오류가 발생했습니다:";
-          
-          if (Array.isArray(result.errors)) {
-            errorMessage = result.errors.map((err: any) => 
-              `${err.path}: ${err.message}`
-            ).join(', ');
-          } else {
-            errorMessage = result.message || '판매 등록에 실패했습니다.';
+        console.error("서버 응답 상태:", response.status, response.statusText);
+        console.error("서버 응답 전체:", result);
+        
+        // 오류 메시지 구성
+        let errorMessage = '판매 등록에 실패했습니다.';
+        let errorDetails = '';
+        
+        if (result) {
+          // 응답 객체에서 오류 정보 추출
+          if (result.error) {
+            errorMessage = result.error;
           }
           
-          throw new Error(errorMessage);
-        } else {
-          throw new Error(result.message || '판매 등록에 실패했습니다.');
+          // 오류 세부 정보가 있는 경우
+          if (result.details) {
+            if (typeof result.details === 'string') {
+              errorDetails = result.details;
+            } else {
+              errorDetails = JSON.stringify(result.details, null, 2);
+            }
+            console.error("오류 세부 정보:", result.details);
+          }
+          
+          // 코드 정보가 있는 경우
+          if (result.code) {
+            errorDetails += `\n오류 코드: ${result.code}`;
+          }
+          
+          // 여러 유효성 검사 오류가 있는 경우
+          if (result.errors && Array.isArray(result.errors)) {
+            errorMessage = "유효성 검사 오류가 발생했습니다:";
+            errorDetails = result.errors.map((err: any) => 
+              `- ${err.path || '필드'}: ${err.message || '알 수 없는 오류'}`
+            ).join('\n');
+          }
         }
+        
+        // 모달 또는 알림으로 상세 오류 표시
+        toast({
+          title: "오류 발생",
+          description: (
+            <div className="space-y-2">
+              <p>{errorMessage}</p>
+              {errorDetails && (
+                <details className="text-sm bg-red-50 p-2 rounded-md border border-red-200">
+                  <summary className="cursor-pointer font-medium">상세 오류 정보</summary>
+                  <pre className="mt-2 whitespace-pre-wrap text-xs">{errorDetails}</pre>
+                </details>
+              )}
+            </div>
+          ),
+          variant: "destructive",
+          duration: 10000, // 10초 동안 표시
+        });
+        
+        throw new Error(errorMessage);
       }
       
       // 성공 메시지 표시
@@ -261,11 +300,17 @@ export default function SellPage() {
       router.push("/mypage");
     } catch (error) {
       console.error("판매 등록 오류:", error);
-      toast({
-        title: "오류 발생",
-        description: error instanceof Error ? error.message : "판매 등록 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
+      console.error("오류 스택:", error instanceof Error ? error.stack : '스택 정보 없음');
+      
+      // 이미 토스트가 표시되지 않은 경우에만 기본 오류 메시지 표시
+      if (!(error instanceof Error && error.message !== '판매 등록에 실패했습니다.')) {
+        toast({
+          title: "오류 발생",
+          description: error instanceof Error ? error.message : "판매 등록 중 오류가 발생했습니다.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
     }
   }
 

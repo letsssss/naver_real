@@ -39,117 +39,14 @@ interface Post {
   };
 }
 
-// 티켓 데이터에 판매자 정보 추가
-const cancellationTickets = [
-  {
-    id: 1,
-    title: "세븐틴 'FOLLOW' TO SEOUL",
-    artist: "세븐틴",
-    date: "2024.03.20",
-    time: "19:00",
-    venue: "잠실종합운동장 주경기장",
-    price: 110000,
-    originalPrice: 120000,
-    image: "/placeholder.svg?height=200&width=400",
-    status: "취켓팅 가능",
-    successRate: "98%",
-    remainingTime: "2일 13시간",
-    seller: {
-      id: "seller123",
-      username: "티켓마스터",
-      rating: 4.8,
-    },
-  },
-  {
-    id: 2,
-    title: "방탄소년단 월드투어",
-    artist: "BTS",
-    date: "2024.04.15",
-    time: "20:00",
-    venue: "서울월드컵경기장",
-    price: 132000,
-    originalPrice: 145000,
-    image: "/placeholder.svg?height=200&width=400",
-    status: "취켓팅 가능",
-    successRate: "95%",
-    remainingTime: "5일 8시간",
-    seller: {
-      id: "seller456",
-      username: "BTS팬클럽",
-      rating: 4.6,
-    },
-  },
-  {
-    id: 3,
-    title: "아이유 콘서트",
-    artist: "아이유",
-    date: "2024.05.01",
-    time: "18:00",
-    venue: "올림픽공원 체조경기장",
-    price: 99000,
-    originalPrice: 110000,
-    image: "/placeholder.svg?height=200&width=400",
-    status: "취켓팅 가능",
-    successRate: "97%",
-    remainingTime: "1일 5시간",
-    seller: {
-      id: "seller789",
-      username: "아이유마스터",
-      rating: 4.9,
-    },
-  },
-  {
-    id: 4,
-    title: "블랙핑크 인 유어 에어리어",
-    artist: "블랙핑크",
-    date: "2024.06.10",
-    time: "19:30",
-    venue: "고척스카이돔",
-    price: 121000,
-    originalPrice: 130000,
-    image: "/placeholder.svg?height=200&width=400",
-    status: "취켓팅 가능",
-    successRate: "96%",
-    remainingTime: "3일 10시간",
-    seller: {
-      id: "seller101",
-      username: "블링크",
-      rating: 4.7,
-    },
-  },
-]
-
-// 인기 티켓 데이터 (하드코딩)
-const popularTickets = [
-  {
-    id: 1,
-    rank: 1,
-    artist: "세븐틴",
-    date: "25.03.20 ~ 25.03.21",
-    venue: "잠실종합운동장 주경기장",
-  },
-  {
-    id: 2,
-    rank: 2,
-    artist: "데이식스 (DAY6)",
-    date: "25.02.01 ~ 25.03.30",
-    venue: "전국투어",
-  },
-  {
-    id: 3,
-    rank: 3,
-    artist: "아이브",
-    date: "25.04.05 ~ 25.04.06",
-    venue: "KSPO DOME",
-  },
-  {
-    id: 4,
-    rank: 4,
-    artist: "웃는 남자",
-    date: "25.01.09 ~ 25.03.09",
-    venue: "예술의전당 오페라극장",
-  },
-]
+// 인기 티켓 데이터 타입 정의
+interface PopularTicket {
+  id: number;
+  rank: number;
+  artist: string;
+  date: string;
+  venue: string;
+}
 
 export default function TicketCancellationPage() {
   const { user, logout } = useAuth()
@@ -161,10 +58,43 @@ export default function TicketCancellationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [creatingTestPost, setCreatingTestPost] = useState(false)
+  const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
 
   useEffect(() => {
     setMounted(true)
     fetchCancellationTickets()
+    
+    // 인기 티켓 데이터 설정 (실제로는 API에서 가져와야 함)
+    setPopularTickets([
+      {
+        id: 1,
+        rank: 1,
+        artist: "세븐틴",
+        date: "25.03.20 ~ 25.03.21",
+        venue: "잠실종합운동장 주경기장",
+      },
+      {
+        id: 2,
+        rank: 2,
+        artist: "데이식스 (DAY6)",
+        date: "25.02.01 ~ 25.03.30",
+        venue: "전국투어",
+      },
+      {
+        id: 3,
+        rank: 3,
+        artist: "아이브",
+        date: "25.04.05 ~ 25.04.06",
+        venue: "KSPO DOME",
+      },
+      {
+        id: 4,
+        rank: 4,
+        artist: "웃는 남자",
+        date: "25.01.09 ~ 25.03.09",
+        venue: "예술의전당 오페라극장",
+      },
+    ])
   }, [])
 
   // 취켓팅 가능 티켓 가져오기
@@ -174,10 +104,11 @@ export default function TicketCancellationPage() {
       setError("")
       console.log("취켓팅 가능 티켓 불러오기 시작...")
       
-      const apiUrl = '/api/posts?category=TICKET_CANCELLATION'
-      console.log("API 호출:", apiUrl)
+      // 먼저 일반 티켓 게시물 확인 - 카테고리 없이 모든 게시물 조회
+      let apiUrl = '/api/posts'
+      console.log("기본 API 호출 (모든 게시물):", apiUrl)
       
-      const response = await fetch(apiUrl, {
+      let response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache',
@@ -186,23 +117,49 @@ export default function TicketCancellationPage() {
         cache: 'no-store'
       })
       
-      console.log("API 응답 상태:", response.status)
-      const data = await response.json()
-      console.log("API 응답 데이터:", data)
+      console.log("기본 API 응답 상태:", response.status)
+      let data = await response.json()
+      console.log("전체 게시물 수:", data.posts?.length || 0)
       
-      if (data.posts) {
-        setTickets(data.posts)
-        console.log("취켓팅 가능 티켓 로드 완료:", data.posts.length, "개 항목")
-        if (data.posts.length === 0) {
-          console.log("표시할 게시물이 없습니다 - 판매 중인 티켓이 없음")
-        }
-      } else {
-        console.error("API 응답 형식 오류:", data)
-        setError("데이터 형식이 올바르지 않습니다.")
+      if (!data.posts || data.posts.length === 0) {
+        console.log("게시물이 없습니다. API 응답:", data);
+        setTickets([]);
+        setLoading(false);
+        return;
       }
+      
+      // 모든 게시물 검사
+      console.log("모든 게시물 세부 정보:", data.posts);
+      
+      // 각 게시물의 구조를 검사
+      data.posts.forEach((post: any, index: number) => {
+        console.log(`[게시물 ${index + 1}] ID: ${post.id}`);
+        console.log(`- 제목: ${post.title}`);
+        console.log(`- 카테고리: ${post.category || '카테고리 없음'}`);
+        console.log(`- 작성자: ${post.author?.name || '작성자 정보 없음'}`);
+        
+        // content가 JSON 문자열인 경우 파싱 시도
+        try {
+          if (typeof post.content === 'string' && (post.content.startsWith('{') || post.content.startsWith('['))) {
+            const contentObj = JSON.parse(post.content);
+            console.log(`- 콘텐츠: JSON 파싱 성공`, contentObj);
+          }
+        } catch (e) {
+          // JSON 파싱 실패는 무시
+        }
+      });
+      
+      // 모든 게시물의 카테고리 확인
+      const sampleCategories = [...new Set(data.posts.map((p: any) => p.category))].filter(Boolean)
+      console.log("발견된 카테고리 목록:", sampleCategories)
+      
+      // 모든 게시물 표시 (카테고리 필터 없이)
+      console.log("카테고리 필터 없이 모든 게시물 표시");
+      setTickets(data.posts);
     } catch (err) {
       console.error("취켓팅 티켓 불러오기 오류:", err)
       setError("데이터를 불러오는데 실패했습니다.")
+      setTickets([]);
     } finally {
       setLoading(false)
     }
@@ -267,47 +224,82 @@ export default function TicketCancellationPage() {
     
     try {
       setCreatingTestPost(true);
-      const testPost = {
-        title: `테스트 취켓팅 게시물 ${new Date().toLocaleTimeString()}`,
-        content: JSON.stringify({
-          description: '테스트 설명입니다.',
-          date: '2024-04-15',
-          time: '19:00',
-          venue: '잠실종합운동장',
-          price: 120000,
-          sections: [
-            { id: 'A', label: 'A석', price: 120000, available: true },
-            { id: 'B', label: 'B석', price: 100000, available: true },
-            { id: 'C', label: 'C석', price: 80000, available: true }
-          ]
-        }),
-        category: 'TICKET_CANCELLATION',
-        eventName: '테스트 콘서트',
-        eventDate: '2024-04-15',
-        eventVenue: '잠실종합운동장',
-        status: 'ACTIVE',
-        published: true
-      };
       
-      console.log('테스트 게시물 생성 중:', testPost);
+      // 순차적으로 시도할 카테고리 목록
+      const categories = [
+        'TICKET_CANCELLATION',  // 원래 시도한 값
+        'TICKET',               // 대안 값 
+        'ticket_cancellation',  // 소문자 버전
+        'ticket-cancellation',  // 하이픈 버전
+        'CANCELLATION'          // 간단한 버전
+      ];
       
-      const response = await fetch('/api/posts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(testPost),
-      });
+      let successfulPost = null;
       
-      const data = await response.json();
-      console.log('테스트 게시물 생성 결과:', data);
+      // 각 카테고리를 순차적으로 시도
+      for (const category of categories) {
+        if (successfulPost) break;
+        
+        console.log(`카테고리 시도: ${category}`);
+        
+        const testPost = {
+          title: `테스트 취켓팅 게시물 ${new Date().toLocaleTimeString()} - ${category}`,
+          content: JSON.stringify({
+            description: '테스트 설명입니다.',
+            date: '2024-04-15',
+            time: '19:00',
+            venue: '잠실종합운동장',
+            price: 120000,
+            sections: [
+              { id: 'A', label: 'A석', price: 120000, available: true },
+              { id: 'B', label: 'B석', price: 100000, available: true },
+              { id: 'C', label: 'C석', price: 80000, available: true }
+            ]
+          }),
+          category: category,
+          eventName: '테스트 콘서트',
+          eventDate: '2024-04-15',
+          eventVenue: '잠실종합운동장',
+          status: 'ACTIVE',
+          ticketPrice: 120000
+        };
+        
+        console.log(`[${category}] 테스트 게시물 생성 중:`, testPost);
+        
+        try {
+          const response = await fetch('/api/posts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(testPost),
+          });
+          
+          const data = await response.json();
+          console.log(`[${category}] 테스트 게시물 생성 결과:`, data);
+          
+          if (data.post) {
+            successfulPost = {
+              category,
+              id: data.post.id
+            };
+            toast.success(`테스트 게시물이 생성되었습니다! (카테고리: ${category}, ID: ${data.post.id})`);
+            break;
+          } else {
+            console.error(`[${category}] 게시물 생성 실패:`, data.error || '알 수 없는 오류');
+          }
+        } catch (err) {
+          console.error(`[${category}] 게시물 생성 중 오류:`, err);
+        }
+      }
       
-      if (data.post) {
-        toast.success('테스트 게시물이 생성되었습니다!');
+      if (successfulPost) {
+        console.log(`성공한 게시물: 카테고리=${successfulPost.category}, ID=${successfulPost.id}`);
+        toast.success(`최종 성공: ${successfulPost.category} (ID: ${successfulPost.id})`);
         // 생성 후 목록 다시 불러오기
         fetchCancellationTickets();
       } else {
-        toast.error('테스트 게시물 생성 실패');
+        toast.error('모든 카테고리에서 게시물 생성 실패');
       }
     } catch (error) {
       console.error('테스트 게시물 생성 오류:', error);
@@ -506,7 +498,7 @@ export default function TicketCancellationPage() {
                     </div>
                     <div className="absolute bottom-3 left-3">
                       <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
+                        {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '날짜 정보 없음'}
                       </div>
                     </div>
                   </div>
@@ -514,28 +506,32 @@ export default function TicketCancellationPage() {
                     <Link href={`/ticket-cancellation/${ticket.id}`}>
                       <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
                     </Link>
-                    <p className="text-gray-600 mb-2">{ticket.eventName}</p>
+                    <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
                     <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
                       <span>판매자:</span>
-                      <Link
-                        href={`/seller/${ticket.author.id}`}
-                        className="text-blue-600 hover:underline flex items-center"
-                      >
-                        {ticket.author.name}
-                        <div className="flex items-center ml-2 text-yellow-500">
-                          <Star className="h-3 w-3 fill-current" />
-                          <span className="text-xs ml-0.5">4.5</span>
-                        </div>
-                      </Link>
+                      {ticket.author ? (
+                        <Link
+                          href={`/seller/${ticket.author.id}`}
+                          className="text-blue-600 hover:underline flex items-center"
+                        >
+                          {ticket.author.name}
+                          <div className="flex items-center ml-2 text-yellow-500">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span className="text-xs ml-0.5">4.5</span>
+                          </div>
+                        </Link>
+                      ) : (
+                        <span className="text-gray-500">판매자 정보 없음</span>
+                      )}
                     </div>
                     <div className="space-y-2 text-sm text-gray-500 mb-3">
                       <div className="flex items-center">
                         <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                        <span>{ticket.eventDate}</span>
+                        <span>{ticket.eventDate || '날짜 정보 없음'}</span>
                       </div>
                       <div className="flex items-center">
                         <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                        <span className="line-clamp-1">{ticket.eventVenue}</span>
+                        <span className="line-clamp-1">{ticket.eventVenue || '장소 정보 없음'}</span>
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
@@ -684,13 +680,24 @@ export default function TicketCancellationPage() {
             <p className="text-yellow-700 text-sm mb-3">
               취켓팅 테스트 게시물이 보이지 않나요? 테스트 게시물을 생성해보세요.
             </p>
-            <Button 
-              onClick={createTestPost} 
-              disabled={creatingTestPost}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white"
-            >
-              {creatingTestPost ? '생성 중...' : '테스트 게시물 생성'}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button 
+                onClick={createTestPost} 
+                disabled={creatingTestPost}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white"
+              >
+                {creatingTestPost ? '생성 중...' : '테스트 게시물 생성'}
+              </Button>
+              <Button
+                onClick={fetchCancellationTickets}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                모든 게시물 새로고침
+              </Button>
+              <div className="text-xs text-gray-500 mt-2">
+                개발 모드에서는 모든 게시물이 표시됩니다. 카테고리가 일치하지 않아도 됩니다.
+              </div>
+            </div>
           </div>
         </div>
       )}
