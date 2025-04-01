@@ -2,31 +2,18 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { Database } from '@/types/supabase.types';
 
+// 하드코딩된 값으로 설정
+const SUPABASE_URL = 'https://jdubrjczdyqqtsppojgu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
+const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+
 // 환경 변수 로깅
 console.log('=== Supabase 환경 변수 디버깅 ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('NEXT_PUBLIC_SUPABASE_URL 설정 여부:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY 설정 여부:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-console.log('SUPABASE_SERVICE_ROLE_KEY 설정 여부:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+console.log('SUPABASE_URL 설정 여부:', !!SUPABASE_URL);
+console.log('SUPABASE_ANON_KEY 설정 여부:', !!SUPABASE_ANON_KEY);
+console.log('SUPABASE_SERVICE_ROLE_KEY 설정 여부:', !!SUPABASE_SERVICE_ROLE_KEY);
 console.log('===============================');
-
-// 환경 변수 확인
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  console.error('오류: NEXT_PUBLIC_SUPABASE_URL 환경 변수가 설정되지 않았습니다.');
-}
-
-if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.error('오류: NEXT_PUBLIC_SUPABASE_ANON_KEY 환경 변수가 설정되지 않았습니다.');
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('오류: SUPABASE_SERVICE_ROLE_KEY 환경 변수가 설정되지 않았습니다.');
-}
-
-// 환경 변수 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
 
 // 개발 환경 확인
 const IS_DEV = process.env.NODE_ENV === 'development';

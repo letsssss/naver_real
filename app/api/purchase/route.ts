@@ -2,6 +2,12 @@ import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { convertBigIntToString } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { Database } from "@/types/supabase.types";
+import { createClient } from "@supabase/supabase-js";
+
+// 하드코딩된 값으로 설정
+const SUPABASE_URL = 'https://jdubrjczdyqqtsppojgu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -49,49 +55,39 @@ export async function GET(request: NextRequest) {
     
     // 페이지네이션 계산
     const skip = (page - 1) * limit;
+
+    // 디버깅: 환경 출력
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+    console.log("Supabase 클라이언트 있음:", !!supabase);
+    
+    // 타입 문제를 해결하기 위해 any 타입으로 캐스팅된 supabase 클라이언트 생성
+    const supabaseAny = supabase as any;
     
     try {
-      // 개발 환경에서 DB 연결 테스트
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          const { data: testConnection, error: connectionError } = await supabase
-            .from('purchases')
-            .select('count(*)', { count: 'exact', head: true });
-            
-          if (connectionError) throw connectionError;
-          console.log("데이터베이스 연결 테스트 성공");
-        } catch (dbConnectionError) {
-          console.error("데이터베이스 연결 오류:", dbConnectionError);
-          return addCorsHeaders(
-            NextResponse.json({ 
-              success: false, 
-              message: "데이터베이스 연결에 실패했습니다." 
-            }, { status: 500 })
-          );
-        }
-      }
-      
-      // 모의 Supabase 클라이언트에서는 .in() 메서드가 지원되지 않음
-      // 상태 필터링을 위한 대체 쿼리 작성
-      let { data: purchases, error, count } = await supabase
+      // Supabase에서 구매 목록 조회
+      let { data: purchases, error, count } = await supabaseAny
         .from('purchases')
         .select(`
           *,
           post:posts(*),
           seller:users!seller_id(id, name, email)
         `, { count: 'exact' })
-        .eq('buyer_id', authUser.id)
-        // 개발 환경에서는 .in() 메서드 대신 eq()로 대체
-        .eq('status', 'PENDING'); // 예시로 하나의 상태만 필터링
-      
-      // 페이지네이션 대체 방법 (range 메서드 없는 경우)
-      if (!error && purchases) {
-        // 수동으로 페이지네이션 처리
-        purchases = purchases.slice(skip, skip + limit);
-      }
+        .eq('buyer_id', authUser.id);
       
       if (error) {
-        throw error;
+        console.error("구매 목록 조회 오류:", error);
+        return addCorsHeaders(
+          NextResponse.json({ 
+            success: false, 
+            message: "데이터베이스 조회 중 오류가 발생했습니다." 
+          }, { status: 500 })
+        );
+      }
+      
+      // 페이지네이션 적용
+      if (purchases) {
+        // 수동으로 페이지네이션 처리
+        purchases = purchases.slice(skip, skip + limit);
       }
       
       // 총 구매 수 조회
@@ -114,8 +110,13 @@ export async function GET(request: NextRequest) {
         }
       }, { status: 200 }));
     } catch (dbError) {
-      console.error("데이터베이스 조회 오류:", dbError instanceof Error ? dbError.message : String(dbError));
-      console.error("상세 오류:", dbError);
+      console.error("데이터베이스 조회 오류:", dbError);
+      console.error("오류 타입:", typeof dbError);
+      
+      if (dbError instanceof Error) {
+        console.error("오류 이름:", dbError.name);
+        console.error("오류 메시지:", dbError.message);
+      }
       
       return addCorsHeaders(
         NextResponse.json({ 
@@ -128,11 +129,19 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("구매 목록 조회 오류:", error instanceof Error ? error.message : String(error));
     console.error("상세 오류 스택:", error);
+    console.error("오류 타입:", typeof error);
+    
+    if (error instanceof Error) {
+      console.error("오류 이름:", error.name);
+      console.error("오류 메시지:", error.message);
+      console.error("오류 스택:", error.stack);
+    }
     
     return addCorsHeaders(
       NextResponse.json({ 
         success: false, 
-        message: "구매 목록 조회 중 오류가 발생했습니다." 
+        message: "구매 목록 조회 중 오류가 발생했습니다.",
+        error: process.env.NODE_ENV === 'development' ? String(error) : undefined
       }, { status: 500 })
     );
   } finally {
