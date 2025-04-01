@@ -1,0 +1,43 @@
+=== Supabase Migration Started ===
+Starting user migration...
+Found 6 users to migrate
+Migrating user: wlstjd1590@naver.com
+Error migrating user wlstjd1590@naver.com: Invalid API key
+Migrating user: wlstjd15901@naver.com
+Error migrating user wlstjd15901@naver.com: Invalid API key
+Migrating user: wlstjd15902@naver.com
+Error migrating user wlstjd15902@naver.com: Invalid API key
+Migrating user: wlstjd15903@naver.com
+Error migrating user wlstjd15903@naver.com: Invalid API key
+Migrating user: wlstjd15904@naver.com
+Error migrating user wlstjd15904@naver.com: Invalid API key
+Migrating user: wlstjd15905@naver.com
+Error migrating user wlstjd15905@naver.com: Invalid API key
+User migration completed
+Starting post migration...
+Found 5 posts to migrate
+Migrating post: 507652913998 - 김대기 4
+Error in post migration: Do not know how to serialize a BigInt
+Starting notification migration...
+Found 14 notifications to migrate
+Migrating notification: 10
+Error migrating notification 10: Invalid API key
+Migrating notification: 11
+Error migrating notification 11: Invalid API key
+Migrating notification: 12
+Error migrating notification 12: Invalid API key
+Migrating notification: 13
+Error migrating notification 13: Invalid API key
+Migrating notification: 14
+Error migrating notification 14: Invalid API key
+Migrating notification: 15
+Error migrating notification 15: Invalid API key
+Migrating notification: 16
+Error migrating notification 16: Invalid API key
+Migrating notification: 17
+Error migrating notification 17: Invalid API key
+Migrating notification: 18
+Error migrating notification 18: Invalid API key
+Migrating notification: 19
+Error in notification migration: Do not know how to serialize a BigInt
+=== Supabase Migration Completed Successfully ===

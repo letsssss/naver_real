@@ -1,0 +1,48 @@
+마이그레이션 로그는 다음 파일에 저장됩니다: logs\run_migration_2025-04-01T01_16_39_459Z.log
+[OUTPUT] === Supabase Migration Started ===
+[OUTPUT] Starting user migration...
+[ERROR] (node:21932) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[OUTPUT] Found 6 users to migrate
+[OUTPUT] Migrating user: wlstjd1590@naver.com
+[OUTPUT] Error migrating user wlstjd1590@naver.com: Invalid API key
+[OUTPUT] Migrating user: wlstjd15901@naver.com
+[OUTPUT] Error migrating user wlstjd15901@naver.com: Invalid API key
+[OUTPUT] Migrating user: wlstjd15902@naver.com
+[OUTPUT] Error migrating user wlstjd15902@naver.com: Invalid API key
+[OUTPUT] Migrating user: wlstjd15903@naver.com
+[OUTPUT] Error migrating user wlstjd15903@naver.com: Invalid API key
+[OUTPUT] Migrating user: wlstjd15904@naver.com
+[OUTPUT] Error migrating user wlstjd15904@naver.com: Invalid API key
+[OUTPUT] Migrating user: wlstjd15905@naver.com
+[OUTPUT] Error migrating user wlstjd15905@naver.com: Invalid API key
+[OUTPUT] User migration completed
+Starting post migration...
+[OUTPUT] Found 5 posts to migrate
+[OUTPUT] Migrating post: 507652913998 - 김대기 4
+Error in post migration: Do not know how to serialize a BigInt
+[OUTPUT] Starting notification migration...
+[OUTPUT] Found 14 notifications to migrate
+[OUTPUT] Migrating notification: 10
+[OUTPUT] Error migrating notification 10: Invalid API key
+[OUTPUT] Migrating notification: 11
+[OUTPUT] Error migrating notification 11: Invalid API key
+[OUTPUT] Migrating notification: 12
+[OUTPUT] Error migrating notification 12: Invalid API key
+[OUTPUT] Migrating notification: 13
+[OUTPUT] Error migrating notification 13: Invalid API key
+Migrating notification: 14
+[OUTPUT] Error migrating notification 14: Invalid API key
+[OUTPUT] Migrating notification: 15
+[OUTPUT] Error migrating notification 15: Invalid API key
+[OUTPUT] Migrating notification: 16
+[OUTPUT] Error migrating notification 16: Invalid API key
+[OUTPUT] Migrating notification: 17
+[OUTPUT] Error migrating notification 17: Invalid API key
+[OUTPUT] Migrating notification: 18
+[OUTPUT] Error migrating notification 18: Invalid API key
+[OUTPUT] Migrating notification: 19
+Error in notification migration: Do not know how to serialize a BigInt
+=== Supabase Migration Completed Successfully ===
+마이그레이션이 성공적으로 완료되었습니다.
+개발 서버를 다시 시작하려면 "pnpm dev"를 실행하세요.
