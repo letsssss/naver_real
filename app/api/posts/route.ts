@@ -1,356 +1,450 @@
-import { NextResponse, NextRequest } from "next/server";
-import { getAuthenticatedUser, verifyToken, getTokenFromHeaders, getTokenFromCookies } from "@/lib/auth";
-import { supabase, createServerSupabaseClient } from "@/lib/supabase";
-import { z } from "zod";
+import { NextResponse } from 'next/server';
+import { 
+  supabase, 
+  createServerSupabaseClient, 
+  formatUserId
+} from '@/lib/supabase';
+import { validateRequestToken } from '@/lib/auth';
 
-// 개발 환경인지 확인하는 변수 추가
-const isDevelopment = process.env.NODE_ENV === 'development';
+// 표준 응답 헤더
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
 
-// 기본 테스트 사용자 ID (개발 환경에서 사용)
-const DEFAULT_TEST_USER_ID = 3;
-
-// 입력 데이터 유효성 검사를 위한 zod 스키마
-const postSchema = z.object({
-  title: z.string().min(2, "제목은 2글자 이상이어야 합니다."),
-  content: z.string().min(10, "내용은 10글자 이상이어야 합니다."),
-  category: z.string().optional(),
-  eventName: z.string().optional(),
-  eventDate: z.string().optional(),
-  eventVenue: z.string().optional(),
-  ticketPrice: z.number()
-    .int("가격은 정수여야 합니다.")
-    .nonnegative("가격은 0 이상이어야 합니다.")
-    .safe("가격이 너무 큽니다. 더 작은 값을 입력해주세요.")
-    .optional(),
-  contactInfo: z.string().optional(),
-  type: z.string().optional(),
-});
-
-// BigInt를 문자열로 변환하는 함수
-function convertBigIntToString(obj: any): any {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-  
-  if (typeof obj === 'bigint') {
-    return obj.toString();
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(item => convertBigIntToString(item));
-  }
-  
-  if (typeof obj === 'object') {
-    const newObj: any = {};
-    for (const key in obj) {
-      newObj[key] = convertBigIntToString(obj[key]);
-    }
-    return newObj;
-  }
-  
-  return obj;
+// API 응답 생성 유틸리티
+function createApiResponse(data: any, status = 200) {
+  return NextResponse.json(data, { status, headers: CORS_HEADERS });
 }
 
-// CORS 헤더 설정을 위한 함수
-function addCorsHeaders(response: NextResponse) {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  // 캐시 방지 헤더
-  response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  response.headers.set('Pragma', 'no-cache');
-  response.headers.set('Expires', '0');
-  
-  return response;
+// 오류 응답 생성 유틸리티
+function createErrorResponse(message: string, code: string, status = 500, details?: any) {
+  return NextResponse.json({
+    error: message,
+    code,
+    details: process.env.NODE_ENV === 'development' ? details : undefined
+  }, { status, headers: CORS_HEADERS });
 }
 
-// OPTIONS 메서드 처리
+// CORS 사전 요청 처리
 export async function OPTIONS() {
-  return addCorsHeaders(new NextResponse(null, { status: 200 }));
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS
+  });
 }
 
-// 글 작성 API
-export async function POST(request: NextRequest) {
+// GET 요청 처리 - 게시물 목록 또는 특정 게시물 조회
+export async function GET(req: Request) {
   try {
-    console.log("글 작성 API 호출됨");
+    console.log('[게시물 API] GET 요청 시작');
     
-    // JWT 토큰 확인
-    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
-    console.log('토큰 정보:', token ? '토큰 있음' : '토큰 없음');
+    const url = new URL(req.url);
+    const postIdParam = url.searchParams.get('id');
     
-    // 사용자 ID 결정
-    let userId: number;
-    
-    // 개발 환경에서는 항상 기본 테스트 사용자 ID 사용
-    if (isDevelopment) {
-      userId = DEFAULT_TEST_USER_ID;
-      console.log(`개발 환경에서 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
-      
-      // 옵션: 개발 환경에서도 Supabase 토큰 확인 (필요한 경우)
-      if (token) {
-        try {
-          const supabaseServerClient = createServerSupabaseClient(token);
-          console.log('개발 환경: Supabase 클라이언트 생성 성공');
-        } catch (err) {
-          console.log('개발 환경: Supabase 클라이언트 생성 실패, 기본 구현으로 진행');
-        }
-      }
-    } else {
-      // 프로덕션 환경에서는 인증 필요
-      // 현재 인증된 사용자 정보 가져오기
-      const authUser = await getAuthenticatedUser(request);
-      
-      if (!authUser) {
-        console.log("인증된 사용자를 찾을 수 없음");
-        return addCorsHeaders(NextResponse.json(
-          { success: false, message: "인증되지 않은 사용자입니다." },
-          { status: 401 }
-        ));
+    // ID가 제공된 경우 단일 게시물 조회
+    if (postIdParam) {
+      const postId = parseInt(postIdParam, 10);
+      if (isNaN(postId)) {
+        return createErrorResponse('유효하지 않은 게시물 ID입니다.', 'INVALID_ID', 400);
       }
       
-      userId = Number(authUser.id);
-      console.log("인증된 사용자 ID:", userId);
+      return await getPostById(postId);
     }
-
-    // 요청 본문 파싱
-    const body = await request.json();
     
-    // 입력 데이터 유효성 검사
-    const validationResult = postSchema.safeParse(body);
+    // 전체 게시물 목록 조회
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
+    const pageSize = parseInt(url.searchParams.get('limit') || '10', 10);
     
-    if (!validationResult.success) {
-      return addCorsHeaders(NextResponse.json(
-        { 
-          success: false, 
-          message: "유효하지 않은 입력 데이터입니다.", 
-          errors: validationResult.error.errors 
-        },
-        { status: 400 }
-      ));
-    }
-
-    // 글 저장 - Supabase 사용
-    try {
-      // 개발 환경에서 ID 필드 문제 해결을 위해 임의의 ID 생성
-      const randomId = isDevelopment ? Math.floor(Math.random() * 9000000000000) + 1000000000000 : undefined;
-      
-      // Supabase 데이터 형식
-      const postData = {
-        id: randomId,
-        title: body.title,
-        content: body.content,
-        category: body.category || "GENERAL",
-        author_id: userId,
-        event_name: body.eventName || null,
-        event_date: body.eventDate || null,
-        event_venue: body.eventVenue || null,
-        ticket_price: body.ticketPrice && body.ticketPrice > 0 ? Math.min(body.ticketPrice, Number.MAX_SAFE_INTEGER) : null,
-        contact_info: body.contactInfo || null,
-        status: "ACTIVE",
-        is_deleted: false
-      };
-      
-      const { data: post, error } = await supabase
-        .from('posts')
-        .insert(postData)
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Supabase 글 생성 오류:", error);
-        throw error;
-      }
-
-      console.log("글 작성 성공:", post.id);
-
-      return addCorsHeaders(NextResponse.json(
-        { 
-          success: true, 
-          message: "글이 성공적으로 작성되었습니다.", 
-          post: post
-        },
-        { status: 201 }
-      ));
-    } catch (createError) {
-      console.error("글 생성 실패 (상세 오류):", createError);
-      return addCorsHeaders(NextResponse.json(
-        { 
-          success: false, 
-          message: "글 저장 중 오류가 발생했습니다.", 
-          error: isDevelopment ? String(createError) : undefined 
-        },
-        { status: 500 }
-      ));
-    }
+    return await getPosts(page, pageSize);
   } catch (error) {
-    console.error("글 작성 오류:", error);
-    return addCorsHeaders(NextResponse.json(
-      { success: false, message: "글 작성 중 오류가 발생했습니다." },
-      { status: 500 }
-    ));
-  } finally {
-    console.log("Posts API 요청 처리 완료");
+    console.error('[게시물 API] 조회 오류:', error);
+    return createErrorResponse(
+      '게시물을 조회하는 중 오류가 발생했습니다.', 
+      'SERVER_ERROR', 
+      500, 
+      error
+    );
   }
 }
 
-// GET 요청 핸들러 - 글 목록 가져오기
-export async function GET(request: NextRequest) {
-  try {
-    console.log("글 목록 API 호출됨");
+// 단일 게시물 조회 핸들러
+async function getPostById(postId: number) {
+  // 게시물 조회
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      user:users(id, name, email),
+      comments(*)
+    `)
+    .eq('id', postId)
+    .single();
+  
+  if (error) {
+    console.error('[게시물 API] 단일 게시물 조회 오류:', error);
     
-    // JWT 토큰 확인 (알림 API와 유사하게 구현)
-    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
-    console.log('토큰 정보:', token ? '토큰 있음' : '토큰 없음');
-    
-    // 개발 환경에서는 모의 Supabase 검증 시도
-    if (isDevelopment && token) {
-      console.log("개발 환경에서 Supabase 검증 시도 중...");
-      
-      try {
-        const supabaseServerClient = createServerSupabaseClient(token);
-        console.log('개발 환경: Supabase 클라이언트 생성 성공');
-      } catch (err) {
-        console.log('개발 환경: Supabase 클라이언트 생성 실패, 기본 구현으로 진행');
-      }
+    if (error.code === 'PGRST116') {
+      return createErrorResponse('게시물을 찾을 수 없습니다.', 'NOT_FOUND', 404);
     }
     
-    // 페이지네이션 파라미터 (search 파라미터로 전달됨)
-    const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
-    const category = searchParams.get('category') || undefined;
-    const userId = searchParams.get('userId') || undefined;
-    const searchQuery = searchParams.get('searchQuery') || '';
+    return createErrorResponse(
+      '게시물을 조회하는 중 오류가 발생했습니다.', 
+      'DB_ERROR', 
+      500, 
+      error
+    );
+  }
+  
+  if (!post) {
+    return createErrorResponse('게시물을 찾을 수 없습니다.', 'NOT_FOUND', 404);
+  }
+  
+  // 좋아요 수 조회
+  const { count: likesCount, error: likesError } = await supabase
+    .from('likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('post_id', postId);
+  
+  if (likesError) {
+    console.warn('[게시물 API] 좋아요 수 조회 오류:', likesError);
+  }
+  
+  // 응답 데이터 구성
+  const formattedPost = {
+    id: post.id,
+    title: post.title,
+    content: post.content,
+    published: post.published,
+    createdAt: post.created_at,
+    updatedAt: post.updated_at,
+    likesCount: likesCount || 0,
+    author: post.user ? {
+      id: post.user.id,
+      name: post.user.name,
+      email: post.user.email
+    } : null,
+    comments: post.comments ? post.comments.map((comment: any) => ({
+      id: comment.id,
+      content: comment.content,
+      createdAt: comment.created_at,
+      userId: comment.user_id
+    })) : []
+  };
+  
+  return createApiResponse({ post: formattedPost });
+}
+
+// 게시물 목록 조회 핸들러
+async function getPosts(page: number, pageSize: number) {
+  const offset = (page - 1) * pageSize;
+  
+  // 게시물 목록 조회
+  const { data: posts, error, count } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      user:users(id, name, email)
+    `, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+  
+  if (error) {
+    console.error('[게시물 API] 목록 조회 오류:', error);
+    return createErrorResponse(
+      '게시물 목록을 조회하는 중 오류가 발생했습니다.', 
+      'DB_ERROR', 
+      500, 
+      error
+    );
+  }
+  
+  // 응답 데이터 구성
+  const formattedPosts = posts.map(post => ({
+    id: post.id,
+    title: post.title,
+    content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
+    published: post.published,
+    createdAt: post.created_at,
+    updatedAt: post.updated_at,
+    author: post.user ? {
+      id: post.user.id,
+      name: post.user.name,
+      email: post.user.email
+    } : null
+  }));
+  
+  return createApiResponse({
+    posts: formattedPosts,
+    pagination: {
+      totalCount: count || 0,
+      totalPages: count ? Math.ceil(count / pageSize) : 0,
+      currentPage: page,
+      pageSize,
+      hasMore: (offset + posts.length) < (count || 0)
+    }
+  });
+}
+
+// POST 요청 처리 - 새 게시물 생성
+export async function POST(req: Request) {
+  try {
+    console.log('[게시물 API] POST 요청 시작');
     
-    console.log("API 요청 파라미터:", { page, limit, category, userId, searchQuery });
+    // 사용자 인증
+    const { userId, authenticated } = await validateRequestToken(req);
     
-    // 페이지네이션 계산
-    const skip = (page - 1) * limit;
+    if (!authenticated) {
+      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+    }
     
-    try {
-      // 개발 환경에서 DB 연결 테스트
-      if (isDevelopment) {
-        try {
-          const { data: testConnection, error: connectionError } = await supabase
-            .from('posts')
-            .select('count(*)', { count: 'exact', head: true });
-            
-          if (connectionError) throw connectionError;
-          console.log("데이터베이스 연결 테스트 성공");
-        } catch (dbConnectionError) {
-          console.error("데이터베이스 연결 오류:", dbConnectionError);
-          return addCorsHeaders(
-            NextResponse.json({ 
-              success: false, 
-              message: "데이터베이스 연결에 실패했습니다." 
-            }, { status: 500 })
-          );
-        }
-      }
-      
-      // Supabase 필터 조건 구성
-      let query = supabase
-        .from('posts')
-        .select('*, author:users!author_id(id, name, email)', { count: 'exact' });
-      
-      // 기본 필터: 삭제되지 않은 글만
-      query = query.eq('is_deleted', false);
-      
-      // 카테고리 필터
-      if (category) {
-        query = query.eq('category', category);
-        console.log(`카테고리 필터 적용: ${category}`);
-      }
-      
-      // 사용자 ID 필터
-      if (userId) {
-        if (isDevelopment) {
-          console.log(`개발 환경: 기본 사용자 ID(${DEFAULT_TEST_USER_ID})로 필터링`);
-          query = query.eq('author_id', DEFAULT_TEST_USER_ID);
-        } else {
-          query = query.eq('author_id', userId);
-          console.log(`사용자 ID로 필터링: ${userId}`);
-        }
-      }
-      
-      // 검색어 필터 - 모의 클라이언트에서는 or 메서드가 제한될 수 있음
-      if (searchQuery) {
-        // 모의 환경에서는 단순화된 검색을 사용
-        query = query.eq('title', searchQuery); // 간소화된 검색 (실제로는 ilike 사용)
-        console.log(`검색어로 필터링: ${searchQuery}`);
-      }
-      
-      // 데이터 조회 실행
-      let { data: posts, error, count } = await query;
-      
-      // 정렬 및 페이지네이션 - 모의 환경에서는 자바스크립트로 처리
-      if (posts) {
-        // 정렬
-        posts = posts.sort((a, b) => {
-          const dateA = new Date(a.created_at || 0).getTime();
-          const dateB = new Date(b.created_at || 0).getTime();
-          return dateB - dateA; // 내림차순 정렬
-        });
-        
-        // 페이지네이션
-        posts = posts.slice(skip, skip + limit);
-      }
-      
-      if (error) {
-        console.error("Supabase 조회 오류:", error);
-        return addCorsHeaders(
-          NextResponse.json({ 
-            success: false, 
-            message: "데이터 조회 중 오류가 발생했습니다." 
-          }, { status: 500 })
-        );
-      }
-      
-      // 조회 결과가 없어도 빈 배열 반환
-      const safePostsList = posts || [];
-      console.log(`${safePostsList.length}개의 게시글을 찾았습니다.`);
-      const totalCount = count || 0;
-      
-      // 성공 응답 반환
-      return addCorsHeaders(NextResponse.json({
-        success: true,
-        posts: safePostsList,
-        pagination: {
-          totalCount,
-          totalPages: Math.ceil(totalCount / limit),
-          currentPage: page,
-          hasMore: skip + safePostsList.length < totalCount
-        }
-      }, { status: 200 }));
-    } catch (dbError) {
-      console.error("데이터베이스 조회 오류:", dbError instanceof Error ? dbError.message : String(dbError));
-      console.error("상세 오류:", dbError);
-      
-      return addCorsHeaders(
-        NextResponse.json({ 
-          success: false, 
-          message: "데이터베이스 조회 중 오류가 발생했습니다.",
-          error: process.env.NODE_ENV === 'development' ? String(dbError) : undefined
-        }, { status: 500 })
+    // 요청 본문 파싱
+    const body = await req.json();
+    const { title, content } = body;
+    
+    // 필수 필드 검증
+    if (!title || !content) {
+      return createErrorResponse(
+        '제목과 내용은 필수 항목입니다.', 
+        'VALIDATION_ERROR', 
+        400
       );
     }
-  } catch (error) {
-    console.error("글 목록 조회 오류:", error instanceof Error ? error.message : String(error));
-    console.error("상세 오류 스택:", error);
     
-    // 오류 응답
-    const errorResponse = { 
-      success: false, 
-      message: error instanceof Error ? error.message : "글 목록을 가져오는 중 오류가 발생했습니다.",
-      // 개발 환경에서만 자세한 오류 정보 포함
-      details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+    // 게시물 생성
+    const { data: post, error } = await supabase
+      .from('posts')
+      .insert({
+        title,
+        content,
+        user_id: userId,
+        published: true
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('[게시물 API] 생성 오류:', error);
+      return createErrorResponse(
+        '게시물을 생성하는 중 오류가 발생했습니다.', 
+        'DB_ERROR', 
+        500, 
+        error
+      );
+    }
+    
+    // 응답 데이터
+    const formattedPost = {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      published: post.published,
+      createdAt: post.created_at,
+      userId: post.user_id
     };
     
-    return addCorsHeaders(
-      NextResponse.json(errorResponse, { status: 500 })
+    return createApiResponse({ post: formattedPost }, 201);
+  } catch (error) {
+    console.error('[게시물 API] 생성 전역 오류:', error);
+    return createErrorResponse(
+      '게시물을 생성하는 중 오류가 발생했습니다.', 
+      'SERVER_ERROR', 
+      500, 
+      error
     );
-  } finally {
-    console.log("Posts API 요청 처리 완료");
+  }
+}
+
+// PUT 요청 처리 - 게시물 수정
+export async function PUT(req: Request) {
+  try {
+    console.log('[게시물 API] PUT 요청 시작');
+    
+    // 사용자 인증
+    const { userId, authenticated } = await validateRequestToken(req);
+    
+    if (!authenticated) {
+      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+    }
+    
+    // 요청 본문 파싱
+    const body = await req.json();
+    const { id, title, content, published } = body;
+    
+    // 필수 필드 검증
+    if (!id || (!title && !content && published === undefined)) {
+      return createErrorResponse(
+        '게시물 ID와 수정할 내용은 필수 항목입니다.', 
+        'VALIDATION_ERROR', 
+        400
+      );
+    }
+    
+    // 게시물 소유자 확인
+    const { data: existingPost, error: fetchError } = await supabase
+      .from('posts')
+      .select('user_id')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError || !existingPost) {
+      console.error('[게시물 API] 조회 오류:', fetchError);
+      return createErrorResponse(
+        '게시물을 찾을 수 없습니다.', 
+        'NOT_FOUND', 
+        404, 
+        fetchError
+      );
+    }
+    
+    // 권한 확인
+    if (existingPost.user_id !== userId) {
+      return createErrorResponse(
+        '이 게시물을 수정할 권한이 없습니다.', 
+        'FORBIDDEN', 
+        403
+      );
+    }
+    
+    // 업데이트할 필드 구성
+    const updateData: Record<string, any> = {};
+    if (title !== undefined) updateData.title = title;
+    if (content !== undefined) updateData.content = content;
+    if (published !== undefined) updateData.published = published;
+    updateData.updated_at = new Date().toISOString();
+    
+    // 게시물 업데이트
+    const { data: updatedPost, error } = await supabase
+      .from('posts')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('[게시물 API] 업데이트 오류:', error);
+      return createErrorResponse(
+        '게시물을 업데이트하는 중 오류가 발생했습니다.', 
+        'DB_ERROR', 
+        500, 
+        error
+      );
+    }
+    
+    // 응답 데이터
+    const formattedPost = {
+      id: updatedPost.id,
+      title: updatedPost.title,
+      content: updatedPost.content,
+      published: updatedPost.published,
+      createdAt: updatedPost.created_at,
+      updatedAt: updatedPost.updated_at,
+      userId: updatedPost.user_id
+    };
+    
+    return createApiResponse({ post: formattedPost });
+  } catch (error) {
+    console.error('[게시물 API] 업데이트 전역 오류:', error);
+    return createErrorResponse(
+      '게시물을 업데이트하는 중 오류가 발생했습니다.', 
+      'SERVER_ERROR', 
+      500, 
+      error
+    );
+  }
+}
+
+// DELETE 요청 처리 - 게시물 삭제
+export async function DELETE(req: Request) {
+  try {
+    console.log('[게시물 API] DELETE 요청 시작');
+    
+    // 사용자 인증
+    const { userId, authenticated } = await validateRequestToken(req);
+    
+    if (!authenticated) {
+      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+    }
+    
+    // 요청 파라미터 파싱
+    const url = new URL(req.url);
+    const postIdParam = url.searchParams.get('id');
+    
+    if (!postIdParam) {
+      return createErrorResponse(
+        '게시물 ID는 필수 항목입니다.', 
+        'VALIDATION_ERROR', 
+        400
+      );
+    }
+    
+    const postId = parseInt(postIdParam, 10);
+    if (isNaN(postId)) {
+      return createErrorResponse(
+        '유효하지 않은 게시물 ID입니다.', 
+        'VALIDATION_ERROR', 
+        400
+      );
+    }
+    
+    // 게시물 소유자 확인
+    const { data: existingPost, error: fetchError } = await supabase
+      .from('posts')
+      .select('user_id')
+      .eq('id', postId)
+      .single();
+    
+    if (fetchError || !existingPost) {
+      console.error('[게시물 API] 조회 오류:', fetchError);
+      return createErrorResponse(
+        '게시물을 찾을 수 없습니다.', 
+        'NOT_FOUND', 
+        404, 
+        fetchError
+      );
+    }
+    
+    // 권한 확인
+    if (existingPost.user_id !== userId) {
+      return createErrorResponse(
+        '이 게시물을 삭제할 권한이 없습니다.', 
+        'FORBIDDEN', 
+        403
+      );
+    }
+    
+    // 게시물 삭제 (관련 댓글과 좋아요는 CASCADE로 자동 삭제)
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId);
+    
+    if (error) {
+      console.error('[게시물 API] 삭제 오류:', error);
+      return createErrorResponse(
+        '게시물을 삭제하는 중 오류가 발생했습니다.', 
+        'DB_ERROR', 
+        500, 
+        error
+      );
+    }
+    
+    return createApiResponse({ 
+      success: true, 
+      message: '게시물이 성공적으로 삭제되었습니다.' 
+    });
+  } catch (error) {
+    console.error('[게시물 API] 삭제 전역 오류:', error);
+    return createErrorResponse(
+      '게시물을 삭제하는 중 오류가 발생했습니다.', 
+      'SERVER_ERROR', 
+      500, 
+      error
+    );
   }
 } 

@@ -1,10 +1,13 @@
 import { compare, hash } from 'bcryptjs';
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import { getServerSession } from 'next-auth/next';
 import * as jsonwebtoken from 'jsonwebtoken';
 import { supabase } from '@/lib/supabase';
+import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { createServerSupabaseClient } from './supabase';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -41,7 +44,7 @@ console.log('JWT_SECRET 출처:', process.env.JWT_SECRET ? '환경 변수' : '�
 console.log('=========================');
 
 // 기본 테스트 사용자 ID (개발 환경에서 사용)
-const DEFAULT_TEST_USER_ID = 3;
+const DEFAULT_TEST_USER_ID = '123e4567-e89b-12d3-a456-426614174000'; // UUID 형식으로 변경
 
 // NextAuth 옵션 설정
 export const authOptions: NextAuthOptions = {
@@ -95,38 +98,90 @@ export function generateRefreshToken(userId: number): string {
   );
 }
 
-// JWT 토큰 검증 함수 - 안전하게 처리하도록 수정
-export function verifyToken(token: string | null) {
-  // 토큰이 없는 경우
+// 유효한 JWT 포맷 확인 (기본 검증)
+function isValidJwtFormat(token: string): boolean {
+  // JWT는 header.payload.signature 형식이어야 함
+  const tokenParts = token.split('.');
+  return tokenParts.length === 3;
+}
+
+/**
+ * JWT 토큰 검증 함수
+ * @param token JWT 토큰
+ * @returns 디코딩된 페이로드 (userId 포함)
+ */
+export async function verifyToken(token: string): Promise<any> {
   if (!token) {
-    console.log("토큰이 제공되지 않았습니다.");
+    throw new Error('토큰이 제공되지 않았습니다.');
+  }
+
+  if (!isValidJwtFormat(token)) {
+    throw new Error('유효하지 않은 토큰 형식입니다.');
+  }
+
+  try {
+    // 1. Supabase JWT 검증 시도
+    try {
+      const supabase = createServerSupabaseClient();
+      const { data, error } = await supabase.auth.getUser(token);
+      
+      if (!error && data.user) {
+        return {
+          userId: data.user.id,
+          email: data.user.email,
+          source: 'supabase'
+        };
+      }
+    } catch (supabaseError) {
+      console.warn('Supabase 토큰 검증 실패:', supabaseError);
+    }
+
+    // 2. 커스텀 JWT 검증
+    // JWT 서명 키 설정
+    const secret = process.env.JWT_SECRET || JWT_SECRET; // 환경변수 없으면 기본값 사용
     
-    // 개발 환경에서는 기본 사용자로 진행
-    if (isDevelopment) {
-      console.log(`개발 환경에서는 기본 사용자 ID(${DEFAULT_TEST_USER_ID})를 사용`);
-      return { userId: DEFAULT_TEST_USER_ID, name: '개발 테스트 사용자' };
+    // 개발 환경에서는 하드코딩된 값 사용
+    if (isDevelopment && !secret) {
+      console.log('개발 환경에서 기본 JWT_SECRET 사용');
+      return {
+        userId: DEFAULT_TEST_USER_ID,
+        email: 'test@example.com',
+        source: 'dev'
+      };
     }
     
-    return null;
-  }
-  
-  // 개발 환경 처리 - 항상 기본 사용자 ID 반환
-  if (isDevelopment) {
-    console.log(`개발 환경에서 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
-    return { userId: DEFAULT_TEST_USER_ID, name: '개발 테스트 사용자' };
-  }
-  
-  // 프로덕션 환경에서 표준 JWT 검증
-  try {
-    console.log("JWT 토큰 검증 시도", token.substring(0, 10) + "...");
+    // 프로덕션 환경에서만 오류 발생
+    if (!isDevelopment && !secret) {
+      throw new Error('환경 변수에 JWT_SECRET이 설정되지 않았습니다.');
+    }
+
+    // JWKS 엔드포인트가 있는 경우 원격 키 사용
+    const jwksUrl = process.env.JWKS_ENDPOINT;
     
-    // 표준 JWT 토큰 검증
-    const decoded = jsonwebtoken.verify(token, JWT_SECRET) as { userId: number; name?: string };
-    console.log("JWT 토큰 검증 성공", decoded);
-    return decoded;
+    if (jwksUrl) {
+      // 원격 JWKS 사용
+      const JWKS = createRemoteJWKSet(new URL(jwksUrl));
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: process.env.JWT_ISSUER || 'netxway',
+        audience: process.env.JWT_AUDIENCE || 'user'
+      });
+      
+      return payload;
+    } else {
+      // 로컬 텍스트 인코딩 비밀키 사용
+      const textEncoder = new TextEncoder();
+      const secretBuffer = textEncoder.encode(secret);
+      
+      const { payload } = await jwtVerify(token, secretBuffer, {
+        issuer: process.env.JWT_ISSUER || 'netxway',
+        audience: process.env.JWT_AUDIENCE || 'user'
+      });
+      
+      return payload;
+    }
   } catch (error) {
-    console.error("JWT 토큰 검증 실패:", error);
-    return null;
+    console.error('토큰 검증 중 오류:', error);
+    throw new Error(`토큰 검증 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
   }
 }
 
@@ -173,24 +228,53 @@ export function verifyRefreshToken(token: string) {
   }
 }
 
-// 요청 헤더에서 인증 토큰을 가져오는 함수
+/**
+ * 요청 헤더에서 인증 토큰을 가져오는 함수
+ * @param headers 헤더 객체
+ * @returns 추출된 토큰 또는 null
+ */
 export function getTokenFromHeaders(headers: Headers): string | null {
-  const authHeader = headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const authHeader = headers.get('Authorization');
+  
+  if (!authHeader) return null;
+  
+  // Bearer 토큰 추출
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
     return null;
   }
-  return authHeader.split(' ')[1];
+  
+  return parts[1];
 }
 
-// 쿠키에서 인증 토큰을 가져오는 함수
-export function getTokenFromCookies(request: Request): string | null {
-  const cookies = request.headers.get('cookie');
-  if (!cookies) return null;
+/**
+ * 쿠키에서 액세스 토큰을 추출합니다.
+ * NextRequest 또는 Request 객체 모두 지원
+ * @param req 요청 객체
+ * @returns 추출된 토큰 또는 null
+ */
+export function getTokenFromCookies(req: Request | NextRequest): string | null {
+  // NextRequest 객체 처리
+  if ('cookies' in req && typeof req.cookies === 'object' && req.cookies.get) {
+    const tokenCookie = req.cookies.get('accessToken');
+    if (tokenCookie) return tokenCookie.value;
+    
+    const sbTokenCookie = req.cookies.get('sb-access-token');
+    if (sbTokenCookie) return sbTokenCookie.value;
+  }
   
-  const tokenCookie = cookies.split(';').find(c => c.trim().startsWith('auth-token='));
-  if (!tokenCookie) return null;
+  // 표준 Request 객체 처리
+  const cookieHeader = req.headers.get('cookie');
+  if (!cookieHeader) return null;
   
-  return tokenCookie.split('=')[1].trim();
+  // 쿠키 문자열 파싱
+  const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+    const [key, value] = cookie.trim().split('=');
+    acc[key] = value;
+    return acc;
+  }, {} as Record<string, string>);
+  
+  return cookies['accessToken'] || cookies['sb-access-token'] || null;
 }
 
 /**
@@ -215,7 +299,7 @@ export async function getAuthenticatedUser(request: NextRequest) {
     
     if (token) {
       // JWT 토큰 검증
-      const decoded = verifyToken(token);
+      const decoded = await verifyToken(token);
       if (decoded && decoded.userId) {
         // Supabase에서 사용자 정보 조회
         const { data: user, error } = await supabase
@@ -277,5 +361,49 @@ export function generateDevToken(userId: number, name: string = '개발 테스�
     console.error('개발용 토큰 생성 실패:', error);
     // 대체 토큰 방식 (보안에 취약하니 개발용으로만 사용)
     return `dev-jwt-${userId}-${Date.now()}`;
+  }
+}
+
+/**
+ * 요청에서 토큰을 추출하고 검증합니다.
+ * @param req 요청 객체
+ * @returns 검증된 사용자 정보 또는 null
+ */
+export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean }> {
+  // 개발 환경 감지
+  const isDev = process.env.NODE_ENV === 'development';
+  
+  try {
+    // 토큰 가져오기
+    const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
+    
+    if (token) {
+      try {
+        const decoded = await verifyToken(token);
+        if (decoded && decoded.userId) {
+          // 사용자 ID가 UUID인지 확인하고 문자열로 변환
+          const userId = String(decoded.userId);
+          return { userId, authenticated: true };
+        }
+      } catch (e) {
+        console.error('토큰 검증 실패:', e);
+      }
+    }
+    
+    // 개발 환경에서는 기본 사용자 허용
+    if (isDev) {
+      return { userId: '3', authenticated: true };
+    }
+    
+    return { userId: '', authenticated: false };
+  } catch (e) {
+    console.error('인증 검증 과정에서 오류 발생:', e);
+    
+    // 개발 환경에서는 기본 사용자 허용
+    if (isDev) {
+      return { userId: '3', authenticated: true };
+    }
+    
+    return { userId: '', authenticated: false };
   }
 } 

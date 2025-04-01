@@ -175,3 +175,107 @@ pnpm dev
 ## 라이선스
 
 MIT 
+
+# Prisma에서 Supabase로 마이그레이션된 프로젝트
+
+## 마이그레이션 요약
+
+이 프로젝트는 Prisma ORM에서 Supabase로 마이그레이션되었습니다. 주요 변경 사항은 다음과 같습니다:
+
+### 1. 데이터베이스 액세스 레이어
+- `lib/prisma.ts` → `lib/supabase.ts`로 변경
+- Prisma 클라이언트 대신 Supabase SDK 사용
+- 데이터베이스 액세스를 위한 싱글톤 패턴 구현
+
+### 2. 인증 시스템
+- JWT 기반 인증 메커니즘 유지
+- 토큰 검증 로직 강화
+- 호환성을 위한 다양한 인증 방식 지원 (JWT, Supabase 세션)
+
+### 3. API 엔드포인트
+- 모든 API 라우트를 Supabase 쿼리로 리팩토링
+- 표준화된 응답 형식 구현
+- 오류 처리 및 로깅 기능 강화
+
+### 4. 데이터 변환 유틸리티
+- snake_case에서 camelCase로 변환하는 유틸리티 함수 제공
+- 날짜 파싱 및 포맷팅 기능 통합
+- ID 처리 일관성 유지 (문자열 기반)
+
+### 5. 환경 변수 관리
+- Supabase 연결을 위한 필수 환경 변수 추가
+- 개발/프로덕션 환경에 따른 조건부 로직 구현
+- 환경 변수 검증 로직 추가
+
+## 실행 방법
+
+### 환경 설정
+
+1. `.env.local` 파일에 Supabase 연결 정보 설정:
+
+```env
+# Supabase 연결 정보
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# 인증 관련 설정
+JWT_SECRET=your-secret-key
+JWT_ISSUER=your-issuer
+JWT_AUDIENCE=your-audience
+```
+
+### 개발 서버 실행
+
+```bash
+# 패키지 설치
+pnpm install
+
+# 개발 서버 실행
+pnpm dev
+```
+
+### 프로덕션 빌드
+
+```bash
+# 빌드
+pnpm build
+
+# 프로덕션 서버 실행
+pnpm start
+```
+
+## API 사용 예시
+
+### 게시물 조회
+
+```javascript
+// 게시물 목록 조회
+const response = await fetch('/api/posts?page=1&limit=10');
+const data = await response.json();
+
+// 단일 게시물 조회
+const response = await fetch(`/api/posts?id=${postId}`);
+const data = await response.json();
+```
+
+### 알림 조회
+
+```javascript
+// 인증 헤더 설정
+const headers = {
+  'Authorization': `Bearer ${token}`
+};
+
+// 알림 목록 조회
+const response = await fetch('/api/notifications', { headers });
+const data = await response.json();
+```
+
+## 마이그레이션 참고 사항
+
+1. **인증 토큰**: 기존 JWT 토큰과 Supabase 토큰 모두 지원됨
+2. **ID 형식**: Prisma는 숫자 ID, Supabase는 UUID 사용 - 형식 변환 로직 추가됨
+3. **쿼리 방식**: ORM 스타일에서 빌더 패턴으로 변경
+4. **타입 안전성**: 타입스크립트 인터페이스 추가로 타입 안전성 강화
+5. **오류 처리**: 표준화된 오류 응답 형식 적용 

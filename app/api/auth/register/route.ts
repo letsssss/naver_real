@@ -13,7 +13,6 @@ declare global {
 }
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/utils/supabaseClient";
 import { supabase } from '@/lib/supabase';
 
 // 이메일 유효성 검사 함수
@@ -65,30 +64,18 @@ export async function POST(request: Request) {
     
     console.log("Supabase 정상 초기화 확인, auth.signUp 함수 유무:", !!supabase.auth.signUp);
     
-    // 이메일 중복 검사: Supabase Auth에서 사용자 조회
+    // 이메일 중복 검사
     try {
       // Supabase에서 사용자 이메일 검색
-      const { data: supabaseUser, error: supabaseError } = await supabase.auth.admin.listUsers();
+      const { data: existingUsers, error: getUsersError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', emailLowerCase);
       
-      if (!supabaseError && supabaseUser) {
-        const existingUser = supabaseUser.users.find(
-          user => user.email?.toLowerCase() === emailLowerCase
-        );
-        
-        if (existingUser) {
-          console.log("이미 가입된 이메일:", emailLowerCase);
-          return NextResponse.json({ 
-            error: "이미 가입된 이메일입니다. 로그인을 시도하거나 다른 이메일을 사용해 주세요." 
-          }, { status: 400 });
-        }
-      }
-      
-      // Prisma에서도 이메일 중복 확인 (Supabase와 연동되지 않은 계정 확인)
-      const existingDbUser = await supabase.from('users').select('*').eq('email', emailLowerCase .toLowerCase())
-      });
-      
-      if (existingDbUser) {
-        console.log("Prisma DB에 이미 존재하는 이메일:", emailLowerCase);
+      if (getUsersError) {
+        console.error("사용자 검색 중 오류:", getUsersError);
+      } else if (existingUsers && existingUsers.length > 0) {
+        console.log("이미 가입된 이메일:", emailLowerCase);
         return NextResponse.json({ 
           error: "이미 가입된 이메일입니다. 로그인을 시도하거나 다른 이메일을 사용해 주세요." 
         }, { status: 400 });
