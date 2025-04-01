@@ -235,6 +235,61 @@ export interface Database {
         }
         Relationships: []
       }
+      purchases: {
+        Row: {
+          id: number
+          buyer_id: string
+          post_id: number
+          seller_id: string
+          status: string
+          amount: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          buyer_id: string
+          post_id: number
+          seller_id: string
+          status?: string
+          amount: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          buyer_id?: string
+          post_id?: number
+          seller_id?: string
+          status?: string
+          amount?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

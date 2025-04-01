@@ -7,15 +7,36 @@ import { usePathname, useRouter } from "next/navigation"
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
 
+// 개발 환경인지 확인하는 헬퍼 함수
+const isDevelopment = () => process.env.NODE_ENV === 'development';
+
 // 로컬 스토리지에 안전하게 저장하는 함수
 const safeLocalStorageSet = (key: string, value: string) => {
   if (isBrowser()) {
     try {
+      // 서버사이드 렌더링 시 오류 방지
+      console.log(`${key} 저장: 길이=${value.length}`);
+      
+      // 중요: localStorage에 먼저 저장 (주요 저장소)
       localStorage.setItem(key, value);
-      // Edge 브라우저 호환성을 위해 sessionStorage에도 저장
+      
+      // 세션 스토리지에도 백업
       sessionStorage.setItem(key, value);
-      // 추가 백업으로 document.cookie에도 저장 (httpOnly 아님)
-      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${7 * 24 * 60 * 60}`;
+      
+      // 쿠키에도 저장 (httpOnly 아님)
+      const maxAge = 30 * 24 * 60 * 60; // 30일 (초 단위)
+      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      
+      // auth-token과 auth-status 쿠키와 동기화 (미들웨어와 일치)
+      if (key === "token") {
+        // 최대한 많은 방법으로 토큰 저장
+        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax`;
+        
+        // 모든 경로에도 쿠키 설정 시도
+        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      }
     } catch (e) {
       console.error("로컬 스토리지 저장 오류:", e);
     }
@@ -56,7 +77,18 @@ const safeLocalStorageRemove = (key: string) => {
     try {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
+      
+      // 일반 쿠키 삭제
       document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      
+      // 인증 관련 쿠키 모두 삭제 (미들웨어 사용 쿠키 포함)
+      if (key === "token" || key === "user") {
+        document.cookie = `auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `supabase-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      }
     } catch (e) {
       console.error("스토리지 삭제 오류:", e);
     }
@@ -102,201 +134,196 @@ const getInitialUser = (): User | null => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // 초기 사용자 정보를 스토리지에서 가져와 설정
-  const [user, setUser] = useState<User | null>(getInitialUser())
-  const [isLoading, setIsLoading] = useState(false)
-  const [lastChecked, setLastChecked] = useState<number>(Date.now())
-  
-  // 인증 상태 확인 중인지 여부를 추적하는 ref
-  const isCheckingRef = useRef<boolean>(false)
-  // 마지막 요청 시간 추적
-  const lastRequestRef = useRef<number>(0)
-  
-  const router = useRouter()
-  const pathname = usePathname()
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // 브라우저 스토리지에서 사용자 정보 확인 및 설정
-  const getUserFromStorage = useCallback(() => {
-    if (!isBrowser()) return null;
-    
-    const storedUser = safeLocalStorageGet("user");
-    if (!storedUser) return null;
-    
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-      return parsedUser;
-    } catch (e) {
-      console.error("사용자 정보 파싱 오류:", e);
-      return null;
-    }
-  }, []);
+  // 개발 환경 인증 상태 설정 시 사용할 참조 - 상태 설정 여부 추적
+  const devSetupDone = useRef(false);
 
   // 인증 상태 확인 함수
   const checkAuthStatus = useCallback(async (): Promise<boolean> => {
-    // 브라우저 환경이 아니면 false 반환
-    if (!isBrowser()) return false;
-    
-    // 이미 확인 중이면 사용자 존재 여부 반환
-    if (isCheckingRef.current) {
-      console.log("이미 인증 확인 중...");
-      return !!user;
-    }
-    
-    // 최근 2초 이내에 확인한 경우 스킵
-    const now = Date.now();
-    if (now - lastRequestRef.current < 2000) {
-      console.log("너무 빈번한 요청, 스킵");
-      return !!user;
-    }
-    
-    // 사용자가 있고 15초 이내에 확인한 경우 바로 true 반환
-    if (user && now - lastChecked < 15000) {
-      console.log("최근에 이미 확인됨, 재확인 스킵");
-      return true;
-    }
-    
-    // 확인 중 상태로 설정하고 시간 갱신
-    isCheckingRef.current = true;
-    lastRequestRef.current = now;
-    
     try {
-      console.log("인증 상태 확인 중...");
+      // 0. 먼저 로컬 스토리지에서 토큰과 사용자 정보 확인
+      const token = safeLocalStorageGet('token');
+      const storedUser = safeLocalStorageGet('user');
       
-      // 먼저 로컬 스토리지에서 토큰 확인
-      const storedToken = safeLocalStorageGet("token");
-      if (!storedToken) {
-        console.log("토큰 없음");
-        isCheckingRef.current = false;
-        return false;
-      }
-      
-      // 토큰 유효성 확인 (서버에 요청)
-      console.log("서버에 토큰 유효성 확인 요청");
-      const timestamp = now; // 캐시 방지를 위한 타임스탬프
-      const response = await fetch(`/api/auth/me?t=${timestamp}`, {
-        method: "GET",
-        credentials: "include", // 쿠키 포함
-        headers: {
-          "Authorization": `Bearer ${storedToken}`,
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-        },
-        cache: "no-store", // 캐시 사용 방지
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.user) {
-          console.log("서버에서 사용자 정보 확인됨");
-          
-          // 사용자 정보 업데이트
-          const userData = {
-            id: data.user.id,
-            email: data.user.email,
-            name: data.user.name || "사용자",
-            role: data.user.role,
-          };
-          
-          safeLocalStorageSet("user", JSON.stringify(userData));
-          if (data.token) {
-            safeLocalStorageSet("token", data.token);
+      // 실제 로그인한 사용자 정보가 있으면 먼저 사용 (카카오 로그인 등)
+      // 토큰과 사용자 정보가 모두 존재하고, 테스트 토큰이 아닌 경우 우선 적용
+      if (token && storedUser && token !== 'test-token-dev') {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          // 이미 동일한 사용자 정보가 상태에 있다면 업데이트하지 않음 (무한 루프 방지)
+          if (!user || user.id !== parsedUser.id) {
+            console.log('실제 로그인한 사용자 정보 사용');
+            setUser(parsedUser);
           }
-          
-          setUser(userData);
-          setLastChecked(now);
-          isCheckingRef.current = false;
+          setLoading(false);
           return true;
+        } catch (error) {
+          console.error('사용자 정보 파싱 오류:', error);
         }
       }
       
-      // 응답이 성공적이지 않거나 사용자 정보가 없는 경우
-      console.log("인증 실패");
-      isCheckingRef.current = false;
-      return false;
-      
+      // 1. 개발 환경이면서 인증 상태가 아직 설정되지 않은 경우 (실제 로그인이 없을 때만)
+      if (process.env.NODE_ENV === 'development' && !devSetupDone.current && !user) {
+        console.log('개발 환경에서 테스트 사용자로 처리');
+        devSetupDone.current = true; // 상태 설정 완료 표시
+        
+        // 테스트 사용자 데이터 (실제 환경에서는 사용되지 않음)
+        const testUser: User = {
+          id: 1,
+          email: 'test@example.com',
+          name: '테스트 사용자',
+          role: 'USER'
+        };
+        
+        // 로컬 스토리지에 테스트 토큰과 사용자 정보가 없는 경우에만 저장
+        if (!token) {
+          safeLocalStorageSet('token', 'test-token-dev');
+        }
+        
+        if (!storedUser) {
+          safeLocalStorageSet('user', JSON.stringify(testUser));
+        }
+        
+        // 상태 업데이트
+        setUser(testUser);
+        setLoading(false);
+        return true;
+      }
+
+      // 2. 로컬 스토리지에서 토큰과 사용자 정보 재확인 (여기까지 오면 테스트 토큰도 허용)
+      if (token && storedUser) {
+        try {
+          // 사용자 정보 파싱
+          const parsedUser = JSON.parse(storedUser);
+          // 이미 동일한 사용자 정보가 상태에 있다면 업데이트하지 않음 (무한 루프 방지)
+          if (!user || user.id !== parsedUser.id) {
+            setUser(parsedUser);
+          }
+          setLoading(false);
+          return true;
+        } catch (error) {
+          console.error('사용자 정보 파싱 오류:', error);
+          safeLocalStorageRemove('user');
+          safeLocalStorageRemove('token');
+          setUser(null);
+          setLoading(false);
+          return false;
+        }
+      } else {
+        // 토큰이 없으면 로그아웃 상태로 설정
+        setUser(null);
+        setLoading(false);
+        return false;
+      }
     } catch (error) {
-      console.error("인증 상태 확인 오류:", error);
-      isCheckingRef.current = false;
+      console.error('인증 상태 확인 오류:', error);
+      setUser(null);
+      setLoading(false);
       return false;
     }
-  }, [user, lastChecked]);
+  }, [user]);
 
-  // 보호된 경로에 대한 인증 확인 및 리다이렉트
-  useEffect(() => {
-    if (!isBrowser() || !pathname) return;
-    
-    const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-    if (!isProtectedRoute) return;
-    
-    // 로딩 중이면 스킵
-    if (isLoading) return;
-    
-    const verifyAuth = async () => {
-      console.log(`보호된 경로 확인: ${pathname}`);
+  // 로그아웃 함수
+  const logout = useCallback(async () => {
+    try {
+      // 서버에 로그아웃 요청
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
       
-      // 이미 사용자 정보가 있으면 바로 반환
-      if (user) {
-        console.log("사용자 정보 있음, 접근 허용");
+      if (!response.ok) {
+        console.error('로그아웃 오류:', response.statusText);
+      }
+    } catch (error) {
+      console.error('로그아웃 요청 오류:', error);
+    } finally {
+      // 로컬 스토리지 및 쿠키 정리
+      safeLocalStorageRemove('token');
+      safeLocalStorageRemove('user');
+      
+      // 쿠키 삭제 (클라이언트 측)
+      if (typeof document !== 'undefined') {
+        document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      }
+      
+      // 사용자 상태 초기화
+      setUser(null);
+      
+      // 개발 환경 설정 상태 초기화 (다시 로그인할 때 설정되도록)
+      devSetupDone.current = false;
+      
+      // 로그인 페이지로 이동
+      router.push('/login');
+    }
+  }, [router]);
+
+  // 세션 갱신 함수
+  const refreshSession = useCallback(async (): Promise<boolean> => {
+    if (process.env.NODE_ENV === 'development') {
+      // 개발 환경에서는 세션 갱신 로직 건너뛰기
+      return true;
+    }
+    
+    try {
+      // 토큰 갱신 API 호출
+      const response = await fetch('/api/auth/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        // 갱신된 세션 정보 확인
+        await checkAuthStatus();
+        return true;
+      } else {
+        // 갱신 실패 시 로그아웃
+        await logout();
+        return false;
+      }
+    } catch (error) {
+      console.error('세션 갱신 오류:', error);
+      await logout();
+      return false;
+    }
+  }, [checkAuthStatus, logout]);
+
+  // 인증이 필요한 라우트 접근 시 세션 확인
+  useEffect(() => {
+    // 첫 렌더링 시 인증 상태 확인
+    if (loading) {
+      checkAuthStatus();
+    }
+    
+    // 보호된 라우트 목록
+    const protectedRoutes = ['/proxy-ticketing', '/ticket-cancellation', '/tickets'];
+    
+    // 현재 경로가 보호된 라우트인 경우 세션 확인
+    if (protectedRoutes.some(route => pathname?.startsWith(route))) {
+      // 개발 환경에서는 항상 인증 상태로 처리
+      if (process.env.NODE_ENV === 'development') {
+        if (!devSetupDone.current) {
+          checkAuthStatus();
+        }
         return;
       }
       
-      // 사용자가 없으면 스토리지에서 한 번 더 확인
-      getUserFromStorage();
-      
-      // 그래도 없으면 인증 상태 확인
-      setIsLoading(true);
-      const isAuthenticated = await checkAuthStatus();
-      setIsLoading(false);
-      
-      if (!isAuthenticated) {
-        console.log("인증되지 않음: 로그인 페이지로 리다이렉트");
-        router.push(`/login?callbackUrl=${pathname}`);
-      }
-    };
-    
-    verifyAuth();
-  }, [pathname, user, router, getUserFromStorage, checkAuthStatus, isLoading]);
-
-  // 초기 로드 시 사용자 정보 확인
-  useEffect(() => {
-    if (!isBrowser()) return;
-    
-    // 이미 사용자 정보가 있으면 스킵
-    if (user) return;
-    
-    // 스토리지에서 다시 한 번 확인
-    getUserFromStorage();
-    
-    // 인증 상태 변경 이벤트 리스너 추가
-    const handleAuthStateChange = (event: Event) => {
-      console.log('인증 상태 변경 이벤트 수신됨');
-      // 커스텀 이벤트에서 authenticated 상태 확인
-      const customEvent = event as CustomEvent<{authenticated: boolean}>;
-      if (customEvent.detail?.authenticated) {
-        // 인증 상태가 true인 경우 사용자 정보 새로고침
-        getUserFromStorage();
-        checkAuthStatus();
-      } else {
-        // 인증 상태가 false인 경우 사용자 정보 초기화
-        setUser(null);
-      }
-    };
-    
-    // 이벤트 리스너 등록
-    window.addEventListener('auth-state-change', handleAuthStateChange);
-    
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
-    return () => {
-      window.removeEventListener('auth-state-change', handleAuthStateChange);
-    };
-  }, [user, getUserFromStorage, checkAuthStatus]);
+      // 프로덕션 환경에서는 세션 갱신 시도
+      refreshSession();
+    }
+  }, [pathname, checkAuthStatus, refreshSession, loading]);
 
   // 로그인 함수
   const login = async (email: string, password: string) => {
     try {
       // 로딩 상태 설정
-      setIsLoading(true);
+      setLoading(true);
       
       // 상대 경로 사용으로 포트 변경에 영향 받지 않음
       const timestamp = new Date().getTime(); // 캐시 방지를 위한 타임스탬프
@@ -318,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data = await response.json();
       } catch (jsonError) {
         console.error("JSON 파싱 오류:", jsonError);
-        setIsLoading(false);
+        setLoading(false);
         return {
           success: false, 
           message: "서버 응답을 처리할 수 없습니다."
@@ -326,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // 로딩 상태 해제
-      setIsLoading(false);
+      setLoading(false);
 
       if (!response.ok) {
         return {
@@ -349,12 +376,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData);
       
       // 마지막 확인 시간 업데이트
-      setLastChecked(Date.now());
+      setLoading(false);
 
       return { success: true };
     } catch (error) {
       console.error("Login error:", error);
-      setIsLoading(false);
+      setLoading(false);
       return {
         success: false,
         message: "로그인 중 오류가 발생했습니다.",
@@ -362,60 +389,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 로그아웃 함수
-  const logout = async () => {
-    try {
-      setIsLoading(true);
-      
-      // 토큰 가져오기
-      const token = safeLocalStorageGet("token");
-      
-      // 쿠키 제거 요청 (백엔드에서 처리)
-      try {
-        const timestamp = new Date().getTime(); // 캐시 방지를 위한 타임스탬프
-        await fetch(`/api/auth/logout?t=${timestamp}`, {
-          method: "POST",
-          headers: token ? {
-            "Authorization": `Bearer ${token}`,
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-          } : {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-          },
-          credentials: "include", // 쿠키 포함
-          cache: "no-store", // 캐시 사용 방지
-        });
-      } catch (error) {
-        console.error("로그아웃 API 오류:", error);
-      }
-
-      // 로컬 스토리지에서 사용자 정보 및 토큰 제거
-      safeLocalStorageRemove("user");
-      safeLocalStorageRemove("token");
-      
-      // 사용자 정보 초기화
-      setUser(null);
-      setIsLoading(false);
-      toast.success("로그아웃 되었습니다.");
-    } catch (error) {
-      console.error("Logout error:", error);
-      setIsLoading(false);
-      toast.error("로그아웃 중 오류가 발생했습니다.");
-    }
-  };
-
-  // 소셜 로그인 함수 추가
+  // 소셜 로그인 함수 수정 (카카오 로그인 처리)
   const socialLogin = async (provider: string) => {
     try {
-      setIsLoading(true);
-      // Supabase 연동은 KakaoLoginButton 컴포넌트에서 직접 처리
+      setLoading(true);
       console.log(`${provider} 로그인 시작`);
+      
+      // 소셜 로그인 성공 시 개발 환경 설정 리셋
+      // 이로써 실제 로그인이 테스트 사용자로 덮어쓰여지는 것을 방지
+      devSetupDone.current = false;
+      
+      // 실제 로그인 처리는 KakaoLoginButton 컴포넌트에서 직접 처리됨
     } catch (error) {
       console.error(`${provider} 로그인 오류:`, error);
       toast.error(`${provider} 로그인 중 오류가 발생했습니다.`);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -423,7 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isLoading,
+        isLoading: loading,
         login,
         logout,
         checkAuthStatus,
