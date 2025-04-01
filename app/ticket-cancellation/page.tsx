@@ -160,6 +160,7 @@ export default function TicketCancellationPage() {
   const [tickets, setTickets] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [creatingTestPost, setCreatingTestPost] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -170,17 +171,34 @@ export default function TicketCancellationPage() {
   const fetchCancellationTickets = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/posts?category=TICKET_CANCELLATION')
-      const data = await response.json()
+      setError("")
+      console.log("취켓팅 가능 티켓 불러오기 시작...")
       
-      if (data.success) {
+      const apiUrl = '/api/posts?category=TICKET_CANCELLATION'
+      console.log("API 호출:", apiUrl)
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store'
+      })
+      
+      console.log("API 응답 상태:", response.status)
+      const data = await response.json()
+      console.log("API 응답 데이터:", data)
+      
+      if (data.posts) {
         setTickets(data.posts)
         console.log("취켓팅 가능 티켓 로드 완료:", data.posts.length, "개 항목")
         if (data.posts.length === 0) {
           console.log("표시할 게시물이 없습니다 - 판매 중인 티켓이 없음")
         }
       } else {
-        setError("데이터를 불러오는데 실패했습니다.")
+        console.error("API 응답 형식 오류:", data)
+        setError("데이터 형식이 올바르지 않습니다.")
       }
     } catch (err) {
       console.error("취켓팅 티켓 불러오기 오류:", err)
@@ -239,6 +257,64 @@ export default function TicketCancellationPage() {
         로그인
       </button>
     );
+  };
+
+  // 개발 환경에서 테스트 게시물 생성
+  const createTestPost = async () => {
+    if (process.env.NODE_ENV !== 'development') {
+      return;
+    }
+    
+    try {
+      setCreatingTestPost(true);
+      const testPost = {
+        title: `테스트 취켓팅 게시물 ${new Date().toLocaleTimeString()}`,
+        content: JSON.stringify({
+          description: '테스트 설명입니다.',
+          date: '2024-04-15',
+          time: '19:00',
+          venue: '잠실종합운동장',
+          price: 120000,
+          sections: [
+            { id: 'A', label: 'A석', price: 120000, available: true },
+            { id: 'B', label: 'B석', price: 100000, available: true },
+            { id: 'C', label: 'C석', price: 80000, available: true }
+          ]
+        }),
+        category: 'TICKET_CANCELLATION',
+        eventName: '테스트 콘서트',
+        eventDate: '2024-04-15',
+        eventVenue: '잠실종합운동장',
+        status: 'ACTIVE',
+        published: true
+      };
+      
+      console.log('테스트 게시물 생성 중:', testPost);
+      
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testPost),
+      });
+      
+      const data = await response.json();
+      console.log('테스트 게시물 생성 결과:', data);
+      
+      if (data.post) {
+        toast.success('테스트 게시물이 생성되었습니다!');
+        // 생성 후 목록 다시 불러오기
+        fetchCancellationTickets();
+      } else {
+        toast.error('테스트 게시물 생성 실패');
+      }
+    } catch (error) {
+      console.error('테스트 게시물 생성 오류:', error);
+      toast.error('테스트 게시물 생성 중 오류가 발생했습니다');
+    } finally {
+      setCreatingTestPost(false);
+    }
   };
 
   return (
@@ -576,6 +652,57 @@ export default function TicketCancellationPage() {
           </div>
         </div>
       </section>
+
+      {/* 티켓 찾기 배너 섹션 (기존) */}
+      <section className="bg-blue-50 py-8 md:py-12">
+        <div className="container mx-auto px-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+            취켓팅으로 놓친 공연 티켓 찾기
+          </h1>
+          <p className="text-gray-600 mb-6 max-w-2xl">
+            취켓팅은 취소표를 대신 찾아주는 서비스입니다. 원하는 공연의 티켓이 매진되었다면,
+            취켓팅을 신청하고 취소표가 나올 때 알림을 받아보세요.
+          </p>
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Input
+              type="search"
+              placeholder="공연명 또는 아티스트 검색"
+              className="pl-10 pr-4 py-2 w-full"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 개발 환경에서만 보이는 테스트 버튼 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="container mx-auto px-4 py-4">
+          <div className="p-4 bg-yellow-50 rounded-lg">
+            <h3 className="text-yellow-800 font-medium mb-2">개발 모드</h3>
+            <p className="text-yellow-700 text-sm mb-3">
+              취켓팅 테스트 게시물이 보이지 않나요? 테스트 게시물을 생성해보세요.
+            </p>
+            <Button 
+              onClick={createTestPost} 
+              disabled={creatingTestPost}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white"
+            >
+              {creatingTestPost ? '생성 중...' : '테스트 게시물 생성'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 티켓 목록 섹션 (기존) */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="md:w-3/4">
+            {/* ... existing grid and ticket display code ... */}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

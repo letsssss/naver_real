@@ -60,8 +60,9 @@ export async function GET(req: Request) {
     // 전체 게시물 목록 조회
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const pageSize = parseInt(url.searchParams.get('limit') || '10', 10);
+    const category = url.searchParams.get('category');
     
-    return await getPosts(page, pageSize);
+    return await getPosts(req, page, pageSize, category);
   } catch (error) {
     console.error('[게시물 API] 조회 오류:', error);
     return createErrorResponse(
@@ -141,16 +142,26 @@ async function getPostById(postId: number) {
 }
 
 // 게시물 목록 조회 핸들러
-async function getPosts(page: number, pageSize: number) {
+async function getPosts(req: Request, page: number, pageSize: number, category?: string | null) {
   const offset = (page - 1) * pageSize;
   
-  // 게시물 목록 조회
-  const { data: posts, error, count } = await supabase
+  // 쿼리 빌더 준비
+  let query = supabase
     .from('posts')
     .select(`
       *,
       user:users(id, name, email)
     `, { count: 'exact' })
+    .is('is_deleted', false); // isDeleted가 아닌 is_deleted로 수정
+  
+  // 카테고리 필터링 추가
+  if (category) {
+    console.log(`[게시물 API] 카테고리 필터링: ${category}`);
+    query = query.eq('category', category);
+  }
+  
+  // 최종 쿼리 실행
+  const { data: posts, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
   
@@ -165,19 +176,30 @@ async function getPosts(page: number, pageSize: number) {
   }
   
   // 응답 데이터 구성
-  const formattedPosts = posts.map(post => ({
-    id: post.id,
-    title: post.title,
-    content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
-    published: post.published,
-    createdAt: post.created_at,
-    updatedAt: post.updated_at,
-    author: post.user ? {
-      id: post.user.id,
-      name: post.user.name,
-      email: post.user.email
-    } : null
-  }));
+  const formattedPosts = posts.map(post => {
+    // 게시물 데이터를 any 타입으로 변환하여 추가 속성에 접근
+    const postData = post as any;
+    
+    return {
+      id: post.id,
+      title: post.title,
+      content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
+      published: post.published,
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      // 추가 필드 안전하게 접근
+      category: postData.category || null,
+      status: postData.status || 'ACTIVE',
+      eventName: postData.eventName || post.title,
+      eventDate: postData.eventDate || null,
+      eventVenue: postData.eventVenue || null,
+      author: post.user ? {
+        id: post.user.id,
+        name: post.user.name,
+        email: post.user.email
+      } : null
+    };
+  });
   
   return createApiResponse({
     posts: formattedPosts,
@@ -223,7 +245,6 @@ export async function POST(req: Request) {
         title,
         content,
         user_id: userId,
-        published: true
       })
       .select()
       .single();
@@ -315,7 +336,6 @@ export async function PUT(req: Request) {
     const updateData: Record<string, any> = {};
     if (title !== undefined) updateData.title = title;
     if (content !== undefined) updateData.content = content;
-    if (published !== undefined) updateData.published = published;
     updateData.updated_at = new Date().toISOString();
     
     // 게시물 업데이트
