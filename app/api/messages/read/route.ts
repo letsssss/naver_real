@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { verifyToken } from '@/lib/auth';
 
 // 메시지 읽음 상태 업데이트 API 핸들러

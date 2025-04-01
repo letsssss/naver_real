@@ -5,7 +5,7 @@ import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
 import { createUniqueOrderNumber } from "@/utils/orderNumber";
 
-const prisma = new PrismaClient();
+// Prisma 클라이언트 제거됨, Supabase 사용;
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
 import { comparePassword, generateAccessToken, generateRefreshToken } from "@/lib/auth"
 import jwt from "jsonwebtoken"
 import { supabase } from "@/lib/supabase"
@@ -58,58 +57,51 @@ export async function POST(request: Request) {
 
       if (supabaseError) {
         console.log("Supabase 로그인 실패:", supabaseError.message);
-        // Supabase 로그인 실패 시 기존 로직으로 진행
-      } else {
-        console.log("Supabase 로그인 성공:", supabaseData);
-      }
-
-      // 사용자 찾기 (Prisma)
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-      });
-      
-      if (!user) {
-        console.log("사용자 없음:", email);
-        return NextResponse.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
-      }
-      
-      console.log("DB에서 사용자 찾음:", user.email);
-      
-      // 비밀번호 검증
-      const isPasswordValid = await comparePassword(password, user.password);
-
-      if (!isPasswordValid) {
-        console.log("비밀번호 불일치");
         return NextResponse.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
       }
 
-      // 로그인 성공
-      console.log("로그인 성공:", user.email);
+      console.log("Supabase 로그인 성공:", supabaseData);
+      
+      // Supabase에서 사용자 정보 조회
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, email, role')
+        .eq('id', supabaseData.user.id)
+        .single();
+      
+      if (userError || !userData) {
+        console.log("Supabase에서 사용자 정보를 찾을 수 없음:", supabaseData.user.id);
+        return NextResponse.json({ error: "사용자 정보를 조회할 수 없습니다." }, { status: 404 });
+      }
+      
+      console.log("DB에서 사용자 찾음:", userData.email);
       
       // JWT 토큰 생성
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ userId: userData.id }, JWT_SECRET, { expiresIn: '7d' });
       
       // 리프레시 토큰 생성
-      const refreshToken = generateRefreshToken(user.id);
+      const refreshToken = generateRefreshToken(userData.id);
 
-      // 리프레시 토큰을 데이터베이스에 저장
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { refreshToken },
-      });
-
-      // 응답에서 민감한 정보 제외
-      const { password: _, refreshToken: __, ...userWithoutSensitiveInfo } = user;
+      // 리프레시 토큰을 Supabase 데이터베이스에 저장
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ refresh_token: refreshToken })
+        .eq('id', userData.id);
+      
+      if (updateError) {
+        console.log("리프레시 토큰 저장 실패:", updateError.message);
+        // 오류가 발생해도 로그인 프로세스는 계속 진행
+      }
 
       // 응답 객체 생성
       const response = NextResponse.json({
         success: true,
         message: "로그인 성공",
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role
         },
         token,
         supabaseSession: supabaseData?.session

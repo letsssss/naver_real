@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { cors } from '@/lib/cors';
 
 // OPTIONS 요청 처리 (CORS 지원)

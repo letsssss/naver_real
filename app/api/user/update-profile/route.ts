@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { getAuthenticatedUser, getTokenFromHeaders, verifyToken } from "@/lib/auth";
 import { z } from "zod";
 
-const prisma = new PrismaClient();
+// Prisma 클라이언트 제거됨, Supabase 사용;
 
 // 입력 데이터 유효성 검사를 위한 zod 스키마
 const updateProfileSchema = z.object({

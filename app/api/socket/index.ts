@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { 
   NextApiResponseServerIO, 
   ClientToServerEvents, 

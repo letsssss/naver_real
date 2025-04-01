@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import prisma from "@/lib/prisma"; // 싱글톤 인스턴스 사용
+import { supabase } from '@/lib/supabase'; // 싱글톤 인스턴스 사용
 
 // BigInt를 문자열로 변환하는 함수
 function convertBigIntToString(obj: any): any {

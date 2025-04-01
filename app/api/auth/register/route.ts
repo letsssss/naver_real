@@ -14,7 +14,7 @@ declare global {
 
 import { NextResponse } from "next/server";
 import { supabase } from "@/utils/supabaseClient";
-import prisma from "@/lib/prisma";
+import { supabase } from '@/lib/supabase';
 
 // 이메일 유효성 검사 함수
 function isValidEmail(email: string): boolean {
@@ -84,8 +84,7 @@ export async function POST(request: Request) {
       }
       
       // Prisma에서도 이메일 중복 확인 (Supabase와 연동되지 않은 계정 확인)
-      const existingDbUser = await prisma.user.findUnique({
-        where: { email: emailLowerCase }
+      const existingDbUser = await supabase.from('users').select('*').eq('email', emailLowerCase .toLowerCase())
       });
       
       if (existingDbUser) {

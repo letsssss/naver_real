@@ -1,6 +1,6 @@
 import { NextApiRequest } from 'next';
 import { NextApiResponseServerIO } from '@/lib/socket';
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { cors } from '@/lib/cors';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 

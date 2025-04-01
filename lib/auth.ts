@@ -4,7 +4,7 @@ import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import { getServerSession } from 'next-auth/next';
 import * as jsonwebtoken from 'jsonwebtoken';
-import { PrismaClient } from "@prisma/client";
+import { supabase } from '@/lib/supabase';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -23,8 +23,6 @@ declare module 'next-auth/jwt' {
     id: string;
   }
 }
-
-const prisma = new PrismaClient();
 
 // 개발 환경인지 확인하는 함수
 export const isDevelopment = process.env.NODE_ENV === 'development';
@@ -196,7 +194,7 @@ export function getTokenFromCookies(request: Request): string | null {
 }
 
 /**
- * 요청에서 인증된 사용자 정보를 가져오는 함수
+ * 요청에서 인증된 사용자 정보를 가져오는 함수 (Supabase 버전)
  * @param request Next.js 요청 객체
  * @returns 인증된 사용자 객체 또는 null
  */
@@ -216,19 +214,17 @@ export async function getAuthenticatedUser(request: NextRequest) {
     const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
     
     if (token) {
+      // JWT 토큰 검증
       const decoded = verifyToken(token);
       if (decoded && decoded.userId) {
-        // JWT 토큰에서 userId를 사용하여 사용자 정보 조회
-        const user = await prisma.user.findUnique({
-          where: { id: decoded.userId },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          }
-        });
+        // Supabase에서 사용자 정보 조회
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .eq('id', decoded.userId)
+          .single();
         
-        if (user) {
+        if (user && !error) {
           console.log('JWT 토큰으로 인증된 사용자:', user);
           return user;
         }
@@ -243,36 +239,23 @@ export async function getAuthenticatedUser(request: NextRequest) {
       return null;
     }
 
-    // 사용자 정보 조회
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      }
-    });
-
-    if (!user) {
-      console.log('사용자를 찾을 수 없음:', session.user.email);
+    // Supabase에서 사용자 정보 조회
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('email', session.user.email.toLowerCase())
+      .single();
+    
+    if (!user || error) {
+      console.log('사용자 정보를 찾을 수 없음:', session.user.email);
       return null;
     }
-
-    console.log('세션으로 인증된 사용자:', user);
+    
+    console.log('세션에서 인증된 사용자:', user);
     return user;
+
   } catch (error) {
-    console.error('사용자 인증 확인 중 오류:', error);
-    
-    // 개발 환경에서는 오류가 발생해도 기본 사용자 정보 반환
-    if (isDevelopment) {
-      console.log(`개발 환경에서 오류 발생 시 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
-      return {
-        id: DEFAULT_TEST_USER_ID,
-        name: '개발 테스트 사용자',
-        email: 'test@example.com'
-      };
-    }
-    
+    console.error('사용자 인증 정보 가져오기 중 오류:', error);
     return null;
   }
 }

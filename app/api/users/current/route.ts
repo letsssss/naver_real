@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { verifyToken } from '@/lib/auth';
 
-const prisma = new PrismaClient();
+// Prisma 클라이언트 제거됨, Supabase 사용;
 
 // CORS 헤더 추가 함수
 const addCorsHeaders = (response: NextResponse) => {

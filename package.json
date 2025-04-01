@@ -7,14 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma:seed": "ts-node --compiler-options {\"module\":\"ESNext\"} prisma/seed.ts",
     "migrate:to:supabase": "node --loader ts-node/esm scripts/migrate-to-supabase.ts"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@next/third-parties": "latest",
-    "@prisma/client": "^6.5.0",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-aspect-ratio": "^1.1.1",

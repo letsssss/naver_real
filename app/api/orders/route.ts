@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client"
 import { createUniqueOrderNumber } from "@/utils/orderNumber"
 
 // Prisma 클라이언트 인스턴스 생성
-const prisma = new PrismaClient()
+// Prisma 클라이언트 제거됨, Supabase 사용
 
 // 임시 주문 데이터베이스
 const orders = [

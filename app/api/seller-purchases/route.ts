@@ -2,7 +2,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getAuthenticatedUser } from "@/lib/auth";
 
-const prisma = new PrismaClient();
+// Prisma 클라이언트 제거됨, Supabase 사용;
 
 // BigInt를 문자열로 변환하는 함수
 function convertBigIntToString(obj: any): any {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from '@/lib/supabase';
 import { getTokenFromHeaders, getTokenFromCookies, verifyAccessToken } from "@/lib/auth";
 import jwt from "jsonwebtoken";
 

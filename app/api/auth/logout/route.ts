@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { supabase } from '@/lib/supabase'
 import { getTokenFromHeaders, verifyAccessToken } from "@/lib/auth"
 
 // OPTIONS 메서드 처리
