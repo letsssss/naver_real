@@ -1,0 +1,16 @@
+[2025-04-02T00:27:29.821Z] 전체 데이터 마이그레이션 시작...
+[2025-04-02T00:27:29.822Z] 사용자 마이그레이션 시작...
+[2025-04-02T00:27:29.834Z] 마이그레이션 중 치명적 오류 발생: 
+Invalid `prisma.user.findMany()` invocation:
+
+
+The table `main.User` does not exist in the current database.
+[2025-04-02T00:27:29.835Z] 스택 트레이스: PrismaClientKnownRequestError: 
+Invalid `prisma.user.findMany()` invocation:
+
+
+The table `main.User` does not exist in the current database.
+    at Wn.handleRequestError (C:\Users\jinseong\node_modules\@prisma\client\runtime\library.js:121:7534)
+    at Wn.handleAndLogRequestError (C:\Users\jinseong\node_modules\@prisma\client\runtime\library.js:121:6858)
+    at Wn.request (C:\Users\jinseong\node_modules\@prisma\client\runtime\library.js:121:6565)
+    at async l (C:\Users\jinseong\node_modules\@prisma\client\runtime\library.js:130:10067)

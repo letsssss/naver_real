@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import prisma from '@/lib/prisma'; 
+import { supabase } from '@/lib/supabase'; 
 import { verifyToken, getTokenFromHeaders } from '@/lib/auth';
 
 export const config = {
@@ -54,18 +54,23 @@ const socketHandler = (req, res) => {
         }
 
         // 사용자 정보 조회
-        const user = await prisma.user.findUnique({
-          where: { id: decoded.userId },
-          select: { id: true, name: true, profileImage: true }
-        });
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('id, name, profile_image')
+          .eq('id', decoded.userId.toString())
+          .single();
 
-        if (!user) {
+        if (error || !user) {
           socket.emit('error', { message: '사용자를 찾을 수 없습니다.' });
           return;
         }
 
         // 사용자 정보 저장
-        currentUser = user;
+        currentUser = {
+          id: user.id,
+          name: user.name,
+          profileImage: user.profile_image
+        };
         socket.emit('authenticated', { user });
         console.log(`사용자 인증 완료: ${user.id} (${user.name})`);
       } catch (error) {
@@ -93,51 +98,106 @@ const socketHandler = (req, res) => {
         const roomName = `purchase_${purchaseId}`;
         
         // 기존 채팅방 확인
-        let room = await prisma.room.findFirst({
-          where: { name: roomName },
-          include: {
-            participants: { include: { user: true } },
-            messages: {
-              orderBy: { createdAt: 'asc' },
-              include: { sender: true }
-            }
-          }
-        });
+        const { data: room, error: roomError } = await supabase
+          .from('rooms')
+          .select(`
+            id,
+            name,
+            purchase_id,
+            participants:room_participants(
+              user_id,
+              users:user_id(id, name, profile_image)
+            ),
+            messages(
+              id, 
+              content, 
+              sender_id, 
+              created_at, 
+              is_read,
+              sender:sender_id(id, name, profile_image)
+            )
+          `)
+          .eq('name', roomName)
+          .order('created_at', { foreignTable: 'messages', ascending: true })
+          .single();
 
         // 채팅방이 없으면 새로 생성
-        if (!room) {
+        if (roomError || !room) {
           // 판매자 ID 확인
-          const seller = sellerId ? 
-            await prisma.user.findUnique({ where: { id: Number(sellerId) } }) : 
-            null;
+          const { data: seller, error: sellerError } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('id', sellerId.toString())
+            .single();
 
-          if (!seller) {
+          if (sellerError || !seller) {
             socket.emit('error', { message: '판매자 정보를 찾을 수 없습니다.' });
             return;
           }
 
           // 채팅방 생성
-          room = await prisma.room.create({
-            data: {
+          const { data: newRoom, error: createRoomError } = await supabase
+            .from('rooms')
+            .insert({
               name: roomName,
-              purchaseId: Number(purchaseId),
-              participants: {
-                create: [
-                  { userId: currentUser.id },
-                  { userId: seller.id }
-                ]
-              }
-            },
-            include: {
-              participants: { include: { user: true } },
-              messages: { include: { sender: true } }
-            }
-          });
+              purchase_id: Number(purchaseId)
+            })
+            .select('id')
+            .single();
 
+          if (createRoomError || !newRoom) {
+            socket.emit('error', { message: '채팅방을 생성할 수 없습니다.' });
+            return;
+          }
+
+          // 참가자 추가
+          const participants = [
+            { room_id: newRoom.id, user_id: currentUser.id },
+            { room_id: newRoom.id, user_id: seller.id }
+          ];
+
+          const { error: participantError } = await supabase
+            .from('room_participants')
+            .insert(participants);
+
+          if (participantError) {
+            socket.emit('error', { message: '참가자를 추가할 수 없습니다.' });
+            return;
+          }
+
+          // 최종 방 정보 조회
+          const { data: finalRoom, error: finalRoomError } = await supabase
+            .from('rooms')
+            .select(`
+              id,
+              name,
+              purchase_id,
+              participants:room_participants(
+                user_id,
+                users:user_id(id, name, profile_image)
+              ),
+              messages(
+                id, 
+                content, 
+                sender_id, 
+                created_at, 
+                is_read,
+                sender:sender_id(id, name, profile_image)
+              )
+            `)
+            .eq('id', newRoom.id)
+            .single();
+
+          if (finalRoomError) {
+            socket.emit('error', { message: '방 정보를 조회할 수 없습니다.' });
+            return;
+          }
+
+          room = finalRoom;
           console.log(`새 채팅방 생성됨: ${roomName}`);
         } else {
           // 이미 방이 있으면 참가자 확인
-          const isParticipant = room.participants.some(p => p.userId === currentUser.id);
+          const isParticipant = room.participants.some(p => p.user_id === currentUser.id);
           
           if (!isParticipant) {
             socket.emit('error', { message: '채팅방에 접근할 권한이 없습니다.' });
@@ -153,17 +213,17 @@ const socketHandler = (req, res) => {
         const messages = room.messages.map(msg => ({
           id: msg.id,
           content: msg.content,
-          senderId: msg.senderId,
-          timestamp: msg.createdAt,
-          isRead: msg.isRead
+          senderId: msg.sender_id,
+          timestamp: msg.created_at,
+          isRead: msg.is_read
         }));
 
         socket.emit('roomJoined', {
           roomId: roomName,
           participants: room.participants.map(p => ({
-            id: p.user.id,
-            name: p.user.name,
-            profileImage: p.user.profileImage
+            id: p.user_id,
+            name: p.users.name,
+            profileImage: p.users.profile_image
           })),
           messages
         });
@@ -189,10 +249,28 @@ const socketHandler = (req, res) => {
         }
 
         // 채팅방 확인
-        const room = await prisma.room.findFirst({
-          where: { name: roomId },
-          include: { participants: true }
-        });
+        const room = await supabase
+          .from('rooms')
+          .select(`
+            id,
+            name,
+            purchase_id,
+            participants:room_participants(
+              user_id,
+              users:user_id(id, name, profile_image)
+            ),
+            messages(
+              id, 
+              content, 
+              sender_id, 
+              created_at, 
+              is_read,
+              sender:sender_id(id, name, profile_image)
+            )
+          `)
+          .eq('name', roomId)
+          .order('created_at', { foreignTable: 'messages', ascending: true })
+          .single();
 
         if (!room) {
           socket.emit('error', { message: '채팅방을 찾을 수 없습니다.' });
@@ -200,14 +278,14 @@ const socketHandler = (req, res) => {
         }
 
         // 참가자 확인
-        const isParticipant = room.participants.some(p => p.userId === currentUser.id);
+        const isParticipant = room.participants.some(p => p.user_id === currentUser.id);
         if (!isParticipant) {
           socket.emit('error', { message: '채팅방에 참가한 사용자만 메시지를 보낼 수 있습니다.' });
           return;
         }
 
         // 수신자 찾기 (자신이 아닌 참가자)
-        const receiver = room.participants.find(p => p.userId !== currentUser.id);
+        const receiver = room.participants.find(p => p.user_id !== currentUser.id);
         
         if (!receiver) {
           socket.emit('error', { message: '메시지 수신자를 찾을 수 없습니다.' });
@@ -215,31 +293,42 @@ const socketHandler = (req, res) => {
         }
 
         // 메시지 저장
-        const message = await prisma.message.create({
-          data: {
+        const { data: message, error: messageError } = await supabase
+          .from('messages')
+          .insert({
             content: chat,
-            senderId: currentUser.id,
-            receiverId: receiver.userId,
-            roomId: room.id,
-            purchaseId: room.purchaseId
-          },
-          include: { sender: true }
-        });
+            sender_id: currentUser.id,
+            receiver_id: receiver.user_id,
+            room_id: room.id,
+            purchase_id: room.purchase_id,
+            is_read: false
+          })
+          .select('id, content, created_at')
+          .single();
+
+        if (messageError) {
+          socket.emit('error', { message: '메시지를 저장할 수 없습니다.' });
+          return;
+        }
 
         // 채팅방 마지막 메시지 업데이트
-        await prisma.room.update({
-          where: { id: room.id },
-          data: {
-            lastChat: chat,
-            timeOfLastChat: new Date()
-          }
-        });
+        const { error: updateRoomError } = await supabase
+          .from('rooms')
+          .update({
+            last_chat: chat,
+            time_of_last_chat: new Date().toISOString()
+          })
+          .eq('id', room.id);
+
+        if (updateRoomError) {
+          console.error('채팅방 업데이트 오류:', updateRoomError);
+        }
 
         // 전체 룸에 메시지 전송
         io.to(roomId).emit('onReceive', {
           messageId: message.id,
           chat: message.content,
-          timestamp: message.createdAt,
+          timestamp: message.created_at,
           user: {
             id: currentUser.id,
             name: currentUser.name,
@@ -270,9 +359,28 @@ const socketHandler = (req, res) => {
         }
 
         // 채팅방 찾기
-        const room = await prisma.room.findFirst({
-          where: { name: roomId }
-        });
+        const room = await supabase
+          .from('rooms')
+          .select(`
+            id,
+            name,
+            purchase_id,
+            participants:room_participants(
+              user_id,
+              users:user_id(id, name, profile_image)
+            ),
+            messages(
+              id, 
+              content, 
+              sender_id, 
+              created_at, 
+              is_read,
+              sender:sender_id(id, name, profile_image)
+            )
+          `)
+          .eq('name', roomId)
+          .order('created_at', { foreignTable: 'messages', ascending: true })
+          .single();
 
         if (!room) {
           socket.emit('error', { message: '채팅방을 찾을 수 없습니다.' });
@@ -280,14 +388,12 @@ const socketHandler = (req, res) => {
         }
 
         // 안 읽은 메시지 찾아서 읽음 처리
-        await prisma.message.updateMany({
-          where: {
-            roomId: room.id,
-            receiverId: currentUser.id,
-            isRead: false
-          },
-          data: { isRead: true }
-        });
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('room_id', room.id)
+          .eq('receiver_id', currentUser.id)
+          .eq('is_read', false);
 
         // 메시지 읽음 이벤트 전송
         io.to(roomId).emit('messageRead', { userId: currentUser.id });

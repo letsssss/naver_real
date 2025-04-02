@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { supabase } from '@/lib/supabase'
 import { getAuthenticatedUser } from "@/lib/auth"
-
-// Prisma 클라이언트 제거됨, Supabase 사용
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -28,41 +26,62 @@ export async function GET(
       ));
     }
     
-    // 게시글 조회 및 조회수 증가
-    const post = await prisma.post.update({
-      where: {
-        id,
-        isDeleted: false,
-      },
-      data: {
-        viewCount: { increment: 1 }
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            profileImage: true,
-          },
-        }
-      },
-    })
+    // 게시글 조회 - any 타입 캐스팅
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        users (
+          id, 
+          name,
+          profile_image
+        )
+      `)
+      .eq('id', id)
+      .eq('is_deleted', false)
+      .single();
+      
+    // 타입 캐스팅으로 타입스크립트 오류 처리
+    const post = data as any;
     
-    if (!post) {
+    if (error || !post) {
+      console.error('게시글 조회 오류:', error);
       return addCorsHeaders(NextResponse.json(
         { error: '게시글을 찾을 수 없습니다' },
         { status: 404 }
       ));
     }
     
-    // 응답 형태 변환 및 BigInt 처리
+    // 조회수 증가
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ view_count: (post.view_count || 0) + 1 } as any)
+      .eq('id', id);
+    
+    if (updateError) {
+      console.error('조회수 업데이트 오류:', updateError);
+    }
+    
+    // 응답 형태 변환
     const formattedPost = {
-      ...JSON.parse(JSON.stringify(post, (key, value) => 
-        typeof value === 'bigint' ? Number(value) : value
-      )),
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      category: post.category || 'GENERAL',
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      viewCount: post.view_count || 0,
+      status: post.status || 'ACTIVE',
+      eventName: post.event_name || '',
+      eventDate: post.event_date || '',
+      eventVenue: post.event_venue || '',
+      ticketPrice: post.ticket_price || 0,
+      contactInfo: post.contact_info || '',
+      isDeleted: post.is_deleted || false,
       author: {
-        ...post.author,
-        image: post.author.profileImage,
+        id: post.users?.id || '',
+        name: post.users?.name || '',
+        image: post.users?.profile_image || '',
       },
       _count: {
         comments: 0 // 댓글 기능은 아직 구현되지 않음
@@ -76,8 +95,6 @@ export async function GET(
       { error: '게시글 조회 중 오류가 발생했습니다' },
       { status: 500 }
     ));
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -113,11 +130,16 @@ export async function DELETE(
     }
 
     // 게시물이 존재하는지 확인
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId }
-    });
+    const { data, error: fetchError } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+      
+    // 타입 캐스팅으로 타입스크립트 오류 처리  
+    const existingPost = data as any;
 
-    if (!existingPost) {
+    if (fetchError || !existingPost) {
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "게시물을 찾을 수 없습니다." },
         { status: 404 }
@@ -125,7 +147,7 @@ export async function DELETE(
     }
 
     // 게시물 작성자 확인
-    if (existingPost.authorId !== userId) {
+    if (existingPost.user_id !== userId) {
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "게시물 삭제 권한이 없습니다." },
         { status: 403 }
@@ -133,10 +155,14 @@ export async function DELETE(
     }
 
     // 게시물 삭제 (소프트 삭제)
-    await prisma.post.update({
-      where: { id: postId },
-      data: { isDeleted: true }
-    });
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ is_deleted: true } as any)
+      .eq('id', postId);
+
+    if (updateError) {
+      throw updateError;
+    }
 
     console.log("게시물 삭제 성공:", postId);
 

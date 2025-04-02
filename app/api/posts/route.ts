@@ -121,8 +121,7 @@ async function getPostById(postId: number) {
     .from('posts')
     .select(`
       *,
-      user:users(id, name, email),
-      comments(*)
+      users (id, name, email)
     `)
     .eq('id', postId)
     .single();
@@ -156,21 +155,24 @@ async function getPostById(postId: number) {
     console.warn('[게시물 API] 좋아요 수 조회 오류:', likesError);
   }
   
+  // 타입 안전하게 처리
+  const postData = post as any;
+  
   // 응답 데이터 구성
   const formattedPost = {
-    id: post.id,
-    title: post.title,
-    content: post.content,
-    published: post.published,
-    createdAt: post.created_at,
-    updatedAt: post.updated_at,
+    id: postData.id,
+    title: postData.title,
+    content: postData.content,
+    published: postData.published,
+    createdAt: postData.created_at,
+    updatedAt: postData.updated_at,
     likesCount: likesCount || 0,
-    author: post.user ? {
-      id: post.user.id,
-      name: post.user.name,
-      email: post.user.email
+    author: postData.users ? {
+      id: postData.users.id,
+      name: postData.users.name,
+      email: postData.users.email
     } : null,
-    comments: post.comments ? post.comments.map((comment: any) => ({
+    comments: postData.comments ? postData.comments.map((comment: any) => ({
       id: comment.id,
       content: comment.content,
       createdAt: comment.created_at,
@@ -190,7 +192,7 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
     .from('posts')
     .select(`
       *,
-      user:users(id, name, email)
+      users (id, name, email)
     `, { count: 'exact' })
     .is('is_deleted', false);
   
@@ -221,22 +223,22 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
     const postData = post as any;
     
     return {
-      id: post.id,
-      title: post.title,
-      content: post.content.substring(0, 200) + (post.content.length > 200 ? '...' : ''),
-      published: post.published,
-      createdAt: post.created_at,
-      updatedAt: post.updated_at,
+      id: postData.id,
+      title: postData.title,
+      content: postData.content.substring(0, 200) + (postData.content.length > 200 ? '...' : ''),
+      published: postData.published,
+      createdAt: postData.created_at,
+      updatedAt: postData.updated_at,
       // 추가 필드 안전하게 접근
       category: postData.category || null,
       status: postData.status || 'ACTIVE',
-      eventName: postData.eventName || post.title,
-      eventDate: postData.eventDate || null,
-      eventVenue: postData.eventVenue || null,
-      author: post.user ? {
-        id: post.user.id,
-        name: post.user.name,
-        email: post.user.email
+      eventName: postData.event_name || postData.title,
+      eventDate: postData.event_date || null,
+      eventVenue: postData.event_venue || null,
+      author: postData.users ? {
+        id: postData.users.id,
+        name: postData.users.name,
+        email: postData.users.email
       } : null
     };
   });

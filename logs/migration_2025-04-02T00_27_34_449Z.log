@@ -1,0 +1,20 @@
+=== Supabase Migration Started ===
+Starting user migration...
+Error in user migration: 
+Invalid `prisma.user.findMany()` invocation:
+
+
+The table `main.User` does not exist in the current database.
+Starting post migration...
+Error in post migration: 
+Invalid `prisma.post.findMany()` invocation:
+
+
+The table `main.Post` does not exist in the current database.
+Starting notification migration...
+Error in notification migration: 
+Invalid `prisma.notification.findMany()` invocation:
+
+
+The table `main.Notification` does not exist in the current database.
+=== Supabase Migration Completed Successfully ===

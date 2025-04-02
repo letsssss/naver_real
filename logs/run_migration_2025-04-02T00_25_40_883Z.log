@@ -1,0 +1,25 @@
+마이그레이션 로그는 다음 파일에 저장됩니다: logs\run_migration_2025-04-02T00_25_40_883Z.log
+[OUTPUT] === Supabase Migration Started ===
+[OUTPUT] Starting user migration...
+[ERROR] (node:11144) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[OUTPUT] Error in user migration: 
+Invalid `prisma.user.findMany()` invocation:
+
+
+The table `main.User` does not exist in the current database.
+[OUTPUT] Starting post migration...
+[OUTPUT] Error in post migration: 
+Invalid `prisma.post.findMany()` invocation:
+
+
+The table `main.Post` does not exist in the current database.
+[OUTPUT] Starting notification migration...
+[OUTPUT] Error in notification migration: 
+Invalid `prisma.notification.findMany()` invocation:
+
+
+The table `main.Notification` does not exist in the current database.
+[OUTPUT] === Supabase Migration Completed Successfully ===
+마이그레이션이 성공적으로 완료되었습니다.
+개발 서버를 다시 시작하려면 "pnpm dev"를 실행하세요.
