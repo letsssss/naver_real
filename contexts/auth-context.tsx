@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
@@ -96,7 +97,7 @@ const safeLocalStorageRemove = (key: string) => {
 };
 
 type User = {
-  id: number
+  id: number | string
   email: string
   name: string
   role?: string
@@ -145,103 +146,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 인증 상태 확인 함수
   const checkAuthStatus = useCallback(async (): Promise<boolean> => {
     try {
-      // 0. 먼저 로컬 스토리지에서 토큰과 사용자 정보 확인
-      const token = safeLocalStorageGet('token');
-      const storedUser = safeLocalStorageGet('user');
+      // Supabase에서 현재 세션 가져오기
+      const { data: { session }, error } = await supabase.auth.getSession();
       
-      // 실제 로그인한 사용자 정보가 있으면 먼저 사용 (카카오 로그인 등)
-      // 토큰과 사용자 정보가 모두 존재하고, 테스트 토큰이 아닌 경우 우선 적용
-      if (token && storedUser && token !== 'test-token-dev') {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          // 이미 동일한 사용자 정보가 상태에 있다면 업데이트하지 않음 (무한 루프 방지)
-          if (!user || user.id !== parsedUser.id) {
-            console.log('실제 로그인한 사용자 정보 사용');
-            setUser(parsedUser);
-          }
-          setLoading(false);
-          return true;
-        } catch (error) {
-          console.error('사용자 정보 파싱 오류:', error);
-        }
+      if (error) {
+        console.error('Supabase 세션 조회 오류:', error);
+        setUser(null);
+        setLoading(false);
+        return false;
       }
       
-      // 1. 개발 환경이면서 인증 상태가 아직 설정되지 않은 경우 (실제 로그인이 없을 때만)
-      if (process.env.NODE_ENV === 'development' && !devSetupDone.current && !user) {
-        console.log('개발 환경에서 테스트 사용자로 처리');
-        devSetupDone.current = true; // 상태 설정 완료 표시
-        
-        // 테스트 사용자 데이터 (실제 환경에서는 사용되지 않음)
-        const testUser: User = {
-          id: 1,
-          email: 'test@example.com',
-          name: '테스트 사용자',
-          role: 'USER'
+      // 세션이 있으면 사용자 정보 설정
+      if (session) {
+        const userData: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || '사용자',
+          role: session.user.user_metadata?.role || 'USER'
         };
         
-        // 로컬 스토리지에 테스트 토큰과 사용자 정보가 없는 경우에만 저장
-        if (!token) {
-          safeLocalStorageSet('token', 'test-token-dev');
-        }
-        
-        if (!storedUser) {
-          safeLocalStorageSet('user', JSON.stringify(testUser));
-        }
-        
-        // 상태 업데이트
-        setUser(testUser);
+        // 사용자 정보 저장
+        safeLocalStorageSet("user", JSON.stringify(userData));
+        setUser(userData);
         setLoading(false);
         return true;
       }
-
-      // 2. 로컬 스토리지에서 토큰과 사용자 정보 재확인 (여기까지 오면 테스트 토큰도 허용)
-      if (token && storedUser) {
+      
+      // 로컬 스토리지에서 사용자 정보 확인 (세션이 없는 경우)
+      const storedUser = safeLocalStorageGet('user');
+      
+      if (storedUser) {
         try {
-          // 사용자 정보 파싱
           const parsedUser = JSON.parse(storedUser);
-          // 이미 동일한 사용자 정보가 상태에 있다면 업데이트하지 않음 (무한 루프 방지)
-          if (!user || user.id !== parsedUser.id) {
-            setUser(parsedUser);
-          }
+          setUser(parsedUser);
           setLoading(false);
           return true;
         } catch (error) {
           console.error('사용자 정보 파싱 오류:', error);
           safeLocalStorageRemove('user');
-          safeLocalStorageRemove('token');
-          setUser(null);
-          setLoading(false);
-          return false;
         }
-      } else {
-        // 토큰이 없으면 로그아웃 상태로 설정
-        setUser(null);
-        setLoading(false);
-        return false;
       }
+      
+      // 인증된 사용자가 없음
+      setUser(null);
+      setLoading(false);
+      return false;
     } catch (error) {
       console.error('인증 상태 확인 오류:', error);
       setUser(null);
       setLoading(false);
       return false;
     }
-  }, [user]);
+  }, []);
 
   // 로그아웃 함수
   const logout = useCallback(async () => {
     try {
-      // 서버에 로그아웃 요청
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      setLoading(true);
       
-      if (!response.ok) {
-        console.error('로그아웃 오류:', response.statusText);
+      // Supabase 세션 로그아웃
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Supabase 로그아웃 오류:', error);
       }
-    } catch (error) {
-      console.error('로그아웃 요청 오류:', error);
-    } finally {
+      
       // 로컬 스토리지 및 쿠키 정리
       safeLocalStorageRemove('token');
       safeLocalStorageRemove('user');
@@ -261,6 +230,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // 로그인 페이지로 이동
       router.push('/login');
+    } catch (error) {
+      console.error('로그아웃 처리 중 오류:', error);
+    } finally {
+      setLoading(false);
     }
   }, [router]);
 
@@ -325,66 +298,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 로딩 상태 설정
       setLoading(true);
       
-      // 상대 경로 사용으로 포트 변경에 영향 받지 않음
-      const timestamp = new Date().getTime(); // 캐시 방지를 위한 타임스탬프
-      const response = await fetch(`/api/auth/login?t=${timestamp}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: "include", // 쿠키를 포함시키기 위해 필요
-        cache: "no-store", // 캐시 사용 방지
+      console.log('Supabase 인증 시작:', email);
+      
+      // Supabase 클라이언트를 이용한 직접 로그인
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password,
       });
-
-      // 응답이 JSON이 아닐 경우 처리
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        console.error("JSON 파싱 오류:", jsonError);
+      
+      if (error) {
+        console.error('Supabase 로그인 오류:', error.message);
         setLoading(false);
         return {
-          success: false, 
-          message: "서버 응답을 처리할 수 없습니다."
+          success: false,
+          message: error.message || "이메일 또는 비밀번호가 올바르지 않습니다."
         };
       }
-
-      // 로딩 상태 해제
-      setLoading(false);
-
-      if (!response.ok) {
+      
+      if (!data.user) {
+        console.error('사용자 정보가 없습니다.');
+        setLoading(false);
         return {
           success: false,
-          message: data?.error || "로그인 중 오류가 발생했습니다.",
+          message: "로그인은 성공했지만 사용자 정보를 찾을 수 없습니다."
         };
       }
-
-      // 로그인 성공
-      const userData = {
+      
+      console.log('Supabase 로그인 성공:', data.user.id);
+      
+      // 사용자 정보 구성
+      const userData: User = {
         id: data.user.id,
-        email: data.user.email,
-        name: data.user.name || "사용자",
-        role: data.user.role,
+        email: data.user.email || email,
+        name: data.user.user_metadata?.name || "사용자",
+        role: data.user.user_metadata?.role || "USER"
       };
-
-      // 로컬 스토리지에 사용자 정보 저장
+      
+      // 사용자 정보 저장
       safeLocalStorageSet("user", JSON.stringify(userData));
-      safeLocalStorageSet("token", data.token); // 토큰 저장
       setUser(userData);
       
-      // 마지막 확인 시간 업데이트
+      // Supabase 세션 상태 다시 확인
+      await checkAuthStatus();
+      
       setLoading(false);
-
       return { success: true };
     } catch (error) {
       console.error("Login error:", error);
       setLoading(false);
       return {
         success: false,
-        message: "로그인 중 오류가 발생했습니다.",
+        message: "로그인 중 오류가 발생했습니다."
       };
     }
   };

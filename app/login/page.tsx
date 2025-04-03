@@ -116,6 +116,13 @@ export default function Login() {
               이메일로 회원가입
             </Button>
           </Link>
+          
+          {/* 인증 초기화 버튼 추가 */}
+          <Link href="/auth/reset" className="block">
+            <Button variant="outline" className="w-full border-red-200 text-red-600 py-2 transition-colors hover:bg-red-50">
+              인증 데이터 초기화 (문제 해결용)
+            </Button>
+          </Link>
         </form>
 
         {/* Social Login */}

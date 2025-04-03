@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 type KakaoLoginButtonProps = {
@@ -40,7 +40,7 @@ export default function KakaoLoginButton({
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
-          redirectTo: `${baseUrl}/auth/callback`,
+          redirectTo: 'https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback',
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             // 하나의 계정만 허용하도록 플래그 추가
