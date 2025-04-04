@@ -13,13 +13,16 @@ interface CorsOptions {
  * @returns 헤더가 설정된 NextResponse 객체
  */
 export function cors(response: NextResponse, options: CorsOptions = {}): NextResponse {
-  const origin = options.origin || '*';
+  const origin = options.origin || 'http://localhost:3000';
   const methods = options.methods?.join(', ') || 'GET, POST, PUT, DELETE, OPTIONS, PATCH';
   const headers = options.headers?.join(', ') || 'Content-Type, Authorization';
   
   response.headers.set('Access-Control-Allow-Origin', origin);
   response.headers.set('Access-Control-Allow-Methods', methods);
   response.headers.set('Access-Control-Allow-Headers', headers);
+  
+  // 쿠키 전달 허용 (credentials: 'include'와 세트)
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
   
   // 캐시 방지 헤더
   response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -36,7 +39,7 @@ export function cors(response: NextResponse, options: CorsOptions = {}): NextRes
 export function handleCorsOptions(): NextResponse {
   const response = new NextResponse(null, { status: 204 });
   return cors(response, {
-    origin: '*',
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     headers: ['Content-Type', 'Authorization']
   });
