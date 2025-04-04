@@ -42,6 +42,30 @@ export default function EditProfilePage() {
         return localToken;
       }
       
+      // access_token 확인
+      const accessToken = localStorage.getItem('access_token');
+      if (accessToken) {
+        console.log('access_token 존재:', accessToken.substring(0, 20) + '...');
+        return accessToken;
+      }
+      
+      // Supabase 세션 토큰 확인
+      const supabaseKey = Object.keys(localStorage).find(key => 
+        key.startsWith('sb-') && key.endsWith('-auth-token')
+      );
+      
+      if (supabaseKey) {
+        try {
+          const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+          if (supabaseData.access_token) {
+            console.log('Supabase 세션 토큰 존재:', supabaseData.access_token.substring(0, 20) + '...');
+            return supabaseData.access_token;
+          }
+        } catch (e) {
+          console.error('Supabase 토큰 파싱 오류:', e);
+        }
+      }
+      
       // 세션 스토리지에서 확인
       const sessionToken = sessionStorage.getItem('token');
       if (sessionToken) {
@@ -72,21 +96,79 @@ export default function EditProfilePage() {
     const fetchUserData = async () => {
       setIsLoading(true);
       try {
-        // 토큰 로깅
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        console.log("요청에 사용할 토큰:", token ? '존재함' : '없음');
+        // 모든 쿠키를 로깅하여 디버깅
+        console.log("현재 쿠키:", document.cookie);
+        console.log("Supabase 세션 사용자:", user.id);
+        
+        // 헤더에 넣을 인증 토큰 준비
+        let accessToken = '';
+        
+        // 다양한 방법으로 토큰 가져오기 시도
+        try {
+          // 1. access_token 확인
+          accessToken = localStorage.getItem('access_token') || '';
+          
+          // 2. Supabase 세션 토큰 확인
+          if (!accessToken) {
+            // Supabase 세션 키 찾기
+            const supabaseKey = Object.keys(localStorage).find(key => 
+              key.startsWith('sb-') && key.endsWith('-auth-token')
+            );
+            
+            if (supabaseKey) {
+              console.log('Supabase 세션 키 발견:', supabaseKey);
+              try {
+                const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+                accessToken = supabaseData.access_token || '';
+                console.log('Supabase 세션에서 토큰 추출:', accessToken ? '성공' : '실패');
+              } catch (e) {
+                console.error('Supabase 토큰 파싱 오류:', e);
+              }
+            }
+          }
+          
+          // 3. 일반 token 확인
+          if (!accessToken) {
+            accessToken = localStorage.getItem('token') || '';
+          }
+          
+          // 4. supabase_token 확인
+          if (!accessToken) {
+            accessToken = localStorage.getItem('supabase_token') || '';
+          }
+          
+          // 5. 세션 스토리지 확인
+          if (!accessToken) {
+            accessToken = sessionStorage.getItem('token') || 
+                         sessionStorage.getItem('access_token') || '';
+          }
+        } catch (storageError) {
+          console.error("토큰 접근 오류:", storageError);
+        }
+        
+        console.log("사용할 액세스 토큰:", accessToken ? `있음 (${accessToken.substring(0, 10)}...)` : '없음');
         
         // credentials 옵션 추가 및 캐시 방지 헤더 설정
         const timestamp = Date.now();
-        const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}`, {
+        const userId = user?.id || '';
+        console.log(`API 요청 URL: ${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`);
+        
+        const headers: Record<string, string> = {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        };
+        
+        // 토큰이 있으면 Authorization 헤더 추가
+        if (accessToken) {
+          headers["Authorization"] = `Bearer ${accessToken}`;
+          console.log("Authorization 헤더 추가됨");
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`, {
           method: "GET",
           credentials: "include", // 쿠키를 포함시켜 요청
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            ...(token ? { "Authorization": `Bearer ${token}` } : {})
-          }
+          headers
         });
         
         console.log("프로필 정보 요청 응답 상태:", response.status);
@@ -138,21 +220,79 @@ export default function EditProfilePage() {
     setIsSaving(true);
     
     try {
-      // 토큰 로깅
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      console.log("요청에 사용할 토큰:", token ? '존재함' : '없음');
+      // 모든 쿠키를 로깅하여 디버깅
+      console.log("현재 쿠키:", document.cookie);
+      console.log("Supabase 세션 사용자:", user?.id);
+      
+      // 헤더에 넣을 인증 토큰 준비
+      let accessToken = '';
+      
+      // 다양한 방법으로 토큰 가져오기 시도
+      try {
+        // 1. access_token 확인
+        accessToken = localStorage.getItem('access_token') || '';
+        
+        // 2. Supabase 세션 토큰 확인
+        if (!accessToken) {
+          // Supabase 세션 키 찾기
+          const supabaseKey = Object.keys(localStorage).find(key => 
+            key.startsWith('sb-') && key.endsWith('-auth-token')
+          );
+          
+          if (supabaseKey) {
+            console.log('Supabase 세션 키 발견:', supabaseKey);
+            try {
+              const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+              accessToken = supabaseData.access_token || '';
+              console.log('Supabase 세션에서 토큰 추출:', accessToken ? '성공' : '실패');
+            } catch (e) {
+              console.error('Supabase 토큰 파싱 오류:', e);
+            }
+          }
+        }
+        
+        // 3. 일반 token 확인
+        if (!accessToken) {
+          accessToken = localStorage.getItem('token') || '';
+        }
+        
+        // 4. supabase_token 확인
+        if (!accessToken) {
+          accessToken = localStorage.getItem('supabase_token') || '';
+        }
+        
+        // 5. 세션 스토리지 확인
+        if (!accessToken) {
+          accessToken = sessionStorage.getItem('token') || 
+                       sessionStorage.getItem('access_token') || '';
+        }
+      } catch (storageError) {
+        console.error("토큰 접근 오류:", storageError);
+      }
+      
+      console.log("사용할 액세스 토큰:", accessToken ? `있음 (${accessToken.substring(0, 10)}...)` : '없음');
       
       // credentials 옵션 추가 및 캐시 방지 헤더 설정
       const timestamp = Date.now();
-      const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}`, {
+      const userId = user?.id || '';
+      console.log(`프로필 업데이트 요청 URL: ${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`);
+      
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      };
+      
+      // 토큰이 있으면 Authorization 헤더 추가
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+        console.log("Authorization 헤더 추가됨");
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
+        headers,
         credentials: "include", // 쿠키를 포함시켜 요청
         body: JSON.stringify({
           name: userData.name,

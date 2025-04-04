@@ -326,6 +326,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Supabase 로그인 성공:', data.user.id);
       
+      // 세션 연장 및 새로고침 시도
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error('세션 갱신 오류:', refreshError);
+        } else {
+          console.log('세션 갱신 성공:', refreshData.session ? '세션 있음' : '세션 없음');
+          if (refreshData.session) {
+            // 갱신된 세션 정보로 업데이트
+            data.session = refreshData.session;
+          }
+        }
+      } catch (refreshError) {
+        console.error('세션 갱신 중 예외 발생:', refreshError);
+      }
+      
+      // 세션 정보 및 쿠키 로깅
+      if (typeof document !== 'undefined') {
+        console.log('로그인 후 브라우저 쿠키:');
+        const allCookies = document.cookie.split(';').map(c => c.trim());
+        console.log(`총 ${allCookies.length}개의 쿠키 발견`);
+        allCookies.forEach(cookie => {
+          console.log(' -', cookie);
+        });
+        
+        // Supabase 관련 쿠키 확인
+        const supabaseCookie = allCookies.find(c => c.startsWith('sb-'));
+        
+        if (supabaseCookie) {
+          console.log('Supabase 세션 쿠키 발견:', supabaseCookie);
+          
+          // 명시적으로 세션 데이터 저장 (백업용)
+          try {
+            localStorage.setItem('supabase-session-cookie', supabaseCookie);
+            console.log('Supabase 세션 쿠키를 localStorage에 백업했습니다.');
+            
+            // 세션 쿠키 이름 확인
+            const cookieName = supabaseCookie.split('=')[0];
+            console.log('Supabase 세션 쿠키 이름:', cookieName);
+          } catch (storageError) {
+            console.error('로컬 스토리지 저장 오류:', storageError);
+          }
+        } else {
+          console.warn('⚠️ Supabase 세션 쿠키가 없습니다! 인증에 문제가 발생할 수 있습니다.');
+          
+          // 세션 데이터 직접 저장 시도
+          try {
+            if (data.session) {
+              // 세션 이름 확인 (Supabase 프로젝트 참조)
+              const projectRef = 'jdubrjczdyqqtsppojgu';
+              const cookieName = `sb-${projectRef}-auth-token`;
+              
+              console.log(`세션 쿠키를 수동으로 생성합니다. 이름: ${cookieName}`);
+              
+              const sessionStr = JSON.stringify({
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: Math.floor(Date.now() / 1000) + 3600, // 1시간 후 만료
+                user: data.user
+              });
+              
+              // 쿠키에 직접 저장 시도 - 모든 경로에서 접근 가능하도록
+              document.cookie = `${cookieName}=${encodeURIComponent(sessionStr)}; path=/; max-age=86400; SameSite=Lax`;
+              
+              // localStorage에도 저장
+              localStorage.setItem(cookieName, sessionStr);
+              
+              // access_token도 별도로 저장
+              localStorage.setItem('access_token', data.session.access_token);
+              document.cookie = `access_token=${data.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
+              
+              console.log('수동으로 Supabase 세션 쿠키를 생성했습니다.');
+              
+              // 저장 후 다시 쿠키 확인
+              console.log('쿠키 생성 후 확인:', document.cookie);
+            }
+          } catch (cookieError) {
+            console.error('쿠키 설정 오류:', cookieError);
+          }
+        }
+      }
+      
+      // 세션 정보 다시 확인
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('현재 세션 정보:', sessionData.session ? '세션 있음' : '세션 없음');
+      
+      if (sessionData.session) {
+        console.log('세션 액세스 토큰 (처음 20자):', sessionData.session.access_token.substring(0, 20));
+        console.log('세션 만료 시간:', new Date(sessionData.session.expires_at! * 1000).toLocaleString());
+        
+        // 액세스 토큰도 따로 저장 (API 요청에 사용 가능)
+        safeLocalStorageSet("access_token", sessionData.session.access_token);
+        
+        // Supabase 세션 객체도 저장
+        try {
+          const sessionStr = JSON.stringify(sessionData.session);
+          safeLocalStorageSet("supabase_session", sessionStr);
+          console.log('Supabase 세션 객체를 localStorage에 저장했습니다.');
+        } catch (sessionStoreError) {
+          console.error('세션 객체 저장 오류:', sessionStoreError);
+        }
+      }
+      
       // 사용자 정보 구성
       const userData: User = {
         id: data.user.id,

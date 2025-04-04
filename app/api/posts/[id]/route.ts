@@ -111,6 +111,66 @@ export async function DELETE(
     
     if (!authUser) {
       console.log("인증된 사용자를 찾을 수 없음");
+      
+      // 개발 환경에서는 쿼리 파라미터 userId 확인 (백업 방식)
+      if (process.env.NODE_ENV === 'development') {
+        const userId = request.nextUrl.searchParams.get('userId');
+        if (userId) {
+          console.log("개발 환경 - 쿼리 파라미터에서 userId 발견:", userId);
+          
+          // 사용자 ID를 사용하여 게시물 삭제 로직 진행
+          const postId = parseInt(params.id);
+          
+          if (isNaN(postId)) {
+            return addCorsHeaders(NextResponse.json(
+              { success: false, message: "유효하지 않은 게시물 ID입니다." },
+              { status: 400 }
+            ));
+          }
+          
+          // 게시물 확인
+          const { data, error: fetchError } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('id', postId)
+            .single();
+            
+          const existingPost = data as any;
+          
+          if (fetchError || !existingPost) {
+            return addCorsHeaders(NextResponse.json(
+              { success: false, message: "게시물을 찾을 수 없습니다." },
+              { status: 404 }
+            ));
+          }
+          
+          // 게시물 작성자 확인
+          if (existingPost.author_id !== userId) {
+            return addCorsHeaders(NextResponse.json(
+              { success: false, message: "게시물 삭제 권한이 없습니다." },
+              { status: 403 }
+            ));
+          }
+          
+          // 게시물 삭제 (소프트 삭제)
+          const { error: updateError } = await supabase
+            .from('posts')
+            .update({ is_deleted: true } as any)
+            .eq('id', postId);
+          
+          if (updateError) {
+            throw updateError;
+          }
+          
+          console.log("개발 환경 - 게시물 삭제 성공:", postId);
+          
+          return addCorsHeaders(NextResponse.json({ 
+            success: true, 
+            message: "게시물이 성공적으로 삭제되었습니다." 
+          }));
+        }
+      }
+      
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "인증되지 않은 사용자입니다." },
         { status: 401 }
@@ -147,7 +207,7 @@ export async function DELETE(
     }
 
     // 게시물 작성자 확인
-    if (existingPost.user_id !== userId) {
+    if (existingPost.author_id !== userId) {
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "게시물 삭제 권한이 없습니다." },
         { status: 403 }

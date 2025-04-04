@@ -284,17 +284,44 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
  */
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
-    // 개발 환경에서는 항상 기본 사용자 정보 반환
-    if (isDevelopment) {
-      console.log(`개발 환경에서 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
-      return {
-        id: DEFAULT_TEST_USER_ID,
-        name: '개발 테스트 사용자',
-        email: 'test@example.com'
-      };
+    // 1. 먼저 쿼리 파라미터로 전달된 userId 확인 (개발 환경용 백업 방식)
+    if (process.env.NODE_ENV === 'development') {
+      const userId = request.nextUrl.searchParams.get('userId');
+      console.log("개발 환경 - 쿼리 파라미터 userId 확인:", userId);
+      
+      if (userId) {
+        console.log("개발 환경 - 쿼리 파라미터에서 userId 발견:", userId);
+        
+        // Supabase에서 사용자 정보 조회
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (!userError && userData) {
+          console.log("쿼리 파라미터 userId로 사용자 조회 성공");
+          const user = userData as any; // 타입 캐스팅
+          return {
+            id: userId,
+            name: user.name || '개발 사용자',
+            email: user.email || 'dev@example.com',
+            role: user.role || 'USER'
+          };
+        }
+        
+        // 사용자를 찾을 수 없는 경우 기본 정보 반환
+        console.log("쿼리 파라미터 userId로 사용자를 찾을 수 없어 기본 정보 사용");
+        return {
+          id: userId,
+          name: '개발 사용자',
+          email: 'dev@example.com',
+          role: 'USER'
+        };
+      }
     }
     
-    // 1. JWT 토큰 확인 (쿠키 또는 헤더에서)
+    // 2. JWT 토큰 확인 (쿠키 또는 헤더에서)
     const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
     
     if (token) {
@@ -302,41 +329,99 @@ export async function getAuthenticatedUser(request: NextRequest) {
       const decoded = await verifyToken(token);
       if (decoded && decoded.userId) {
         // Supabase에서 사용자 정보 조회
-        const { data: user, error } = await supabase
+        const { data: userData, error } = await supabase
           .from('users')
-          .select('id, name, email')
+          .select('id, name, email, role')
           .eq('id', decoded.userId)
           .single();
         
-        if (user && !error) {
-          console.log('JWT 토큰으로 인증된 사용자:', user);
-          return user;
+        if (userData && !error) {
+          console.log('JWT 토큰으로 인증된 사용자:', userData);
+          const user = userData as any; // 타입 캐스팅
+          return {
+            id: user.id,
+            name: user.name || '',
+            email: user.email || '',
+            role: user.role || 'USER'
+          };
         }
       }
     }
     
-    // 2. JWT 인증 실패 시 NextAuth 세션 확인
+    // 3. Supabase 세션 직접 확인
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (!error && session) {
+        const userId = session.user.id;
+        console.log("Supabase 세션에서 인증된 사용자 ID:", userId);
+        
+        // Supabase에서 사용자 정보 조회
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, name, email, role')
+          .eq('id', userId)
+          .single();
+        
+        if (!userError && userData) {
+          console.log("Supabase 세션으로 사용자 조회 성공");
+          const user = userData as any; // 타입 캐스팅
+          return {
+            id: userId,
+            name: user.name || '사용자',
+            email: user.email || '',
+            role: user.role || 'USER'
+          };
+        }
+        
+        // 사용자 테이블에 없지만 인증은 된 경우
+        return {
+          id: userId,
+          name: session.user.user_metadata?.name || '사용자',
+          email: session.user.email || '',
+          role: session.user.user_metadata?.role || 'USER'
+        };
+      }
+    } catch (sessionError) {
+      console.error("Supabase 세션 확인 오류:", sessionError);
+    }
+    
+    // 4. JWT 인증 실패 시 NextAuth 세션 확인
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.email) {
-      console.log('세션 또는 사용자 이메일이 없음');
-      return null;
+    if (session?.user?.email) {
+      // Supabase에서 사용자 정보 조회
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('id, name, email, role')
+        .eq('email', session.user.email.toLowerCase())
+        .single();
+      
+      if (userData && !error) {
+        console.log('NextAuth 세션에서 인증된 사용자:', userData);
+        const user = userData as any; // 타입 캐스팅
+        return {
+          id: user.id,
+          name: user.name || '',
+          email: user.email || '',
+          role: user.role || 'USER'
+        };
+      }
     }
-
-    // Supabase에서 사용자 정보 조회
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, name, email')
-      .eq('email', session.user.email.toLowerCase())
-      .single();
     
-    if (!user || error) {
-      console.log('사용자 정보를 찾을 수 없음:', session.user.email);
-      return null;
+    // 5. 개발 환경에서는 기본 테스트 사용자 사용 (마지막 대안)
+    if (isDevelopment) {
+      console.log(`개발 환경 대체: 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
+      return {
+        id: DEFAULT_TEST_USER_ID,
+        name: '개발 테스트 사용자',
+        email: 'test@example.com',
+        role: 'USER'
+      };
     }
     
-    console.log('세션에서 인증된 사용자:', user);
-    return user;
+    console.log('인증된 사용자를 찾을 수 없음');
+    return null;
 
   } catch (error) {
     console.error('사용자 인증 정보 가져오기 중 오류:', error);

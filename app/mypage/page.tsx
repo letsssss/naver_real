@@ -175,28 +175,43 @@ export default function MyPage() {
       
       // 판매자의 판매 상품에 대한 구매 정보도 함께 가져옵니다
       // 구매 확정(CONFIRMED) 상태 확인을 위해 추가 API 호출
-      const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases`, {
+      const timestamp = Date.now();
+      const userId = user?.id || '';
+      console.log(`판매자 구매 내역 요청: ${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
+      
+      const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : '',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
-        }
+        },
+        credentials: 'include' // 쿠키 포함
       });
+      
+      console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);
       
       let purchasesByPostId: Record<number, any> = {};
       
       if (purchaseResponse.ok) {
         const purchaseData = await purchaseResponse.json();
+        console.log("판매자 구매 내역 데이터:", purchaseData);
         if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
           // 게시글 ID별로 구매 정보를 인덱싱
           purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
-            if (purchase.postId) {
-              acc[purchase.postId] = purchase;
+            if (purchase.postId || purchase.post_id) {
+              // post_id 또는 postId 필드 처리
+              const postId = purchase.postId || purchase.post_id;
+              acc[postId] = purchase;
             }
             return acc;
           }, {});
         }
+      } else {
+        console.error("판매자 구매 내역 가져오기 실패:", purchaseResponse.status);
+        const errorText = await purchaseResponse.text().catch(() => "");
+        console.error("오류 응답:", errorText);
       }
         
       // API 응답을 화면에 표시할 형식으로 변환
@@ -599,21 +614,64 @@ export default function MyPage() {
   // 게시물 삭제 함수
   const deletePost = async (postId: number) => {
     try {
-      console.log("게시물 삭제 요청:", postId);
+      if (!user || !user.id) {
+        toast.error("사용자 인증 정보가 없습니다. 다시 로그인해주세요.");
+        router.push("/login?callbackUrl=/mypage");
+        return;
+      }
       
-      // 클라이언트 사이드에서만 localStorage에 접근하도록 수정
-      const authToken = typeof window !== 'undefined' 
-        ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
-        : '';
+      console.log("게시물 삭제 요청:", postId, "사용자 ID:", user.id);
       
-      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
+      // Supabase 세션 토큰 가져오기
+      let authToken = '';
+      try {
+        if (typeof window !== 'undefined') {
+          // 1. Supabase 저장소 키 가져오기
+          const supabaseStorageKey = Object.keys(localStorage).find(key => 
+            key.startsWith('sb-') && key.endsWith('-auth-token')
+          );
+          
+          if (supabaseStorageKey) {
+            // Supabase 세션 데이터 파싱
+            const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
+            if (supabaseSession.access_token) {
+              authToken = supabaseSession.access_token;
+              console.log("Supabase 세션 토큰 발견");
+            }
+          }
+          
+          // 2. 이전 방식의 토큰 확인 (폴백)
+          if (!authToken) {
+            authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+            if (authToken) console.log("기존 저장소에서 토큰 발견");
+          }
+        }
+      } catch (storageError) {
+        console.error("토큰 접근 오류:", storageError);
+      }
+      
+      // 요청 헤더 구성
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+      
+      // 토큰이 있는 경우 인증 헤더 추가
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
+      // userId를 항상 쿼리 파라미터로 추가 (인증 백업)
+      const userId = user.id?.toString() || '';
+      let url = `${API_BASE_URL}/api/posts/${postId}?userId=${userId}`;
+      
+      console.log("삭제 요청 URL:", url);
+      console.log("인증 헤더 포함:", !!headers['Authorization']);
+      
+      const response = await fetch(url, {
         method: 'DELETE',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : ''
-        },
-        credentials: 'include', // 쿠키를 포함시킵니다
+        headers,
+        credentials: 'include', // 쿠키 포함
       });
       
       // 응답이 JSON이 아닌 경우 처리
