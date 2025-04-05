@@ -3,21 +3,31 @@ import { createBrowserClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { Database } from '@/types/supabase.types';
 
-// 환경 변수에서 값을 가져옴
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+// 환경 변수 로딩
+// 하드코딩된 값은 폴백으로만 사용
+const ENV = {
+  SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co',
+  SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww',
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU',
+  NODE_ENV: process.env.NODE_ENV || 'development'
+}
 
-// 환경 변수 로깅
-console.log('=== Supabase 환경 변수 디버깅 ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('SUPABASE_URL 설정 여부:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log('SUPABASE_ANON_KEY 설정 여부:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-console.log('SUPABASE_SERVICE_ROLE_KEY 설정 여부:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+// 환경 변수 디버깅 로그
+console.log('=== Supabase 환경 설정 디버깅 ===');
+console.log('프로세스 환경:', { 
+  node_env: process.env.NODE_ENV,
+  has_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+  has_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+});
+console.log('사용 중인 값:', { 
+  url: ENV.SUPABASE_URL.substring(0, 15) + '...',
+  key_prefix: ENV.SUPABASE_ANON_KEY.substring(0, 10) + '...',
+  is_fallback_used: !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+});
 console.log('===============================');
 
 // 개발 환경 확인
-const IS_DEV = process.env.NODE_ENV === 'development';
+const IS_DEV = ENV.NODE_ENV === 'development';
 
 // 클라이언트 옵션 구성
 const supabaseOptions = {
@@ -30,7 +40,7 @@ const supabaseOptions = {
 
 // 클라이언트 사이드용 Supabase 클라이언트 생성 (SSR 권장 방식)
 export const createBrowserSupabaseClient = () => {
-  return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return createBrowserClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
 };
 
 /**
@@ -39,10 +49,10 @@ export const createBrowserSupabaseClient = () => {
  */
 export function getSupabaseClient(): SupabaseClient<Database> {
   // 로깅 추가
-  console.log(`[Supabase] 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}... / 키: ${SUPABASE_ANON_KEY.substring(0, 10)}...`);
+  console.log(`[Supabase] 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}... / 키: ${ENV.SUPABASE_ANON_KEY.substring(0, 10)}...`);
   
   try {
-    return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, supabaseOptions);
+    return createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, supabaseOptions);
   } catch (error) {
     console.error('[Supabase] 클라이언트 생성 오류:', error);
     throw error;
@@ -54,10 +64,10 @@ export function getSupabaseClient(): SupabaseClient<Database> {
  * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
  */
 export function createAdminClient(): SupabaseClient<Database> {
-  console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}...`);
+  console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}...`);
   
   try {
-    return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    return createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
@@ -75,10 +85,10 @@ export function createAdminClient(): SupabaseClient<Database> {
  */
 export function createServerSupabaseClient(jwt?: string): SupabaseClient<Database> {
   // 클라이언트 생성
-  console.log(`[Supabase] 서버 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}... / JWT 제공: ${!!jwt}`);
+  console.log(`[Supabase] 서버 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}... / JWT 제공: ${!!jwt}`);
   
   try {
-    const client = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const client = createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
