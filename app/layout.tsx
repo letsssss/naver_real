@@ -6,6 +6,7 @@ import "./globals.css"
 import { FeedbackForm } from "@/components/feedback-form"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
+import { SyncUser } from "./components/sync-user"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -32,6 +33,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning={true}>
         <AuthProvider>
+          <SyncUser />
           {children}
           <FeedbackForm />
           <Toaster position="top-center" />

@@ -1,25 +1,22 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-// API 기본 URL 설정 (환경별로 다른 호스트 사용)
-const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
 
 export default function EditProfilePage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const router = useRouter();
-  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const router = useRouter()
+  const { user } = useAuth()
 
   const [userData, setUserData] = useState({
     name: "",
@@ -28,272 +25,78 @@ export default function EditProfilePage() {
     bankName: "",
     accountNumber: "",
     accountHolder: "",
-  });
+  })
 
-  // 브라우저 스토리지에서 직접 토큰 확인하는 함수
-  const checkStoredToken = () => {
-    if (typeof window === 'undefined') return null;
-    
-    try {
-      // 로컬 스토리지에서 확인
-      const localToken = localStorage.getItem('token');
-      if (localToken) {
-        console.log('로컬 스토리지 토큰 존재:', localToken.substring(0, 20) + '...');
-        return localToken;
-      }
-      
-      // access_token 확인
-      const accessToken = localStorage.getItem('access_token');
-      if (accessToken) {
-        console.log('access_token 존재:', accessToken.substring(0, 20) + '...');
-        return accessToken;
-      }
-      
-      // Supabase 세션 토큰 확인
-      const supabaseKey = Object.keys(localStorage).find(key => 
-        key.startsWith('sb-') && key.endsWith('-auth-token')
-      );
-      
-      if (supabaseKey) {
-        try {
-          const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-          if (supabaseData.access_token) {
-            console.log('Supabase 세션 토큰 존재:', supabaseData.access_token.substring(0, 20) + '...');
-            return supabaseData.access_token;
-          }
-        } catch (e) {
-          console.error('Supabase 토큰 파싱 오류:', e);
-        }
-      }
-      
-      // 세션 스토리지에서 확인
-      const sessionToken = sessionStorage.getItem('token');
-      if (sessionToken) {
-        console.log('세션 스토리지 토큰 존재:', sessionToken.substring(0, 20) + '...');
-        return sessionToken;
-      }
-      
-      console.log('스토리지에 토큰이 없음');
-      return null;
-    } catch (e) {
-      console.error('토큰 확인 오류:', e);
-      return null;
-    }
-  };
-
-  // 페이지 로드 시 사용자 데이터 가져오기
   useEffect(() => {
-    // 현재 인증 상태 확인
-    console.log("현재 인증 상태:", !!user);
-    const storedToken = checkStoredToken();
-    
+    console.log("✅ useEffect 진입")
     if (!user) {
-      toast.error("로그인이 필요한 페이지입니다");
-      router.push("/login?callbackUrl=/mypage/edit-profile");
-      return;
+      toast.error("로그인이 필요한 페이지입니다")
+      router.push("/login?callbackUrl=/mypage/edit-profile")
+      return
     }
 
     const fetchUserData = async () => {
-      setIsLoading(true);
+      console.log("🔥 fetchUserData() 실행됨")  // 디버깅 로그
+      setIsLoading(true)
       try {
-        // 모든 쿠키를 로깅하여 디버깅
-        console.log("현재 쿠키:", document.cookie);
-        console.log("Supabase 세션 사용자:", user.id);
-        
-        // 헤더에 넣을 인증 토큰 준비
-        let accessToken = '';
-        
-        // 다양한 방법으로 토큰 가져오기 시도
-        try {
-          // 1. access_token 확인
-          accessToken = localStorage.getItem('access_token') || '';
-          
-          // 2. Supabase 세션 토큰 확인
-          if (!accessToken) {
-            // Supabase 세션 키 찾기
-            const supabaseKey = Object.keys(localStorage).find(key => 
-              key.startsWith('sb-') && key.endsWith('-auth-token')
-            );
-            
-            if (supabaseKey) {
-              console.log('Supabase 세션 키 발견:', supabaseKey);
-              try {
-                const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-                accessToken = supabaseData.access_token || '';
-                console.log('Supabase 세션에서 토큰 추출:', accessToken ? '성공' : '실패');
-              } catch (e) {
-                console.error('Supabase 토큰 파싱 오류:', e);
-              }
-            }
-          }
-          
-          // 3. 일반 token 확인
-          if (!accessToken) {
-            accessToken = localStorage.getItem('token') || '';
-          }
-          
-          // 4. supabase_token 확인
-          if (!accessToken) {
-            accessToken = localStorage.getItem('supabase_token') || '';
-          }
-          
-          // 5. 세션 스토리지 확인
-          if (!accessToken) {
-            accessToken = sessionStorage.getItem('token') || 
-                         sessionStorage.getItem('access_token') || '';
-          }
-        } catch (storageError) {
-          console.error("토큰 접근 오류:", storageError);
-        }
-        
-        console.log("사용할 액세스 토큰:", accessToken ? `있음 (${accessToken.substring(0, 10)}...)` : '없음');
-        
-        // credentials 옵션 추가 및 캐시 방지 헤더 설정
-        const timestamp = Date.now();
-        const userId = user?.id || '';
-        console.log(`API 요청 URL: ${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`);
-        
-        const headers: Record<string, string> = {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0"
-        };
-        
-        // 토큰이 있으면 Authorization 헤더 추가
-        if (accessToken) {
-          headers["Authorization"] = `Bearer ${accessToken}`;
-          console.log("Authorization 헤더 추가됨");
-        }
-        
-        const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/user/update-profile`, {
           method: "GET",
-          credentials: "include", // 쿠키를 포함시켜 요청
-          headers
-        });
-        
-        console.log("프로필 정보 요청 응답 상태:", response.status);
-        
+          credentials: "include",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        })
+
+        console.log("프로필 정보 요청 응답 상태:", response.status)
+
         if (!response.ok) {
-          // 인증 오류인 경우 로그인 페이지로 리다이렉트
           if (response.status === 401) {
-            toast.error("인증 세션이 만료되었습니다. 다시 로그인해 주세요.");
-            router.push("/login?callbackUrl=/mypage/edit-profile");
-            return;
+            toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.")
+            router.push("/login?callbackUrl=/mypage/edit-profile")
+            return
           }
-          throw new Error("사용자 정보를 가져오는데 실패했습니다");
+          throw new Error("사용자 정보를 가져오지 못했습니다.")
         }
-        
-        const data = await response.json();
-        
+
+        const data = await response.json()
         if (data.success) {
-          // 기본 사용자 정보 설정
           setUserData({
             name: data.user.name || "",
             email: data.user.email || "",
             phoneNumber: data.user.phoneNumber || "",
-            // 계좌 정보가 있으면 설정
             bankName: data.user.bankInfo?.bankName || "",
             accountNumber: data.user.bankInfo?.accountNumber || "",
             accountHolder: data.user.bankInfo?.accountHolder || "",
-          });
+          })
         } else {
-          toast.error(data.message || "사용자 정보를 가져오는데 실패했습니다");
+          toast.error(data.message || "사용자 정보를 가져오지 못했습니다.")
         }
       } catch (error) {
-        console.error("사용자 정보 로딩 오류:", error);
-        toast.error("사용자 정보를 가져오는데 실패했습니다");
+        console.error("🔥 사용자 정보 가져오기 실패:", error)
+        toast.error("사용자 정보를 불러오는 중 오류가 발생했습니다.")
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
-    };
+    }
 
-    fetchUserData();
-  }, [user, router]);
+    fetchUserData()
+  }, [user, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setUserData((prev) => ({ ...prev, [name]: value }));
-  };
+    const { name, value } = e.target
+    setUserData((prev) => ({ ...prev, [name]: value }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
+    e.preventDefault()
+    setIsSaving(true)
     try {
-      // 모든 쿠키를 로깅하여 디버깅
-      console.log("현재 쿠키:", document.cookie);
-      console.log("Supabase 세션 사용자:", user?.id);
-      
-      // 헤더에 넣을 인증 토큰 준비
-      let accessToken = '';
-      
-      // 다양한 방법으로 토큰 가져오기 시도
-      try {
-        // 1. access_token 확인
-        accessToken = localStorage.getItem('access_token') || '';
-        
-        // 2. Supabase 세션 토큰 확인
-        if (!accessToken) {
-          // Supabase 세션 키 찾기
-          const supabaseKey = Object.keys(localStorage).find(key => 
-            key.startsWith('sb-') && key.endsWith('-auth-token')
-          );
-          
-          if (supabaseKey) {
-            console.log('Supabase 세션 키 발견:', supabaseKey);
-            try {
-              const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-              accessToken = supabaseData.access_token || '';
-              console.log('Supabase 세션에서 토큰 추출:', accessToken ? '성공' : '실패');
-            } catch (e) {
-              console.error('Supabase 토큰 파싱 오류:', e);
-            }
-          }
-        }
-        
-        // 3. 일반 token 확인
-        if (!accessToken) {
-          accessToken = localStorage.getItem('token') || '';
-        }
-        
-        // 4. supabase_token 확인
-        if (!accessToken) {
-          accessToken = localStorage.getItem('supabase_token') || '';
-        }
-        
-        // 5. 세션 스토리지 확인
-        if (!accessToken) {
-          accessToken = sessionStorage.getItem('token') || 
-                       sessionStorage.getItem('access_token') || '';
-        }
-      } catch (storageError) {
-        console.error("토큰 접근 오류:", storageError);
-      }
-      
-      console.log("사용할 액세스 토큰:", accessToken ? `있음 (${accessToken.substring(0, 10)}...)` : '없음');
-      
-      // credentials 옵션 추가 및 캐시 방지 헤더 설정
-      const timestamp = Date.now();
-      const userId = user?.id || '';
-      console.log(`프로필 업데이트 요청 URL: ${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`);
-      
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
-      };
-      
-      // 토큰이 있으면 Authorization 헤더 추가
-      if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-        console.log("Authorization 헤더 추가됨");
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/api/user/update-profile?t=${timestamp}&userId=${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/user/update-profile`, {
         method: "PUT",
-        headers,
-        credentials: "include", // 쿠키를 포함시켜 요청
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           name: userData.name,
           phoneNumber: userData.phoneNumber,
@@ -301,41 +104,40 @@ export default function EditProfilePage() {
           accountNumber: userData.accountNumber,
           accountHolder: userData.accountHolder,
         }),
-      });
-      
-      // 응답 상태 로깅
-      console.log("프로필 수정 요청 응답 상태:", response.status);
-      
-      // 인증 오류 처리
-      if (response.status === 401) {
-        toast.error("인증 세션이 만료되었습니다. 다시 로그인해 주세요.");
-        router.push("/login?callbackUrl=/mypage/edit-profile");
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        toast.success("프로필이 성공적으로 수정되었습니다");
-        router.push("/mypage");
-      } else {
-        toast.error(data.message || "프로필 수정에 실패했습니다");
-      }
-    } catch (error) {
-      console.error("프로필 수정 오류:", error);
-      toast.error("프로필 수정 중 오류가 발생했습니다");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      })
 
-  // 로딩 중인 경우 로딩 표시
+      console.log("프로필 수정 응답 상태:", response.status)
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.")
+          router.push("/login?callbackUrl=/mypage/edit-profile")
+          return
+        }
+        throw new Error("프로필 수정 실패")
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success("프로필이 성공적으로 수정되었습니다.")
+        router.push("/mypage")
+      } else {
+        toast.error(result.message || "수정에 실패했습니다.")
+      }
+    } catch (err) {
+      console.error("🔥 프로필 수정 오류:", err)
+      toast.error("프로필 수정 중 오류가 발생했습니다.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p>사용자 정보를 불러오는 중...</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -381,10 +183,8 @@ export default function EditProfilePage() {
               />
             </div>
 
-            {/* 계좌 정보 섹션 추가 */}
             <div className="pt-4 border-t mt-6">
               <h3 className="text-lg font-medium text-gray-700 mb-4">계좌 정보</h3>
-
               <div className="space-y-4">
                 <div>
                   <label htmlFor="bankName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -396,7 +196,6 @@ export default function EditProfilePage() {
                     type="text"
                     value={userData.bankName}
                     onChange={handleChange}
-                    placeholder="예: 신한은행, 국민은행"
                   />
                 </div>
 
@@ -410,7 +209,6 @@ export default function EditProfilePage() {
                     type="text"
                     value={userData.accountNumber}
                     onChange={handleChange}
-                    placeholder="'-' 없이 입력해주세요"
                   />
                 </div>
 
@@ -424,14 +222,13 @@ export default function EditProfilePage() {
                     type="text"
                     value={userData.accountHolder}
                     onChange={handleChange}
-                    placeholder="예금주명을 입력해주세요"
                   />
                 </div>
               </div>
             </div>
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full bg-[#0061FF] hover:bg-[#0052D6] text-white"
               disabled={isSaving}
             >
