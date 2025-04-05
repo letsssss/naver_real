@@ -6,7 +6,7 @@ import "./globals.css"
 import { FeedbackForm } from "@/components/feedback-form"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
-import { SyncUser } from "./components/sync-user"
+import { SyncUser } from "@/app/components/sync-user"
 
 const inter = Inter({ subsets: ["latin"] })
 
