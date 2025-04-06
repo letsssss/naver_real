@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { supabase, createServerSupabaseClient } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
 import { getTokenFromHeaders, getTokenFromCookies, verifyToken, isDevelopment } from '@/lib/auth';
 
 // OPTIONS 요청 처리

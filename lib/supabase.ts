@@ -1,62 +1,35 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createBrowserClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { Database } from '@/types/supabase.types';
 
-// 환경 변수 로딩
-// 하드코딩된 값은 폴백으로만 사용
-const ENV = {
-  SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co',
-  SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww',
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU',
-  NODE_ENV: process.env.NODE_ENV || 'development'
+// ✅ 환경 변수 설정
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error("❌ Supabase 환경 변수가 누락되었습니다.");
 }
 
-// 환경 변수 디버깅 로그
-console.log('=== Supabase 환경 설정 디버깅 ===');
-console.log('프로세스 환경:', { 
-  node_env: process.env.NODE_ENV,
-  has_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-  has_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-});
-console.log('사용 중인 값:', { 
-  url: ENV.SUPABASE_URL.substring(0, 15) + '...',
-  key_prefix: ENV.SUPABASE_ANON_KEY.substring(0, 10) + '...',
-  is_fallback_used: !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-});
-console.log('===============================');
-
-// 개발 환경 확인
-const IS_DEV = ENV.NODE_ENV === 'development';
-
-// 클라이언트 옵션 구성
-const supabaseOptions = {
+// ✅ Supabase 클라이언트 옵션
+const options = {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+  },
 };
 
-// 클라이언트 사이드용 Supabase 클라이언트 생성 (SSR 권장 방식)
-export const createBrowserSupabaseClient = () => {
-  return createBrowserClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);
-};
+// ✅ 싱글톤 Supabase 인스턴스 생성
+const supabase: SupabaseClient<Database> = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  options
+);
 
-/**
- * 기본 Supabase 클라이언트를 가져옵니다.
- * 이 클라이언트는 공개 API에 액세스하는 데 사용됩니다.
- */
-export function getSupabaseClient(): SupabaseClient<Database> {
-  // 로깅 추가
-  console.log(`[Supabase] 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}... / 키: ${ENV.SUPABASE_ANON_KEY.substring(0, 10)}...`);
-  
-  try {
-    return createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, supabaseOptions);
-  } catch (error) {
-    console.error('[Supabase] 클라이언트 생성 오류:', error);
-    throw error;
-  }
+// ✅ 디버깅용 로그 (선택사항)
+if (typeof window !== 'undefined') {
+  console.log('✅ Supabase 클라이언트 초기화 완료');
+  console.log('🔗 URL:', SUPABASE_URL);
 }
 
 /**
@@ -64,10 +37,10 @@ export function getSupabaseClient(): SupabaseClient<Database> {
  * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
  */
 export function createAdminClient(): SupabaseClient<Database> {
-  console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}...`);
+  console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}...`);
   
   try {
-    return createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_SERVICE_ROLE_KEY, {
+    return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
@@ -78,60 +51,6 @@ export function createAdminClient(): SupabaseClient<Database> {
     throw error;
   }
 }
-
-/**
- * 서버 컴포넌트용 Supabase 클라이언트를 생성합니다.
- * 이 클라이언트는 토큰 기반 인증을 사용합니다.
- */
-export function createServerSupabaseClient(jwt?: string): SupabaseClient<Database> {
-  // 클라이언트 생성
-  console.log(`[Supabase] 서버 클라이언트 생성 - URL: ${ENV.SUPABASE_URL.substring(0, 15)}... / JWT 제공: ${!!jwt}`);
-  
-  try {
-    const client = createClient<Database>(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
-      }
-    });
-    
-    // JWT가 제공된 경우 세션 설정
-    if (jwt) {
-      client.auth.setSession({
-        access_token: jwt,
-        refresh_token: ''
-      });
-    }
-    
-    return client;
-  } catch (error) {
-    console.error('[Supabase] 서버 클라이언트 생성 오류:', error);
-    throw error;
-  }
-}
-
-/**
- * 사용자 인증 클라이언트를 생성합니다.
- * @param token 인증 토큰 (선택적)
- */
-export function createAuthClient(token?: string): SupabaseClient<Database> {
-  const client = getSupabaseClient();
-  
-  if (token) {
-    client.auth.setSession({
-      access_token: token,
-      refresh_token: ''
-    });
-  }
-  
-  return client;
-}
-
-/**
- * 싱글톤 Supabase 인스턴스를 내보냅니다.
- */
-export const supabase = getSupabaseClient();
 
 /**
  * ID 값을 문자열로 변환합니다.
@@ -219,4 +138,6 @@ export const transformers = {
   }
 };
 
+// ✅ named + default export 둘 다 제공
+export { supabase };
 export default supabase; 

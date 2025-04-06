@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import supabase from "@/lib/supabase"
 
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
@@ -325,6 +325,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       console.log('Supabase 로그인 성공:', data.user.id);
+      
+      // ✅ 로그인 성공 후 세션 수동 동기화
+      const sessionResult = await supabase.auth.getSession();
+      console.log("✅ 로그인 직후 세션 확인:", sessionResult);
       
       // 세션 연장 및 새로고침 시도
       try {

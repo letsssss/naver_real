@@ -4,10 +4,10 @@ import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import { getServerSession } from 'next-auth/next';
 import * as jsonwebtoken from 'jsonwebtoken';
-import { supabase } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
-import { createServerSupabaseClient } from './supabase';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -122,7 +122,6 @@ export async function verifyToken(token: string): Promise<any> {
   try {
     // 1. Supabase JWT 검증 시도
     try {
-      const supabase = createServerSupabaseClient();
       const { data, error } = await supabase.auth.getUser(token);
       
       if (!error && data.user) {
