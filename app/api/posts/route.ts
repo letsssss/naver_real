@@ -1,25 +1,32 @@
 import { NextResponse } from 'next/server';
 import { 
   supabase, 
-  createServerSupabaseClient, 
-  formatUserId
+  createLegacyServerClient, 
+  formatUserId,
+  createAdminClient
 } from '@/lib/supabase';
 import { validateRequestToken } from '@/lib/auth';
 import { logDetailedError, getUserFriendlyErrorMessage, isSchemaError } from '@/lib/error-utils';
 import type { Post } from '@/types/supabase';
-import { createClient } from '@supabase/supabase-js';
 
-// 하드코딩된 Supabase 설정 사용
-const supabaseUrl = 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+// 관리자 클라이언트 생성
+const adminSupabase = createAdminClient();
 
-// Supabase 어드민 클라이언트 생성 (서비스 롤 키 사용)
-const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
+// 어드민 클라이언트가 올바르게 작동하는지 테스트
+(async () => {
+  try {
+    console.log('[Supabase 테스트] 어드민 클라이언트 테스트 중...');
+    const { data, error } = await adminSupabase.from('users').select('id').limit(1);
+    
+    if (error) {
+      console.error('[Supabase 테스트] 오류:', error);
+    } else {
+      console.log('[Supabase 테스트] 성공! 사용자 조회 결과:', data);
+    }
+  } catch (err) {
+    console.error('[Supabase 테스트] 예외 발생:', err);
   }
-});
+})();
 
 // 표준 응답 헤더
 const CORS_HEADERS = {
@@ -260,8 +267,37 @@ export async function POST(req: Request) {
   try {
     console.log('[게시물 API] POST 요청 시작');
     
-    // 테이블 구조 확인
-    console.log('[게시물 API] Supabase 테이블 구조 확인 중...');
+    // 1. 사용자 인증
+    const { userId, authenticated, message } = await validateRequestToken(req);
+    console.log('[게시물 API] 인증 결과:', { 
+      userId, 
+      authenticated, 
+      message, 
+      userIdType: typeof userId 
+    });
+    
+    if (!authenticated) {
+      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+    }
+    
+    // 2. 요청 본문 파싱
+    const body = await req.json();
+    console.log('[게시물 API] 요청 본문 요약:', { 
+      title: body.title, 
+      contentLength: body.content ? body.content.length : 0,
+      category: body.category 
+    });
+    
+    // 3. 필수 필드 검증
+    if (!body.title) {
+      return createErrorResponse('제목은 필수 항목입니다.', 'VALIDATION_ERROR', 400);
+    }
+    
+    // 4. 간소화된 데이터 구성
+    
+    // 테이블 구조 확인 (시간 절약을 위해 간소화된 접근법 사용)
+    // 실제 컬럼 확인하여 author_id 또는 user_id 사용
+    console.log('[게시물 API] 테이블 구조 확인 중...');
     let availableColumns: string[] = [];
     
     try {
@@ -270,186 +306,50 @@ export async function POST(req: Request) {
         .select('*')
         .limit(1);
       
-      if (tableError) {
-        console.error('[게시물 API] 테이블 정보 조회 오류:', tableError);
-      } else if (tableInfo && tableInfo.length > 0) {
+      if (tableInfo && tableInfo.length > 0) {
         availableColumns = Object.keys(tableInfo[0]);
         console.log('[게시물 API] 테이블 컬럼 목록:', availableColumns);
-      } else {
-        console.log('[게시물 API] 테이블에 데이터가 없거나 접근 권한이 없습니다.');
       }
-    } catch (tableCheckError) {
-      console.error('[게시물 API] 테이블 확인 중 오류:', tableCheckError);
+    } catch (error) {
+      console.error('[게시물 API] 테이블 구조 확인 오류:', error);
     }
     
-    // 사용자 인증
-    const { userId, authenticated } = await validateRequestToken(req);
-    console.log('[게시물 API] 인증 결과:', { userId, authenticated });
-    
-    if (!authenticated) {
-      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
-    }
-    
-    // 인증된 사용자가 실제로 데이터베이스에 존재하는지 확인
-    try {
-      console.log(`[게시물 API] 사용자 확인 중: ${userId}`);
-      const { data: userData, error: userError } = await adminSupabase
-        .from('users')
-        .select('id')
-        .eq('id', userId)
-        .single();
-        
-      if (userError || !userData) {
-        console.error('[게시물 API] 사용자 조회 오류:', userError);
-        console.log('[게시물 API] 인증된 사용자가 데이터베이스에 존재하지 않습니다. 새 사용자 생성 시도...');
-        
-        // 사용자 생성 시도
-        const { error: createUserError } = await adminSupabase
-          .from('users')
-          .insert([
-            { 
-              id: userId,
-              name: 'User', // 기본값
-              email: 'user@example.com' // 기본값, 실제 앱에서는 세션에서 가져오는 것이 좋음
-            }
-          ]);
-          
-        if (createUserError) {
-          console.error('[게시물 API] 사용자 생성 실패:', createUserError);
-          return createErrorResponse(
-            '사용자 정보를 찾을 수 없어 게시물을 등록할 수 없습니다.',
-            'USER_NOT_FOUND',
-            400
-          );
-        }
-      }
-    } catch (userCheckError) {
-      console.error('[게시물 API] 사용자 확인 중 오류:', userCheckError);
-    }
-    
-    // 요청 본문 파싱
-    const body = await req.json();
-    console.log('[게시물 API] 요청 본문:', JSON.stringify(body, null, 2));
-    
-    // 기본 데이터 준비
-    const title = body.title || body.concertTitle || '제목 없음';
-    let content = body.content || '';
-    
-    // 판매 페이지에서 온 요청인 경우 추가 데이터 포맷팅
-    if (body.concertDates || body.sections || body.concertVenue) {
-      try {
-        content = JSON.stringify({
-          description: body.ticketDescription || '',
-          dates: body.concertDates || [],
-          venue: body.concertVenue || '',
-          time: body.concertTime || '',
-          sections: body.sections || [],
-          additionalInfo: body.additionalInfo || ''
-        });
-        console.log('[게시물 API] 포맷팅된 콘텐츠:', content.substring(0, 100) + '...');
-      } catch (jsonError) {
-        console.error('[게시물 API] JSON 직렬화 오류:', jsonError);
-        content = `티켓 판매: ${title}`;
-      }
-    }
-    
-    // 필수 필드 검증
-    if (!title) {
-      return createErrorResponse(
-        '제목은 필수 항목입니다.', 
-        'VALIDATION_ERROR', 
-        400
-      );
-    }
-    
-    // 가격 처리
-    let ticketPrice = 0;
-    try {
-      // body에서 직접 ticketPrice 필드를 먼저 확인
-      if (body.ticketPrice) {
-        console.log('[게시물 API] 직접 전달된 ticketPrice 사용:', body.ticketPrice);
-        const priceStr = String(body.ticketPrice).replace(/[^0-9]/g, '');
-        ticketPrice = parseInt(priceStr, 10);
-      } 
-      // sections 배열에서 가격 정보 찾기
-      else if (body.sections && body.sections.length > 0 && body.sections[0].price) {
-        console.log('[게시물 API] sections[0].price에서 가격 추출:', body.sections[0].price);
-        const priceStr = String(body.sections[0].price).replace(/[^0-9]/g, '');
-        ticketPrice = parseInt(priceStr, 10);
-      }
-      
-      // NaN인 경우 0으로 처리
-      if (isNaN(ticketPrice)) {
-        console.log('[게시물 API] 유효하지 않은 가격, 기본값 0 사용');
-        ticketPrice = 0;
-      } else {
-        console.log('[게시물 API] 최종 처리된 가격:', ticketPrice);
-      }
-    } catch (priceError) {
-      console.error('[게시물 API] 가격 처리 오류:', priceError);
-    }
-    
-    // 가용 컬럼에 맞게 데이터 구성
-    // 단계적 접근: 없는 필드는 제외하고 있는 필드만 포함
-    const safePostData: any = {
-      title,
-      content
+    // 데이터 객체 구성 (모든 필드 포함)
+    const postData: any = {
+      title: body.title,
+      content: body.content || '',
+      category: body.category || 'GENERAL',
+      status: 'ACTIVE'
     };
     
-    // 사용자 ID 필드 - 우선순위 결정
-    if (availableColumns.includes('user_id')) {
-      console.log('[게시물 API] user_id 필드 사용');
-      safePostData.user_id = userId;
-    } else if (availableColumns.includes('author_id')) {
+    // 실제 컬럼 이름에 따라 사용자 ID 필드 추가
+    if (availableColumns.includes('author_id')) {
+      postData.author_id = userId;
       console.log('[게시물 API] author_id 필드 사용');
-      safePostData.author_id = userId;
-    } else if (availableColumns.includes('userid')) {
-      console.log('[게시물 API] userid 필드 사용');
-      safePostData.userid = userId;
+    } else if (availableColumns.includes('user_id')) {
+      postData.user_id = userId;
+      console.log('[게시물 API] user_id 필드 사용 (대체)');
     } else {
-      console.log('[게시물 API] 사용자 ID 필드를 찾을 수 없습니다. 시스템 값 사용');
-      safePostData.created_by = 'system';
+      console.warn('[게시물 API] 사용자 ID 필드를 찾을 수 없음');
+      // 기본값으로 author_id 사용
+      postData.author_id = userId;
     }
     
-    if (availableColumns.includes('category')) safePostData.category = body.category || 'TICKET';
-    if (availableColumns.includes('status')) safePostData.status = body.status || 'ACTIVE';
-    if (availableColumns.includes('event_name')) safePostData.event_name = body.concertTitle || title;
-    if (availableColumns.includes('event_venue')) safePostData.event_venue = body.concertVenue || null;
+    console.log('[게시물 API] 저장할 데이터:', postData);
     
-    // 날짜 처리
-    if (availableColumns.includes('event_date') && body.concertDates && body.concertDates.length > 0) {
-      safePostData.event_date = body.concertDates[0].date;
-    }
-    
-    // 가격 처리 - 항상 정수형으로 변환해서 저장
-    if (availableColumns.includes('ticket_price') && ticketPrice > 0) {
-      console.log('[게시물 API] ticket_price 필드에 가격 저장:', ticketPrice);
-      safePostData.ticket_price = ticketPrice;
-      
-      // ticketPrice 필드도 추가 (일부 API에서 사용할 수 있음)
-      if (availableColumns.includes('ticketPrice')) {
-        safePostData.ticketPrice = ticketPrice;
-      }
-    }
-    
-    // 소프트 삭제 플래그
-    if (availableColumns.includes('is_deleted')) safePostData.is_deleted = false;
-    
-    console.log('[게시물 API] Supabase에 저장할 데이터:', JSON.stringify(safePostData, null, 2));
-    
-    // 게시물 생성 (safePostData 사용)
+    // 5. 데이터베이스 작업 시도
     try {
-      console.log('[게시물 API] Supabase 삽입 시도...');
+      console.log('[게시물 API] 데이터베이스 삽입 시도...');
       
-      console.log('[게시물 API] 관리자 권한으로 데이터 삽입 시도');
-      let { data: post, error } = await adminSupabase
+      // adminSupabase 클라이언트로 게시물 생성
+      const { data: post, error } = await adminSupabase
         .from('posts')
-        .insert(safePostData as any)
-        .select('*')
+        .insert(postData)
+        .select()
         .single();
       
       if (error) {
-        console.error('[게시물 API] 관리자 권한 삽입 오류:', error);
+        console.error('[게시물 API] 삽입 오류:', error);
         console.error('[게시물 API] 오류 세부 정보:', {
           code: error.code,
           message: error.message,
@@ -457,114 +357,66 @@ export async function POST(req: Request) {
           hint: error.hint
         });
         
-        // 문제 컬럼 식별
-        if (error.message && error.message.includes('column')) {
-          const columnMatch = error.message.match(/column ['"]([^'"]+)['"]/);
-          if (columnMatch && columnMatch[1]) {
-            const problematicColumn = columnMatch[1];
-            console.error(`[게시물 API] 문제 발생 필드: ${problematicColumn}`);
-            
-            // 문제가 되는 필드 제거 후 다시 시도
-            if (safePostData[problematicColumn]) {
-              delete safePostData[problematicColumn];
-              console.log(`[게시물 API] 문제 필드 제거 후 데이터:`, safePostData);
-              
-              // 필드를 제거하고 다시 시도 (관리자 권한으로)
-              const retryResult = await adminSupabase
-                .from('posts')
-                .insert(safePostData as any)
-                .select('*')
-                .single();
-              
-              if (retryResult.error) {
-                console.error('[게시물 API] 재시도 실패:', retryResult.error);
-                throw retryResult.error;
-              } else {
-                console.log('[게시물 API] 재시도 성공:', retryResult.data);
-                post = retryResult.data;
-              }
-            }
-          }
-        } else {
-          throw error;
-        }
+        // 데이터베이스 오류 세부 정보와 함께 오류 응답 생성
+        return createErrorResponse(
+          '게시물을 생성하는 중 데이터베이스 오류가 발생했습니다.',
+          'DB_ERROR', 
+          500, 
+          error
+        );
       }
       
-      if (post) {
-        console.log('[게시물 API] 삽입 성공:', post);
-        
-        // 응답 데이터 (동적으로 구성)
-        const formattedPost: Record<string, any> = {
+      if (!post) {
+        console.error('[게시물 API] 게시물 데이터가 없습니다.');
+        return createErrorResponse(
+          '게시물이 생성되었으나 데이터를 반환받지 못했습니다.',
+          'NO_DATA',
+          500
+        );
+      }
+      
+      // 6. 성공 응답 구성
+      console.log('[게시물 API] 게시물 생성 성공:', post.id);
+      
+      return createApiResponse({
+        success: true,
+        post: {
           id: post.id,
           title: post.title,
-          content: typeof post.content === 'string' ? 
-            (post.content.length > 100 ? post.content.substring(0, 100) + '...' : post.content) : 
-            post.content
-        };
-        
-        // 존재하는 필드만 포함
-        if ('created_at' in post) formattedPost.createdAt = post.created_at;
-        if ('user_id' in post) formattedPost.userId = post.user_id;
-        if ('author_id' in post) formattedPost.authorId = post.author_id;
-        
-        return createApiResponse({ post: formattedPost }, 201);
-      } else {
-        throw new Error('게시물 생성에 실패했지만 구체적인 오류가 없습니다.');
-      }
-    } catch (insertError: any) {
-      console.error('[게시물 API] 삽입 처리 중 오류:', insertError);
-      
-      // Supabase 오류 처리
-      let errorCode = 'DB_ERROR';
-      let statusCode = 500;
-      let errorMessage = insertError.message || '데이터베이스 오류가 발생했습니다.';
-      
-      if (insertError.code) {
-        switch (insertError.code) {
-          case '23505': // 중복 키
-            errorCode = 'DUPLICATE_ENTRY';
-            errorMessage = '이미 동일한 내용의 게시물이 존재합니다.';
-            statusCode = 409;
-            break;
-          case '23503': // 외래 키
-            errorCode = 'INVALID_REFERENCE';
-            errorMessage = '참조하는 데이터가 존재하지 않습니다.';
-            statusCode = 400;
-            break;
-          case '42703': // 정의되지 않은 열
-            errorCode = 'SCHEMA_ERROR';
-            errorMessage = '데이터 구조가 일치하지 않습니다: ' + insertError.message;
-            statusCode = 400;
-            break;
+          createdAt: post.created_at
         }
-      }
+      }, 201);
+      
+    } catch (dbError: any) {
+      // 데이터베이스 작업 예외 처리
+      console.error('[게시물 API] 데이터베이스 작업 중 예외 발생:', dbError);
+      console.error('[게시물 API] 예외 세부 정보:', {
+        name: dbError.name,
+        message: dbError.message,
+        stack: dbError.stack?.split('\n').slice(0, 3).join('\n')
+      });
       
       return createErrorResponse(
-        errorMessage,
-        errorCode,
-        statusCode,
-        insertError
+        '게시물 생성 중 서버 오류가 발생했습니다.',
+        'SERVER_ERROR',
+        500,
+        dbError
       );
     }
   } catch (error: any) {
-    console.error('[게시물 API] 전역 오류:', error);
-    
-    const errorDetails = {
-      message: error.message || '알 수 없는 오류',
-      name: error.name || 'UnknownError',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    };
-    
-    let userMessage = '게시물을 생성하는 중 오류가 발생했습니다.';
-    if (error.message && error.message.includes('column')) {
-      userMessage = '데이터베이스 구조 문제가 발생했습니다. 관리자에게 문의하세요.';
-    }
+    // 전역 예외 처리
+    console.error('[게시물 API] 전역 예외 발생:', error);
+    console.error('[게시물 API] 예외 세부 정보:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+    });
     
     return createErrorResponse(
-      userMessage,
+      '게시물을 생성하는 중 오류가 발생했습니다.',
       'SERVER_ERROR',
       500,
-      errorDetails
+      error
     );
   }
 }
@@ -647,7 +499,7 @@ export async function PUT(req: Request) {
     // 권한 확인 (author_id로 변경)
     const authorIdField = availableColumns.includes('author_id') ? 'author_id' : 
                          availableColumns.includes('user_id') ? 'user_id' : null;
-    
+                          
     if (!authorIdField) {
       logDetailedError('사용자 ID 필드 확인', new Error('사용자 ID 컬럼을 찾을 수 없음'), { availableColumns });
       return createErrorResponse(

@@ -1,5 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase.types';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+// 직접 import하지 않고 필요할 때 동적으로 가져오도록 수정
+// import { cookies } from 'next/headers';
 
 // ✅ 환경 변수 설정
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
@@ -33,6 +36,49 @@ if (typeof window !== 'undefined') {
 }
 
 /**
+ * Next.js 서버 컴포넌트에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
+ * 이 함수는 App Router(/app)에서만 사용해야 합니다.
+ */
+export const createServerSupabaseClient = () => {
+  try {
+    // 동적으로 cookies 가져오기
+    const { cookies } = require('next/headers');
+    return createServerComponentClient({ cookies });
+  } catch (error) {
+    console.error('[Supabase] 서버 컴포넌트 클라이언트 생성 오류:', error);
+    // Pages Router에서는 대체 메서드 사용
+    return createLegacyServerClient();
+  }
+};
+
+/**
+ * 서버 사이드에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
+ * 이 함수는 Pages Router(/pages)와 App Router 모두에서 사용 가능합니다.
+ * @deprecated createServerSupabaseClient 함수를 대신 사용하세요.
+ */
+export function createLegacyServerClient(): SupabaseClient<Database> {
+  console.log('[Supabase] 레거시 서버 클라이언트 생성');
+  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
+
+/**
+ * 권한 확인을 위한 인증 전용 클라이언트를 생성합니다.
+ */
+export function createAuthClient(): SupabaseClient<Database> {
+  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
+
+/**
  * 관리자 권한 Supabase 클라이언트를 생성합니다.
  * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
  */
@@ -50,6 +96,13 @@ export function createAdminClient(): SupabaseClient<Database> {
     console.error('[Supabase] 관리자 클라이언트 생성 오류:', error);
     throw error;
   }
+}
+
+/**
+ * 현재 클라이언트나 서버 환경에 맞는 Supabase 클라이언트를 반환합니다.
+ */
+export function getSupabaseClient(): SupabaseClient<Database> {
+  return supabase;
 }
 
 /**
