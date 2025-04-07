@@ -101,21 +101,28 @@ export default function TicketCancellationDetail() {
     
     const checkAuthor = async () => {
       try {
-        // 사용자가 작성한 게시글 목록 조회
-        const response = await fetch(`/api/posts?userId=${currentUserId}`);
+        // 게시글 정보 조회를 통해 작성자 확인 (더 효율적인 방식)
+        const response = await fetch(`/api/posts/${id}`);
         if (response.ok) {
           const data = await response.json();
           
-          if (data && data.posts) {
-            // 현재 게시글이 사용자가 작성한 게시글 목록에 있는지 확인
-            const isCreator = data.posts.some((post: any) => post.id.toString() === id);
+          if (data && data.post) {
+            const post = data.post;
             
-            console.log(`사용자 ${currentUserId}가 게시글 ${id}의 작성자인가?`, isCreator);
+            // 다양한 방식으로 저장된 작성자 ID 추출
+            const authorId = post.author?.id || post.authorId || post.user_id || post.userId;
             
-            if (isCreator !== isAuthor) {
-              setIsAuthor(isCreator);
-              if (isCreator) {
-                toast.warning("자신의 게시물은 구매할 수 없습니다.");
+            if (authorId) {
+              // 문자열로 변환하여 비교 (타입 통일)
+              const isCreator = String(authorId) === String(currentUserId);
+              
+              console.log(`게시글 작성자 ID: ${authorId}, 현재 사용자 ID: ${currentUserId}, 일치여부: ${isCreator}`);
+              
+              if (isCreator !== isAuthor) {
+                setIsAuthor(isCreator);
+                if (isCreator) {
+                  toast.warning("자신의 게시물은 구매할 수 없습니다.");
+                }
               }
             }
           }
@@ -184,22 +191,19 @@ export default function TicketCancellationDetail() {
         console.log("게시글 userId 확인:", postData.userId);
         console.log("게시글 authorId 확인:", postData.authorId);
         
-        // 작성자 판별을 위한 API 추가 호출
-        const creatorResponse = await fetch(`/api/posts?userId=${currentUserId || user?.id}`);
-        if (creatorResponse.ok) {
-          const creatorData = await creatorResponse.json();
-          console.log("사용자가 작성한.게시글 목록:", creatorData);
+        // 직접 작성자 ID와 현재 로그인한 사용자 ID 비교
+        const authorId = postData.author?.id || postData.authorId || postData.user_id || postData.userId;
+        const userId = currentUserId || user?.id;
+        
+        if (authorId && userId) {
+          // 문자열로 변환하여 비교 (타입 통일)
+          const isPostCreator = String(authorId) === String(userId);
+          console.log("작성자 ID와 사용자 ID 직접 비교:", { authorId, userId, isPostCreator });
           
-          // 현재 게시글이 사용자가 작성한 게시글 목록에 있는지 확인
-          if (creatorData && creatorData.posts) {
-            const isPostCreator = creatorData.posts.some((p: any) => p.id.toString() === id);
-            console.log("이 게시글이 사용자의 게시글인가?", isPostCreator);
-            
-            if (isPostCreator) {
-              setIsAuthor(true);
-              console.log("사용자는 이 게시글의 작성자입니다!");
-              toast.warning("자신의 게시물은 구매할 수 없습니다.");
-            }
+          if (isPostCreator) {
+            setIsAuthor(true);
+            console.log("사용자는 이 게시글의 작성자입니다!");
+            toast.warning("자신의 게시물은 구매할 수 없습니다.");
           }
         }
         

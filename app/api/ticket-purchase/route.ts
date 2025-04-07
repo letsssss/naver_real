@@ -81,6 +81,15 @@ export async function POST(request: NextRequest) {
       ));
     }
 
+    // prisma가 undefined인지 확인
+    if (!prisma) {
+      console.error("Prisma 클라이언트가 초기화되지 않았습니다.");
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "서버 오류: 데이터베이스 연결이 설정되지 않았습니다." },
+        { status: 500 }
+      ));
+    }
+
     const { postId, quantity, selectedSeats, phoneNumber, paymentMethod } = validationResult.data;
     console.log("유효성 검사 통과 후 데이터:", { postId, quantity, selectedSeats, phoneNumber, paymentMethod });
 
@@ -101,11 +110,11 @@ export async function POST(request: NextRequest) {
       console.log("API - 게시글 작성자 ID:", post.authorId.toString(), typeof post.authorId);
       console.log("API - 사용자 ID:", authUser.id.toString(), typeof authUser.id);
       
-      // 숫자로 변환하여 비교
-      const postAuthorId = Number(post.authorId);
-      const currentUserId = Number(authUser.id);
+      // ID들을 문자열로 변환하여 비교 (타입 통일)
+      const postAuthorId = String(post.authorId);
+      const currentUserId = String(authUser.id);
       
-      console.log("API - 숫자 변환 후 비교:", { postAuthorId, currentUserId });
+      console.log("API - 문자열 변환 후 비교:", { postAuthorId, currentUserId, isEqual: postAuthorId === currentUserId });
       
       if (postAuthorId === currentUserId) {
         console.log("API - 작성자와 사용자가 일치함");
@@ -243,6 +252,9 @@ export async function POST(request: NextRequest) {
       { status: statusCode }
     ));
   } finally {
-    await prisma.$disconnect();
+    // prisma가 undefined가 아닌 경우에만 연결 해제
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   }
 } 
