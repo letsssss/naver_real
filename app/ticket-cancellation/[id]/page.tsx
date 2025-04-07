@@ -103,6 +103,25 @@ export default function TicketCancellationDetail() {
         
         const postData = data.post;
         
+        // 사용자가 게시글 작성자인지 먼저 확인
+        console.log("사용자 ID 확인:", user?.id?.toString());
+        console.log("게시글 작성자 ID 확인:", postData.author?.id?.toString());
+        
+        if (user && postData.author) {
+          const userId = user.id.toString();
+          const authorId = postData.author.id.toString();
+          
+          console.log("비교 결과:", userId === authorId);
+          
+          if (userId === authorId) {
+            console.log("사용자가 작성자로 확인됨");
+            setIsAuthor(true);
+            toast.warning("자신의 게시물은 구매할 수 없습니다.");
+          } else {
+            setIsAuthor(false);
+          }
+        }
+        
         // 날짜 및 가격 정보 파싱
         let eventDate = '', eventTime = '', eventVenue = '', seatOptions = [];
         let eventPrice = postData.price || 0;
@@ -191,24 +210,6 @@ export default function TicketCancellationDetail() {
           },
           seatOptions: seatOptions
         });
-        
-        // 사용자가 게시글 작성자인지 확인
-        console.log("사용자 ID 확인:", user?.id?.toString());
-        console.log("게시글 작성자 ID 확인:", postData.author?.id?.toString());
-        
-        if (user && postData.author) {
-          const userId = user.id.toString();
-          const authorId = postData.author.id.toString();
-          
-          console.log("비교 결과:", userId === authorId);
-          
-          if (userId === authorId) {
-            console.log("사용자가 작성자로 확인됨");
-            setIsAuthor(true);
-          } else {
-            setIsAuthor(false);
-          }
-        }
         
         setError(null);
       } catch (error) {
@@ -548,40 +549,53 @@ export default function TicketCancellationDetail() {
 
               {mounted && user && !isAuthor && (
                 <form onSubmit={handleSubmit}>
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">좌석 선택(중복 선택 가능)</label>
-                    <div 
-                      className="flex flex-wrap gap-2 mt-4 items-center"
-                    >
-                      {ticketData.seatOptions.map((seat: SeatOption) => (
-                        <button
-                          key={seat.id}
-                          className={`border rounded-md px-4 py-2 flex flex-col items-center transition-colors ${
-                            selectedSeats.includes(seat.id)
-                              ? "bg-blue-50 border-blue-500"
-                              : "hover:bg-gray-50"
-                          }`}
-                          onClick={() => toggleSeatSelection(seat.id)}
-                        >
-                          <p className="font-medium">{seat.label}</p>
-                          <p className="text-gray-600 mt-1">{seat.price.toLocaleString()}원</p>
-                        </button>
-                      ))}
+                  <div className="space-y-6">
+                    {isAuthor && (
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4 mr-2" />
+                        <AlertTitle>자신의 게시물입니다</AlertTitle>
+                        <AlertDescription>
+                          본인이 등록한 게시물은 구매할 수 없습니다. 다른 게시물을 선택해주세요.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
+                    <div>
+                      <label htmlFor="seatSelection" className="block text-sm font-medium text-gray-700 mb-2">
+                        좌석 선택
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3" id="seatSelection">
+                        {ticketData.seatOptions.map((seat) => (
+                          <div
+                            key={seat.id}
+                            className={`border rounded-md p-3 cursor-pointer transition ${
+                              selectedSeats.includes(seat.id)
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            } ${isAuthor ? "opacity-50 cursor-not-allowed" : ""}`}
+                            onClick={() => !isAuthor && toggleSeatSelection(seat.id)}
+                          >
+                            <p className="font-medium">{seat.label}</p>
+                            <p className="text-sm text-gray-600">
+                              {seat.price.toLocaleString()}원
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-6 mb-6">
                     <div>
                       <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 mb-2">
-                        구매자 아이디
+                        티켓 예매 사이트 아이디
                       </label>
                       <Input
                         id="accountId"
                         type="text"
-                        placeholder="예매 사이트 아이디를 입력해주세요"
+                        placeholder="아이디를 입력해주세요"
                         value={accountId}
                         onChange={(e) => setAccountId(e.target.value)}
                         required
+                        disabled={isAuthor}
                       />
                     </div>
 
@@ -644,8 +658,12 @@ export default function TicketCancellationDetail() {
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full bg-[#0061FF] hover:bg-[#0052D6]" disabled={isSubmitting}>
-                    {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-[#0061FF] hover:bg-[#0052D6]" 
+                    disabled={isSubmitting || isAuthor}
+                  >
+                    {isSubmitting ? "처리 중..." : isAuthor ? "자신의 게시물은 구매할 수 없습니다" : "취켓팅 신청하기"}
                   </Button>
                 </form>
               )}
