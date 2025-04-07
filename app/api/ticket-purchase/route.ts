@@ -5,7 +5,14 @@ import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
 import { createUniqueOrderNumber } from "@/utils/orderNumber";
 
-// Prisma 클라이언트 제거됨, Supabase 사용;
+// Prisma 클라이언트 초기화
+// 개발 환경에서는 핫 리로딩으로 인해 여러 인스턴스가 생성되는 것을 방지하기 위해
+// globalThis를 사용하여 싱글톤 패턴으로 관리
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -41,7 +48,28 @@ export async function POST(request: NextRequest) {
     console.log("티켓 구매 API 호출됨");
     
     // 현재 인증된 사용자 정보 가져오기
-    const authUser = await getAuthenticatedUser(request);
+    let authUser = await getAuthenticatedUser(request);
+    
+    // 개발 환경에서 URL 쿼리 파라미터로 인증 지원 (다른 API와 동일한 패턴)
+    if (!authUser && process.env.NODE_ENV === 'development') {
+      // URL에서 userId 쿼리 파라미터 확인
+      const { searchParams } = new URL(request.url);
+      const userId = searchParams.get('userId');
+      console.log("개발 환경 - 쿼리 파라미터 userId 확인:", userId);
+      
+      if (userId) {
+        console.log("개발 환경 - 쿼리 파라미터 userId 사용:", userId);
+        
+        // Prisma 대신 직접 authUser 객체 생성
+        authUser = {
+          id: userId,  // 문자열 ID 사용
+          name: '개발 테스트 사용자',
+          email: 'dev@example.com',
+          role: 'USER'
+        };
+        console.log("개발 환경 - 테스트 사용자 생성:", authUser);
+      }
+    }
     
     if (!authUser) {
       console.log("인증된 사용자를 찾을 수 없음");

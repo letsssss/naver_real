@@ -387,8 +387,14 @@ export default function TicketCancellationDetail() {
           throw new Error("게시글 ID가 없습니다")
         }
 
+        // 개발 환경에서 인증을 위한 userId 쿼리 파라미터 추가
+        const userId = currentUserId || user?.id;
+        const apiUrl = process.env.NODE_ENV === 'development' && userId
+          ? `/api/ticket-purchase?userId=${userId}`
+          : '/api/ticket-purchase';
+
         // 티켓 구매 API 호출
-        const response = await fetch('/api/ticket-purchase', {
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
