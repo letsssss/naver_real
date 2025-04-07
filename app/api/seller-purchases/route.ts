@@ -322,7 +322,8 @@ async function getAuthUser(request: NextRequest) {
 // GET 요청 핸들러 - 판매자의 상품에 대한 구매 목록 가져오기
 export async function GET(request: NextRequest) {
   try {
-    console.log("판매자 구매 목록 API 호출됨");
+    console.log("\n===== 판매자 구매 목록 API 호출 시작 =====");
+    console.log("요청 URL:", request.url);
     
     // 현재 인증된 사용자 정보 가져오기
     const authUser = await getAuthUser(request);
@@ -341,24 +342,73 @@ export async function GET(request: NextRequest) {
     console.log("NODE_ENV:", process.env.NODE_ENV);
     
     try {
-      // Supabase에서 판매자 ID로 판매 중인 게시글 ID 목록 조회
-      const { data: posts, error: postsError } = await supabase
+      // 1. 먼저 posts 테이블 구조 확인
+      console.log("1. posts 테이블 구조 확인 중...");
+      const { data: tableInfo, error: tableError } = await supabase
         .from('posts')
-        .select('id')
-        .eq('author_id', authUser.id)
-        .eq('is_deleted', false);
+        .select('*')
+        .limit(1);
+      
+      if (tableError) {
+        console.error("테이블 구조 확인 중 오류:", tableError);
+        return addCorsHeaders(
+          NextResponse.json({ 
+            success: false, 
+            message: "테이블 구조 확인 중 오류가 발생했습니다.", 
+            error: process.env.NODE_ENV === 'development' ? tableError : undefined
+          }, { status: 500 })
+        );
+      }
+      
+      // 테이블 컬럼 확인
+      const tableColumns = tableInfo && tableInfo.length > 0 ? Object.keys(tableInfo[0]) : [];
+      console.log("posts 테이블 컬럼:", tableColumns);
+
+      // 2. 테이블 구조에 맞게 쿼리 작성
+      console.log("2. 판매자 게시글 조회 중...");
+      const hasAuthorIdField = tableColumns.includes('author_id');
+      const hasUserIdField = tableColumns.includes('user_id');
+      const hasIsDeletedField = tableColumns.includes('is_deleted');
+      
+      console.log("필드 확인: author_id=", hasAuthorIdField, "user_id=", hasUserIdField, "is_deleted=", hasIsDeletedField);
+      
+      // 쿼리 기본 준비
+      let query = supabase.from('posts').select('id');
+      
+      // 적절한 ID 필드 사용
+      if (hasAuthorIdField) {
+        query = query.eq('author_id', authUser.id);
+        console.log("author_id 필드로 필터링");
+      } else if (hasUserIdField) {
+        query = query.eq('user_id', authUser.id);
+        console.log("user_id 필드로 필터링");
+      } else {
+        console.warn("사용자 ID에 해당하는 필드를 찾을 수 없음. author_id로 시도");
+        query = query.eq('author_id', authUser.id);
+      }
+      
+      // is_deleted 필드가 있으면 해당 조건 추가
+      if (hasIsDeletedField) {
+        query = query.eq('is_deleted', false);
+        console.log("is_deleted 필드로 필터링 추가");
+      }
+      
+      // 최종 쿼리 실행
+      const { data: posts, error: postsError } = await query;
       
       if (postsError) {
         console.error("게시글 조회 오류:", postsError);
         return addCorsHeaders(
           NextResponse.json({ 
             success: false, 
-            message: "데이터베이스 조회 중 오류가 발생했습니다." 
+            message: "데이터베이스 조회 중 오류가 발생했습니다.", 
+            error: process.env.NODE_ENV === 'development' ? postsError : undefined 
           }, { status: 500 })
         );
       }
       
       const postIds = posts?.map((post: any) => post.id) || [];
+      console.log("조회된 게시글 ID 목록:", postIds);
       
       if (postIds.length === 0) {
         console.log("판매자의 게시글이 없습니다.");
@@ -368,29 +418,75 @@ export async function GET(request: NextRequest) {
         }, { status: 200 }));
       }
       
-      // 판매자의 게시글에 대한 모든 구매 목록 조회
-      const { data: purchases, error: purchasesError } = await supabase
+      // 3. purchases 테이블 구조 확인
+      console.log("3. purchases 테이블 구조 확인 중...");
+      const { data: purchaseInfo, error: purchaseTableError } = await supabase
         .from('purchases')
-        .select(`
-          *,
-          post:posts(*),
-          buyer:users(*)
-        `)
-        .in('post_id', postIds)
-        .in('status', ['PENDING', 'COMPLETED', 'PROCESSING', 'CONFIRMED'])
-        .order('updated_at', { ascending: false });
+        .select('*')
+        .limit(1);
+      
+      if (purchaseTableError) {
+        console.error("purchases 테이블 구조 확인 중 오류:", purchaseTableError);
+        return addCorsHeaders(
+          NextResponse.json({ 
+            success: false, 
+            message: "구매 테이블 구조 확인 중 오류가 발생했습니다.",
+            error: process.env.NODE_ENV === 'development' ? purchaseTableError : undefined
+          }, { status: 500 })
+        );
+      }
+      
+      // purchases 테이블 컬럼 확인
+      const purchaseColumns = purchaseInfo && purchaseInfo.length > 0 ? Object.keys(purchaseInfo[0]) : [];
+      console.log("purchases 테이블 컬럼:", purchaseColumns);
+      
+      // post_id 또는 대체 필드 확인
+      const postIdField = purchaseColumns.includes('post_id') ? 'post_id' : 
+                          purchaseColumns.includes('postId') ? 'postId' : 'post_id';
+      
+      console.log(`구매 테이블의 게시글 ID 필드: ${postIdField}`);
+      
+      // 4. 판매자의 게시글에 대한 모든 구매 목록 조회
+      console.log("4. 판매자 구매 목록 조회 중...");
+      
+      // 안전한 쿼리 작성
+      let purchasesQuery = supabase.from('purchases').select(`
+        *,
+        post:posts(*),
+        buyer:users!purchases_buyer_id_fkey(*)
+      `);
+      
+      // postIds 배열이 비어있지 않을 때만 in 필터 적용
+      if (postIds.length > 0) {
+        purchasesQuery = purchasesQuery.in(postIdField, postIds);
+      }
+      
+      // status 필드가 있을 경우에만 상태 필터 적용
+      if (purchaseColumns.includes('status')) {
+        purchasesQuery = purchasesQuery.in('status', ['PENDING', 'COMPLETED', 'PROCESSING', 'CONFIRMED']);
+      }
+      
+      // updated_at 필드가 있을 경우에만 정렬 적용
+      if (purchaseColumns.includes('updated_at')) {
+        purchasesQuery = purchasesQuery.order('updated_at', { ascending: false });
+      }
+      
+      console.log("Supabase 쿼리 실행 중 (foreign key 관계 명시: users!purchases_buyer_id_fkey)");
+      const { data: purchases, error: purchasesError } = await purchasesQuery;
       
       if (purchasesError) {
         console.error("구매 목록 조회 오류:", purchasesError);
         return addCorsHeaders(
           NextResponse.json({ 
             success: false, 
-            message: "데이터베이스 조회 중 오류가 발생했습니다." 
+            message: "데이터베이스 조회 중 오류가 발생했습니다.", 
+            error: process.env.NODE_ENV === 'development' ? purchasesError : undefined
           }, { status: 500 })
         );
       }
       
       console.log(`판매자 ${authUser.id}의 판매 상품에 대한 구매 ${purchases?.length || 0}개 조회됨`);
+      console.log("===== 판매자 구매 목록 API 호출 완료 =====\n");
       
       // 조회 결과가 없어도 빈 배열 반환
       const safePurchasesList = purchases || [];
