@@ -194,6 +194,10 @@ async function getPostById(postId: number) {
 async function getPosts(req: Request, page: number, pageSize: number, category?: string | null) {
   const offset = (page - 1) * pageSize;
   
+  // URL에서 userId 파라미터 추출
+  const url = new URL(req.url);
+  const userId = url.searchParams.get('userId');
+  
   // 쿼리 빌더 준비 (adminSupabase 사용)
   let query = adminSupabase
     .from('posts')
@@ -207,6 +211,12 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
   if (category) {
     console.log(`[게시물 API] 카테고리 필터링: ${category}`);
     query = query.eq('category', category);
+  }
+  
+  // 사용자 ID로 필터링 (마이페이지에서 사용자 본인의 게시글만 표시)
+  if (userId) {
+    console.log(`[게시물 API] 작성자 ID 필터링: ${userId}`);
+    query = query.eq('author_id', userId);
   }
   
   // 최종 쿼리 실행

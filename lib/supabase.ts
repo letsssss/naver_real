@@ -162,6 +162,37 @@ export function formatUserId(id: string | number): string {
 }
 
 /**
+ * 인증 토큰으로 Supabase 클라이언트를 생성합니다.
+ * 이 클라이언트는 RLS 정책에 따라 인증된 사용자로 작동합니다.
+ * @param token JWT 형식의 인증 토큰
+ * @returns 인증된 Supabase 클라이언트
+ */
+export function createAuthedClient(token: string) {
+  if (!token) {
+    console.warn("⚠️ 토큰이 제공되지 않았습니다. 익명 클라이언트를 반환합니다.");
+    return getSupabaseClient();
+  }
+  
+  console.log("✅ 인증된 Supabase 클라이언트 생성 - 토큰:", token.substring(0, 10) + "...");
+  
+  return createClient<Database>(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+      }
+    }
+  );
+}
+
+/**
  * 데이터 변환 유틸리티
  */
 export const transformers = {

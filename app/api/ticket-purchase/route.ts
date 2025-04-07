@@ -180,7 +180,6 @@ export async function POST(request: NextRequest) {
       post_id: postId,
       seller_id: authorId,
       status: "PROCESSING",
-      amount: postData.ticket_price ? postData.ticket_price * quantity : 0,
       quantity,
       created_at: new Date().toISOString()
     };
@@ -190,6 +189,31 @@ export async function POST(request: NextRequest) {
     if (phoneNumber) purchaseData.phone_number = phoneNumber;
     if (selectedSeats) purchaseData.selected_seats = selectedSeats;
     if (paymentMethod) purchaseData.payment_method = paymentMethod;
+    
+    // 가격 정보 설정 (total_price는 NOT NULL 필드)
+    let totalPrice = 0;
+    
+    // 1. 게시글에 ticket_price 필드가 있으면 사용
+    if (postData.ticket_price) {
+      totalPrice = postData.ticket_price * quantity;
+    } 
+    // 2. content 필드에서 가격 정보 추출 시도 (JSON 형식인 경우)
+    else if (postData.content) {
+      try {
+        const contentData = JSON.parse(postData.content);
+        if (contentData.price) {
+          totalPrice = contentData.price * quantity;
+        } else if (contentData.sections && contentData.sections.length > 0) {
+          // sections 배열의 첫 번째 항목의 price 사용
+          totalPrice = contentData.sections[0].price * quantity;
+        }
+      } catch (e) {
+        console.log("게시글 content 파싱 실패 (JSON 아님):", e);
+      }
+    }
+    
+    // 3. 최소한의 기본값 설정 (0원은 안전하지 않을 수 있으나 필드는 채워야 함)
+    purchaseData.total_price = totalPrice;
     
     console.log("구매 데이터:", purchaseData);
 

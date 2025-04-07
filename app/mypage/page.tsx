@@ -124,6 +124,64 @@ export default function MyPage() {
   // 읽지 않은 알림 카운트
   const unreadNotificationCount = notifications.filter(n => !n.isRead).length;
 
+  // Supabase 토큰 디버깅을 위한 useEffect 추가
+  useEffect(() => {
+    // 브라우저 환경인지 확인
+    if (typeof window === 'undefined') return;
+    
+    // Supabase 관련 키 찾기
+    const keys = Object.keys(localStorage).filter(k => k.includes('auth-token'));
+    console.log("🔑 Supabase 관련 키:", keys);
+
+    if (keys.length > 0) {
+      const tokenKey = keys[0];
+      const session = localStorage.getItem(tokenKey);
+
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          console.log("📦 Supabase 세션 정보:", parsed);
+          console.log("✅ access_token:", parsed.access_token);
+          
+          // 토큰이 올바른 형식인지 확인
+          if (parsed.access_token) {
+            // JWT 토큰 분해 시도
+            const parts = parsed.access_token.split('.');
+            if (parts.length === 3) {
+              try {
+                // 페이로드 부분만 디코딩
+                const payload = JSON.parse(atob(parts[1]));
+                console.log("✅ 토큰 페이로드:", payload);
+                console.log("✅ 사용자 역할:", payload.role);
+                console.log("✅ 만료 시간:", new Date(payload.exp * 1000).toLocaleString());
+              } catch (e) {
+                console.error("❌ 토큰 페이로드 파싱 실패:", e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("❌ 세션 정보 파싱 실패:", e);
+        }
+      } else {
+        console.warn("❌ 토큰 키는 있지만 세션 정보가 없음:", tokenKey);
+      }
+    } else {
+      console.warn("❌ Supabase 세션이 localStorage에 없음");
+      
+      // 추가 확인: 다른 형태의 키로 저장되어 있는지 확인
+      const allStorageKeys = Object.keys(localStorage);
+      console.log("📋 모든 localStorage 키:", allStorageKeys);
+      
+      const tokenValues = allStorageKeys
+        .filter(key => localStorage.getItem(key) && localStorage.getItem(key)!.includes('eyJ'))
+        .map(key => ({ key, value: localStorage.getItem(key) }));
+      
+      if (tokenValues.length > 0) {
+        console.log("🔍 JWT 형식 토큰 발견:", tokenValues.map(t => t.key));
+      }
+    }
+  }, []);
+
   // 내가 판매 중인 게시물 목록 가져오기
   const fetchOngoingSales = async () => {
     if (!user) return;
@@ -350,24 +408,90 @@ export default function MyPage() {
     
     setIsLoadingPurchases(true);
     try {
-      // 클라이언트 사이드에서만 localStorage에 접근하도록 수정
-      const authToken = typeof window !== 'undefined' 
-        ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
-        : '';
+      console.log("📣 fetchOngoingPurchases 호출됨, 사용자 ID:", user.id);
       
-      // 구매 목록 API 호출 (인증 토큰 포함)
-      console.log("구매 목록 불러오기 시도... 사용자 ID:", user.id);
-      const response = await fetch(`${API_BASE_URL}/api/purchase?userId=${user.id}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        credentials: 'include', // 쿠키를 포함시킵니다
+      // Supabase 저장소 키 찾기 (디버깅용)
+      let authToken = '';
+      const authTokenSources = [];
+      
+      // 1. sb-xxx-auth-token 형태의 키 찾기
+      const supabaseKey = Object.keys(localStorage).find(key => 
+        key.startsWith('sb-') && key.endsWith('-auth-token')
+      );
+      
+      if (supabaseKey) {
+        try {
+          const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+          if (supabaseData.access_token) {
+            authToken = supabaseData.access_token;
+            authTokenSources.push('sb-auth-token');
+            console.log("✅ sb-xxx-auth-token에서 토큰 발견");
+          }
+        } catch (e) {
+          console.error("❌ Supabase 저장소 파싱 실패:", e);
+        }
+      }
+      
+      // 2. auth-token 포함 키 찾기
+      if (!authToken) {
+        const authKeys = Object.keys(localStorage).filter(k => k.includes('auth-token'));
+        if (authKeys.length > 0) {
+          try {
+            const authData = JSON.parse(localStorage.getItem(authKeys[0]) || '{}');
+            if (authData.access_token) {
+              authToken = authData.access_token;
+              authTokenSources.push('auth-token');
+              console.log("✅ auth-token에서 토큰 발견");
+            }
+          } catch (e) {
+            console.error("❌ auth-token 파싱 실패:", e);
+          }
+        }
+      }
+      
+      // 3. 기존 방식 (token, supabase_token 등)
+      if (!authToken) {
+        authToken = localStorage.getItem('token') || localStorage.getItem('supabase_token') || localStorage.getItem('access_token') || '';
+        if (authToken) {
+          authTokenSources.push('legacy-token');
+          console.log("✅ 기존 저장소에서 토큰 발견");
+        }
+      }
+      
+      // 캐시 방지를 위한 타임스탬프 추가
+      const timestamp = new Date().getTime();
+      
+      // 디버깅을 위한 URL 및 토큰 로깅
+      console.log("📡 구매 목록 API 호출:", `${API_BASE_URL}/api/purchase?userId=${user.id}&t=${timestamp}`);
+      console.log("🔑 토큰 소스:", authTokenSources.join(', ') || '없음');
+      console.log("🔑 토큰 형식 검증:", authToken ? `Bearer ${authToken.substring(0, 10)}...` : '없음');
+      
+      // 헤더 설정
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': authToken ? `Bearer ${authToken}` : '',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      };
+      
+      console.log("📨 요청 헤더:", JSON.stringify(headers, null, 2));
+      
+      const response = await fetch(`${API_BASE_URL}/api/purchase?userId=${user.id}&t=${timestamp}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+        cache: 'no-store'
       });
       
-      console.log("구매 API 응답 상태:", response.status, response.statusText);
+      console.log("📥 구매 데이터 API 응답 상태:", response.status, response.statusText);
+      
+      // 응답 헤더 확인
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+      console.log("📥 응답 헤더:", responseHeaders);
       
       if (!response.ok) {
         const errorData = await response.text();
@@ -375,77 +499,195 @@ export default function MyPage() {
         throw new Error('구매 목록을 불러오는데 실패했습니다.');
       }
       
-      const data = await response.json();
-      console.log("받은 구매 데이터:", data);
+      const responseText = await response.text();
+      console.log("원시 응답 텍스트:", responseText);
       
-      if (!data.purchases || !Array.isArray(data.purchases)) {
-        console.error("API 응답에 purchases 배열이 없거나 유효하지 않습니다:", data);
+      // 응답이 빈 문자열인 경우 처리
+      if (!responseText || responseText.trim() === '') {
+        console.error("API가 빈 응답을 반환했습니다");
         setOngoingPurchases([]);
         return;
       }
       
-      // 상태 카운트 초기화
-      const newPurchaseStatus = {
-        취켓팅진행중: 0,
-        판매중인상품: 0,
-        취켓팅완료: 0,
-        거래완료: 0,
-        거래취소: 0,
-      };
+      // 텍스트를 JSON으로 파싱
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("JSON 파싱 오류:", jsonError, "원본 텍스트:", responseText);
+        throw new Error('응답 데이터 형식이 잘못되었습니다.');
+      }
       
-      // API 응답을 화면에 표시할 형식으로 변환
-      const purchasesData = data.purchases.map((purchase: any) => {
-        // 상태에 따라 카운트 증가
-        const status = purchase.status;
-        if (status === 'PENDING') {
-          newPurchaseStatus.취켓팅진행중 += 1;
-        } else if (status === 'PROCESSING') {
-          newPurchaseStatus.취켓팅진행중 += 1; // 'PROCESSING'은 취켓팅진행중으로 카운트
-        } else if (status === 'COMPLETED') {
-          newPurchaseStatus.취켓팅완료 += 1; // 'COMPLETED'가 취켓팅완료로 카운트
-        } else if (status === 'CONFIRMED') {
-          // 구매 확정된 경우도 거래완료로 카운트
-          newPurchaseStatus.거래완료 += 1;
-        } else if (status === 'CANCELLED') {
-          newPurchaseStatus.거래취소 += 1;
-        }
+      console.log("구매 API 응답 데이터:", data);
+      // 추가 디버깅 정보
+      console.log("🔍 API 전체 응답 (data):", JSON.stringify(data, null, 2));
+      console.log("🔎 data 타입:", typeof data);
+      console.log("🔎 data 키들:", Object.keys(data));
+      console.log("🔎 purchases 값:", data.purchases);
+      console.log("🔎 data.data 값:", data.data);
+      console.log("🔎 data.result 값:", data.result);
+      console.log("🔎 data.items 값:", data.items);
+      
+      // 실제 구매 데이터가 어떤 필드에 있는지 확인
+      let purchasesArray = null;
+      if (data.purchases && Array.isArray(data.purchases)) {
+        console.log("✅ 구매 데이터는 data.purchases에 있습니다.");
+        purchasesArray = data.purchases;
+      } else if (data.data && Array.isArray(data.data)) {
+        console.log("✅ 구매 데이터는 data.data에 있습니다.");
+        purchasesArray = data.data;
+      } else if (data.result && Array.isArray(data.result)) {
+        console.log("✅ 구매 데이터는 data.result에 있습니다.");
+        purchasesArray = data.result;
+      } else if (data.items && Array.isArray(data.items)) {
+        console.log("✅ 구매 데이터는 data.items에 있습니다.");
+        purchasesArray = data.items;
+      } else if (Array.isArray(data)) {
+        console.log("✅ 응답 자체가 배열입니다.");
+        purchasesArray = data;
+      }
+      
+      // API 응답에 purchases 배열이 있는지 확인
+      if (!purchasesArray) {
+        console.error("API 응답에서 구매 데이터 배열을 찾을 수 없습니다:", data);
         
-        return {
-          id: purchase.id,
-          orderNumber: purchase.orderNumber,  // 주문번호 추가
-          title: purchase.ticketTitle || purchase.post?.title || purchase.post?.eventName || "제목 없음",
-          date: formatDate(purchase.eventDate, purchase.post?.eventDate, purchase.createdAt),
-          price: purchase.totalPrice 
-            ? `${Number(purchase.totalPrice).toLocaleString()}원` 
-            : '가격 정보 없음',
-          status: getStatusText(status),
-          sellerId: purchase.sellerId
-        };
-      });
+        // 어드민 API를 사용하여 구매 내역 가져오기 시도
+        console.log("어드민 API로 구매 내역 검색 시도 중...");
+        try {
+          const adminResponse = await fetch(`${API_BASE_URL}/api/admin-purchases?userId=${user.id}&t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            credentials: 'include'
+          });
+          
+          console.log("어드민 API 응답 상태:", adminResponse.status, adminResponse.statusText);
+          
+          if (!adminResponse.ok) {
+            console.error("어드민 API 오류:", adminResponse.statusText);
+            setOngoingPurchases([]);
+            return;
+          }
+          
+          const adminData = await adminResponse.json();
+          console.log("어드민 API 응답 데이터:", adminData);
+          console.log("🔍 어드민 API 전체 응답:", JSON.stringify(adminData, null, 2));
+          
+          if (adminData.success && adminData.purchases && adminData.purchases.length > 0) {
+            console.log(`어드민 API에서 ${adminData.purchases.length}개의 구매 내역 발견`);
+            processPurchaseData(adminData.purchases);
+            return;
+          } else {
+            console.log("어드민 API에서도 구매 내역을 찾지 못함");
+            setOngoingPurchases([]);
+            return;
+          }
+        } catch (adminError) {
+          console.error("어드민 API 호출 오류:", adminError);
+          setOngoingPurchases([]);
+          return;
+        }
+      }
       
-      // 상태 업데이트
-      setPurchaseStatus(newPurchaseStatus);
+      console.log(`API에서 ${purchasesArray.length}개의 구매 내역 불러옴:`, purchasesArray);
       
-      // CONFIRMED(구매 확정) 상태의 구매는 '구매중'이 아니므로 필터링
-      const ongoingPurchasesData = purchasesData.filter((purchase: any) => 
-        !purchase.status.includes('구매 확정됨')
-      );
-      
-      console.log("변환된 구매 데이터:", purchasesData);
-      console.log("구매중인 상품 데이터:", ongoingPurchasesData);
-      console.log("상태별 카운트:", newPurchaseStatus);
-      setOngoingPurchases(ongoingPurchasesData);
+      // 구매 내역 처리
+      processPurchaseData(purchasesArray);
     } catch (error) {
-      console.error('구매 목록 로딩 오류:', error);
-      toast.error('구매 목록을 불러오는데 실패했습니다.');
-      // 더미 데이터로 대체
-      setOngoingPurchases([
-        { id: 1, title: "세븐틴 콘서트 [더미 데이터]", date: "2024-03-20", price: "165,000원", status: "입금 대기중" },
-        { id: 2, title: "데이식스 전국투어 [더미 데이터]", date: "2024-02-01", price: "99,000원", status: "배송 준비중" },
-      ]);
+      console.error("구매 데이터 로딩 오류:", error);
+      toast.error("구매 내역을 불러오는 중 오류가 발생했습니다.");
+      
+      // 오류 시에도 빈 배열로 설정하여 UI가 깨지지 않도록 함
+      setOngoingPurchases([]);
     } finally {
       setIsLoadingPurchases(false);
     }
+  };
+  
+  // 구매 데이터 처리 함수 추가
+  const processPurchaseData = (purchases: any[]) => {
+    // 구매 상태에 따른 카운트
+    const newPurchaseStatus = {
+      취켓팅진행중: 0,
+      판매중인상품: 0,
+      취켓팅완료: 0,
+      거래완료: 0,
+      거래취소: 0,
+    };
+    
+    // API 응답을 화면에 표시할 형식으로 변환
+    const purchasesData = purchases.map((purchase: any) => {
+      // 구매 상태에 따라 카운트 증가
+      const purchaseStatus = purchase.status || '';
+      
+      console.log(`구매 데이터 처리: ID=${purchase.id}, 상태=${purchaseStatus}`);
+      console.log("구매 데이터 전체:", purchase);
+      
+      // 상태 카운트 로직
+      if (purchaseStatus === 'PENDING' || purchaseStatus === 'PENDING_PAYMENT' || purchaseStatus === 'PROCESSING' || purchaseStatus === 'PROCESS') {
+        newPurchaseStatus.취켓팅진행중 += 1;
+        console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅진행중 (+1)`);
+      } else if (purchaseStatus === 'COMPLETED') {
+        newPurchaseStatus.취켓팅완료 += 1;
+        console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅완료 (+1)`);
+      } else if (purchaseStatus === 'CONFIRMED') {
+        newPurchaseStatus.거래완료 += 1;
+        console.log(`[구매 카운트] ID ${purchase.id}: 거래완료 (+1)`);
+      } else if (purchaseStatus === 'CANCELLED') {
+        newPurchaseStatus.거래취소 += 1;
+        console.log(`[구매 카운트] ID ${purchase.id}: 거래취소 (+1)`);
+      } else {
+        console.log(`[구매 카운트] 알 수 없는 상태: ${purchase.id}, status=${purchaseStatus}`);
+      }
+      
+      // 게시물 데이터 안전하게 접근
+      const post = purchase.post || {};
+      const seller = purchase.seller || {};
+      const title = post.title || purchase.ticket_title || post.event_name || '제목 없음';
+      
+      const formattedPurchase = {
+        id: purchase.id,
+        order_number: purchase.order_number,
+        postId: purchase.post_id || purchase.postId,
+        title,
+        status: purchaseStatus,
+        seller: seller.name || '판매자 정보 없음',
+        sellerId: purchase.seller_id || seller.id,
+        quantity: purchase.quantity || 1,
+        price: purchase.total_price || post.ticket_price || 0,
+        createdAt: purchase.created_at || new Date().toISOString(),
+        updatedAt: purchase.updated_at || purchase.created_at || new Date().toISOString(),
+      };
+      
+      console.log(`[구매 데이터] ID ${purchase.id} 변환:`, formattedPurchase);
+      return formattedPurchase;
+    });
+    
+    console.log("최종 구매 상태 카운트:", newPurchaseStatus);
+    
+    // 정렬: 취켓팅 진행중 > 취켓팅 완료 > 거래완료 > 거래취소
+    const sortedPurchases = [...purchasesData].sort((a, b) => {
+      const getPriority = (status: string) => {
+        if (status === 'PENDING' || status === 'PENDING_PAYMENT' || status === 'PROCESSING' || status === 'PROCESS') return 1;
+        if (status === 'COMPLETED') return 2;
+        if (status === 'CONFIRMED') return 3;
+        if (status === 'CANCELLED') return 4;
+        return 5;
+      };
+      
+      return getPriority(a.status) - getPriority(b.status);
+    });
+    
+    console.log("정렬된 구매 데이터:", sortedPurchases);
+    
+    // 상태 업데이트
+    setOngoingPurchases(sortedPurchases);
+    setPurchaseStatus(newPurchaseStatus);
+    
+    console.log("구매 데이터 로딩 완료:", sortedPurchases.length, "개 항목");
   };
 
   // 상태 텍스트 변환 함수

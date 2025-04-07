@@ -300,7 +300,8 @@ export async function getAuthenticatedUser(request: NextRequest) {
             id: userId,
             name: user.name || '개발 사용자',
             email: user.email || 'dev@example.com',
-            role: user.role || 'USER'
+            role: user.role || 'USER',
+            token: '' // 개발 환경에서는 토큰 없음
           };
         }
         
@@ -331,7 +332,8 @@ export async function getAuthenticatedUser(request: NextRequest) {
             id: user.id,
             name: user.name || '',
             email: user.email || '',
-            role: user.role || 'USER'
+            role: user.role || 'USER',
+            token  // ✅ 토큰 추가
           };
         }
       }
@@ -344,6 +346,9 @@ export async function getAuthenticatedUser(request: NextRequest) {
       if (!error && session) {
         const userId = session.user.id;
         console.log("Supabase 세션에서 인증된 사용자 ID:", userId);
+        
+        // 세션 액세스 토큰 확인
+        const sessionToken = session.access_token || '';
         
         // Supabase에서 사용자 정보 조회
         const { data: userData, error: userError } = await supabase
@@ -359,7 +364,8 @@ export async function getAuthenticatedUser(request: NextRequest) {
             id: userId,
             name: user.name || '사용자',
             email: user.email || '',
-            role: user.role || 'USER'
+            role: user.role || 'USER',
+            token: sessionToken // ✅ 세션 토큰 추가
           };
         }
         
@@ -368,7 +374,8 @@ export async function getAuthenticatedUser(request: NextRequest) {
           id: userId,
           name: session.user.user_metadata?.name || '사용자',
           email: session.user.email || '',
-          role: session.user.user_metadata?.role || 'USER'
+          role: session.user.user_metadata?.role || 'USER',
+          token: sessionToken // ✅ 세션 토큰 추가
         };
       }
     } catch (sessionError) {
@@ -393,7 +400,8 @@ export async function getAuthenticatedUser(request: NextRequest) {
           id: user.id,
           name: user.name || '',
           email: user.email || '',
-          role: user.role || 'USER'
+          role: user.role || 'USER',
+          token: token || '' // ✅ 토큰 추가 (없을 경우 빈 문자열)
         };
       }
     }
