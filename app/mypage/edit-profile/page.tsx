@@ -36,29 +36,76 @@ export default function EditProfilePage() {
     }
 
     const fetchUserData = async () => {
-      console.log("🔥 fetchUserData() 실행됨")  // 디버깅 로그
+      console.log("🔥 fetchUserData() 실행됨", user?.id)  // 디버깅 로그
       setIsLoading(true)
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/update-profile`, {
+        // Supabase 토큰 가져오기
+        let authToken = '';
+        try {
+          if (typeof window !== 'undefined') {
+            // 1. Supabase 저장소 키 가져오기
+            const supabaseStorageKey = Object.keys(localStorage).find(key => 
+              key.startsWith('sb-') && key.endsWith('-auth-token')
+            );
+            
+            if (supabaseStorageKey) {
+              // Supabase 세션 데이터 파싱
+              const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
+              if (supabaseSession.access_token) {
+                authToken = supabaseSession.access_token;
+                console.log("✅ Supabase 세션 토큰 발견");
+              }
+            }
+            
+            // 2. 이전 방식의 토큰 확인 (폴백)
+            if (!authToken) {
+              authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+              if (authToken) console.log("✅ 기존 저장소에서 토큰 발견");
+            }
+          }
+        } catch (storageError) {
+          console.error("❌ 토큰 접근 오류:", storageError);
+        }
+        
+        // 사용자 ID 쿼리 파라미터 추가
+        const userId = user?.id || '';
+        const queryParams = new URLSearchParams();
+        if (userId) queryParams.append('userId', userId.toString());
+        
+        // 타임스탬프 추가하여 캐싱 방지
+        queryParams.append('t', Date.now().toString());
+        
+        const requestUrl = `${API_BASE_URL}/api/user/update-profile?${queryParams.toString()}`;
+        console.log("🔍 요청 URL:", requestUrl);
+        
+        const response = await fetch(requestUrl, {
           method: "GET",
           credentials: "include",
           headers: {
             "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            // 인증 토큰 추가
+            ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {})
           },
         })
 
-        console.log("프로필 정보 요청 응답 상태:", response.status)
+        console.log("📡 프로필 정보 요청 응답 상태:", response.status);
 
         if (!response.ok) {
           if (response.status === 401) {
-            toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.")
-            router.push("/login?callbackUrl=/mypage/edit-profile")
-            return
+            console.error("❌ 인증 오류 (401)");
+            const errorData = await response.text();
+            console.error("❌ 오류 응답:", errorData);
+            toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+            router.push("/login?callbackUrl=/mypage/edit-profile");
+            return;
           }
-          throw new Error("사용자 정보를 가져오지 못했습니다.")
+          throw new Error("사용자 정보를 가져오지 못했습니다.");
         }
 
-        const data = await response.json()
+        const data = await response.json();
+        console.log("📦 응답 데이터:", data);
+        
         if (data.success) {
           setUserData({
             name: data.user.name || "",
@@ -67,15 +114,15 @@ export default function EditProfilePage() {
             bankName: data.user.bankInfo?.bankName || "",
             accountNumber: data.user.bankInfo?.accountNumber || "",
             accountHolder: data.user.bankInfo?.accountHolder || "",
-          })
+          });
         } else {
-          toast.error(data.message || "사용자 정보를 가져오지 못했습니다.")
+          toast.error(data.message || "사용자 정보를 가져오지 못했습니다.");
         }
       } catch (error) {
-        console.error("🔥 사용자 정보 가져오기 실패:", error)
-        toast.error("사용자 정보를 불러오는 중 오류가 발생했습니다.")
+        console.error("🔥 사용자 정보 가져오기 실패:", error);
+        toast.error("사용자 정보를 불러오는 중 오류가 발생했습니다.");
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
 
@@ -91,11 +138,54 @@ export default function EditProfilePage() {
     e.preventDefault()
     setIsSaving(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/user/update-profile`, {
+      // Supabase 토큰 가져오기
+      let authToken = '';
+      try {
+        if (typeof window !== 'undefined') {
+          // 1. Supabase 저장소 키 가져오기
+          const supabaseStorageKey = Object.keys(localStorage).find(key => 
+            key.startsWith('sb-') && key.endsWith('-auth-token')
+          );
+          
+          if (supabaseStorageKey) {
+            // Supabase 세션 데이터 파싱
+            const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
+            if (supabaseSession.access_token) {
+              authToken = supabaseSession.access_token;
+              console.log("✅ Supabase 세션 토큰 발견");
+            }
+          }
+          
+          // 2. 이전 방식의 토큰 확인 (폴백)
+          if (!authToken) {
+            authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+            if (authToken) console.log("✅ 기존 저장소에서 토큰 발견");
+          }
+        }
+      } catch (storageError) {
+        console.error("❌ 토큰 접근 오류:", storageError);
+      }
+      
+      // 사용자 ID 쿼리 파라미터 추가
+      const userId = user?.id || '';
+      const queryParams = new URLSearchParams();
+      if (userId) queryParams.append('userId', userId.toString());
+      
+      // 타임스탬프 추가하여 캐싱 방지
+      queryParams.append('t', Date.now().toString());
+      
+      const requestUrl = `${API_BASE_URL}/api/user/update-profile?${queryParams.toString()}`;
+      console.log("🔍 수정 요청 URL:", requestUrl);
+      
+      const response = await fetch(requestUrl, {
         method: "PUT",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+          // 인증 토큰 추가
+          ...(authToken ? { "Authorization": `Bearer ${authToken}` } : {})
         },
         body: JSON.stringify({
           name: userData.name,
@@ -104,31 +194,36 @@ export default function EditProfilePage() {
           accountNumber: userData.accountNumber,
           accountHolder: userData.accountHolder,
         }),
-      })
+      });
 
-      console.log("프로필 수정 응답 상태:", response.status)
+      console.log("📡 프로필 수정 응답 상태:", response.status);
 
       if (!response.ok) {
         if (response.status === 401) {
-          toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.")
-          router.push("/login?callbackUrl=/mypage/edit-profile")
-          return
+          console.error("❌ 인증 오류 (401)");
+          const errorData = await response.text();
+          console.error("❌ 오류 응답:", errorData);
+          toast.error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+          router.push("/login?callbackUrl=/mypage/edit-profile");
+          return;
         }
-        throw new Error("프로필 수정 실패")
+        throw new Error("프로필 수정 실패");
       }
 
-      const result = await response.json()
+      const result = await response.json();
+      console.log("📦 수정 응답 데이터:", result);
+      
       if (result.success) {
-        toast.success("프로필이 성공적으로 수정되었습니다.")
-        router.push("/mypage")
+        toast.success("프로필이 성공적으로 수정되었습니다.");
+        router.push("/mypage");
       } else {
-        toast.error(result.message || "수정에 실패했습니다.")
+        toast.error(result.message || "수정에 실패했습니다.");
       }
     } catch (err) {
-      console.error("🔥 프로필 수정 오류:", err)
-      toast.error("프로필 수정 중 오류가 발생했습니다.")
+      console.error("🔥 프로필 수정 오류:", err);
+      toast.error("프로필 수정 중 오류가 발생했습니다.");
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
   }
 
