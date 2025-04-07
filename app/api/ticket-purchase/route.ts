@@ -1,18 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
-import { createUniqueOrderNumber } from "@/utils/orderNumber";
-
-// Prisma 클라이언트 초기화
-// 개발 환경에서는 핫 리로딩으로 인해 여러 인스턴스가 생성되는 것을 방지하기 위해
-// globalThis를 사용하여 싱글톤 패턴으로 관리
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-
-export const prisma = globalForPrisma.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+import { adminSupabase, supabase } from "@/lib/supabase";
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -42,6 +32,13 @@ const purchaseSchema = z.object({
   paymentMethod: z.string().optional(),
 });
 
+// 간단한 주문 번호 생성 함수
+async function createSimpleOrderNumber() {
+  const timestamp = new Date().getTime().toString().slice(-8);
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `ORDER-${timestamp}-${random}`;
+}
+
 // POST 요청 핸들러 - 티켓 구매 신청
 export async function POST(request: NextRequest) {
   try {
@@ -60,9 +57,9 @@ export async function POST(request: NextRequest) {
       if (userId) {
         console.log("개발 환경 - 쿼리 파라미터 userId 사용:", userId);
         
-        // Prisma 대신 직접 authUser 객체 생성
+        // 테스트 사용자 객체 생성
         authUser = {
-          id: userId,  // 문자열 ID 사용
+          id: userId,
           name: '개발 테스트 사용자',
           email: 'dev@example.com',
           role: 'USER'
@@ -109,146 +106,152 @@ export async function POST(request: NextRequest) {
       ));
     }
 
-    // prisma가 undefined인지 확인
-    if (!prisma) {
-      console.error("Prisma 클라이언트가 초기화되지 않았습니다.");
+    const { postId, quantity, selectedSeats, phoneNumber, paymentMethod } = validationResult.data;
+    console.log("유효성 검사 통과 후 데이터:", { postId, quantity, selectedSeats, phoneNumber, paymentMethod });
+
+    // 게시글 조회 - 타입 문제를 피하기 위해 any 타입 사용
+    const { data: post, error: postError } = await adminSupabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+
+    if (postError || !post) {
+      console.log(`게시글 ID ${postId}를 찾을 수 없음:`, postError);
       return addCorsHeaders(NextResponse.json(
-        { success: false, message: "서버 오류: 데이터베이스 연결이 설정되지 않았습니다." },
+        { success: false, message: "해당하는 게시글을 찾을 수 없습니다." },
+        { status: 404 }
+      ));
+    }
+
+    console.log("게시글 데이터:", post);
+
+    // 게시글의 작성자 ID와 현재 사용자 ID 비교
+    // any 타입으로 처리하여 TypeScript 오류 회피
+    const postData = post as any;
+    const authorId = postData.author_id || postData.user_id;
+    
+    if (String(authorId) === String(authUser.id)) {
+      console.log("자신의 게시글은 구매할 수 없습니다");
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "자신의 게시글은 구매할 수 없습니다." },
+        { status: 400 }
+      ));
+    }
+
+    // 게시글 상태 확인
+    if (postData.status && postData.status !== "ACTIVE") {
+      console.log(`게시글 상태가 ${postData.status}입니다. ACTIVE 상태만 구매 가능합니다.`);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "이미 판매 진행 중이거나 판매 완료된 게시글입니다." },
+        { status: 400 }
+      ));
+    }
+
+    // 이미 구매 진행 중인지 확인
+    const { data: existingPurchases, error: purchaseError } = await adminSupabase
+      .from('purchases')
+      .select('*')
+      .eq('post_id', postId)
+      .in('status', ['PENDING', 'PROCESSING', 'COMPLETED']);
+
+    if (purchaseError) {
+      console.error("구매 정보 조회 오류:", purchaseError);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "구매 정보 조회 중 오류가 발생했습니다." },
         { status: 500 }
       ));
     }
 
-    const { postId, quantity, selectedSeats, phoneNumber, paymentMethod } = validationResult.data;
-    console.log("유효성 검사 통과 후 데이터:", { postId, quantity, selectedSeats, phoneNumber, paymentMethod });
+    if (existingPurchases && existingPurchases.length > 0) {
+      console.log(`게시글 ID ${postId}는 이미 구매가 진행 중입니다.`);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "이미 다른 사용자가 구매 중인 게시글입니다." },
+        { status: 400 }
+      ));
+    }
 
-    // 트랜잭션 시작 - 동시 구매를 방지하기 위해 트랜잭션으로 처리
-    const result = await prisma.$transaction(async (tx) => {
-      // 게시글 조회 - 상태 확인을 위해 FOR UPDATE 잠금을 사용 (pessimistic locking)
-      const post = await tx.post.findUnique({
-        where: { id: postId },
-        include: { author: true }
-      });
+    // 주문 번호 생성
+    const orderNumber = await createSimpleOrderNumber();
+    
+    // 구매 데이터 준비
+    const purchaseData: any = {
+      buyer_id: authUser.id,
+      post_id: postId,
+      seller_id: authorId,
+      status: "PROCESSING",
+      amount: postData.ticket_price ? postData.ticket_price * quantity : 0,
+      quantity,
+      created_at: new Date().toISOString()
+    };
+    
+    // 추가 필드 (데이터베이스에 존재하는 경우에만)
+    if (orderNumber) purchaseData.order_number = orderNumber;
+    if (phoneNumber) purchaseData.phone_number = phoneNumber;
+    if (selectedSeats) purchaseData.selected_seats = selectedSeats;
+    if (paymentMethod) purchaseData.payment_method = paymentMethod;
+    
+    console.log("구매 데이터:", purchaseData);
 
-      if (!post) {
-        console.log(`게시글 ID ${postId}를 찾을 수 없음`);
-        throw new Error("해당하는 게시글을 찾을 수 없습니다.");
-      }
+    // 구매 정보 생성
+    const { data: purchase, error: createError } = await adminSupabase
+      .from('purchases')
+      .insert(purchaseData)
+      .select()
+      .single();
 
-      // 자신의 게시글인지 확인
-      console.log("API - 게시글 작성자 ID:", post.authorId.toString(), typeof post.authorId);
-      console.log("API - 사용자 ID:", authUser.id.toString(), typeof authUser.id);
-      
-      // ID들을 문자열로 변환하여 비교 (타입 통일)
-      const postAuthorId = String(post.authorId);
-      const currentUserId = String(authUser.id);
-      
-      console.log("API - 문자열 변환 후 비교:", { postAuthorId, currentUserId, isEqual: postAuthorId === currentUserId });
-      
-      if (postAuthorId === currentUserId) {
-        console.log("API - 작성자와 사용자가 일치함");
-        throw new Error("자신의 게시글은 구매할 수 없습니다.");
-      }
-      
-      console.log("API - 작성자와 사용자가 다름");
+    if (createError) {
+      console.error("구매 정보 생성 오류:", createError);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "구매 정보 생성 중 오류가 발생했습니다." },
+        { status: 500 }
+      ));
+    }
 
-      // 게시글 상태 확인 - ACTIVE 상태일 때만 구매 가능
-      if (post.status !== "ACTIVE") {
-        console.log(`게시글 ID ${postId}는 현재 '${post.status}' 상태로 구매할 수 없습니다.`);
-        throw new Error("이미 판매 진행 중이거나 판매 완료된 게시글입니다.");
-      }
+    // 게시물 상태 업데이트
+    const updateData: any = { status: "PROCESSING" };
+    const { error: updateError } = await adminSupabase
+      .from('posts')
+      .update(updateData)
+      .eq('id', postId);
 
-      // 이미 구매 진행 중인지 확인
-      const existingPurchase = await tx.purchase.findFirst({
-        where: {
-          postId: post.id,
-          status: {
-            in: ["PENDING", "PROCESSING", "COMPLETED"]
-          }
-        }
-      });
-
-      if (existingPurchase) {
-        console.log(`게시글 ID ${postId}는 이미 구매가 진행 중입니다.`);
-        throw new Error("이미 다른 사용자가 구매 중인 게시글입니다.");
-      }
-
-      // 총 가격 계산
-      const totalPrice = post.ticketPrice ? post.ticketPrice * BigInt(quantity) : BigInt(0);
-      
-      // 주문 번호 생성
-      const orderNumber = await createUniqueOrderNumber(tx);
-      console.log("생성된 주문 번호:", orderNumber);
-
-      // 구매 정보 생성 - 바로 PROCESSING 상태로 시작
-      const purchase = await tx.purchase.create({
-        data: {
-          orderNumber,
-          buyerId: authUser.id,
-          sellerId: post.authorId,
-          postId: post.id,
-          quantity,
-          totalPrice,
-          status: "PROCESSING", // PENDING 대신 바로 PROCESSING으로 시작
-          selectedSeats,
-          phoneNumber,
-          paymentMethod,
-          // Post 정보도 함께 저장
-          ticketTitle: post.title,
-          eventDate: post.eventDate,
-          eventVenue: post.eventVenue,
-          ticketPrice: post.ticketPrice,
-        },
-        include: {
-          post: {
-            select: {
-              title: true,
-              eventName: true,
-            }
-          }
-        }
-      });
-
-      // 게시물 상태 업데이트 - PROCESSING으로 변경하여 더 이상 구매할 수 없게 함
-      await tx.post.update({
-        where: { id: postId },
-        data: { status: "PROCESSING" }
-      });
-      
+    if (updateError) {
+      console.error("게시글 상태 업데이트 오류:", updateError);
+      // 실패해도 구매는 성공했으므로 계속 진행
+    } else {
       console.log(`게시글 ID ${postId}의 상태가 'PROCESSING'으로 업데이트되었습니다.`);
+    }
 
-      // 판매자에게 알림 생성
-      console.log('판매자 알림 생성 시도:', {
-        userId: post.authorId,
-        postId: post.id,
-        message: `${authUser.name || '구매자'}님이 "${post.title || post.eventName || '게시글'}"의 결제를 완료하여 취켓팅이 시작되었습니다. (${quantity}매, ${totalPrice.toString()}원)`,
-        type: "TICKET_REQUEST"
-      });
+    // 판매자에게 알림 생성
+    try {
+      const notificationMessage = `${authUser.name || '구매자'}님이 "${postData.title || postData.event_name || '게시글'}"의 결제를 완료하여 취켓팅이 시작되었습니다. (${quantity}매)`;
+      
+      const notificationData: any = {
+        user_id: authorId,
+        post_id: postId,
+        message: notificationMessage,
+        type: "TICKET_REQUEST",
+        created_at: new Date().toISOString()
+      };
+      
+      const { error: notificationError } = await adminSupabase
+        .from('notifications')
+        .insert(notificationData);
 
-      // 알림 생성
-      await tx.notification.create({
-        data: {
-          userId: post.authorId,
-          postId: post.id,
-          message: `${authUser.name || '구매자'}님이 "${post.title || post.eventName || '게시글'}"의 결제를 완료하여 취켓팅이 시작되었습니다. (${quantity}매, ${totalPrice.toString()}원)`,
-          type: "TICKET_REQUEST"
-        }
-      });
-
-      return { purchase, post };
-    }, {
-      // 트랜잭션 옵션 설정
-      maxWait: 5000, // 최대 대기 시간 (ms)
-      timeout: 10000, // 트랜잭션 타임아웃 (ms)
-    });
+      if (notificationError) {
+        console.error("알림 생성 오류:", notificationError);
+        // 알림 생성 실패는 전체 프로세스에 영향을 주지 않음
+      }
+    } catch (notificationError) {
+      console.error("알림 생성 과정에서 오류 발생:", notificationError);
+      // 오류가 발생해도 계속 진행
+    }
 
     // 구매 정보 응답
     return addCorsHeaders(NextResponse.json({
       success: true,
       message: "구매 신청이 성공적으로 처리되었습니다.",
-      purchase: convertBigIntToString({
-        ...result.purchase,
-        post: result.post
-      })
+      purchase
     }, { status: 201 }));
     
   } catch (error) {
@@ -279,10 +282,5 @@ export async function POST(request: NextRequest) {
       },
       { status: statusCode }
     ));
-  } finally {
-    // prisma가 undefined가 아닌 경우에만 연결 해제
-    if (prisma) {
-      await prisma.$disconnect();
-    }
   }
 } 
