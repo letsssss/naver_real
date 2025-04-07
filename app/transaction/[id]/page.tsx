@@ -221,12 +221,49 @@ export default function TransactionDetail() {
         // 거래 정보 가져오기 (오류 처리 개선)
         console.log(`API 요청 시작: /api/purchase/${id}`);
         try {
+          // 인증 토큰 가져오기
+          let authToken = '';
+          
+          // 클라이언트 사이드에서만 실행
+          if (typeof window !== 'undefined') {
+            try {
+              // 1. Supabase 저장소 키 찾기
+              const supabaseStorageKey = Object.keys(localStorage).find(key => 
+                key.startsWith('sb-') && key.endsWith('-auth-token')
+              );
+              
+              if (supabaseStorageKey) {
+                // Supabase 세션 데이터 파싱
+                const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
+                if (supabaseSession.access_token) {
+                  authToken = supabaseSession.access_token;
+                  console.log("✅ Supabase 세션 토큰 발견");
+                }
+              }
+              
+              // 2. 일반 토큰 저장소 확인 (폴백)
+              if (!authToken) {
+                authToken = localStorage.getItem('token') || 
+                          localStorage.getItem('accessToken') || 
+                          localStorage.getItem('auth_token') || 
+                          localStorage.getItem('supabase_token') || '';
+                
+                if (authToken) console.log("✅ 일반 저장소에서 토큰 발견");
+              }
+            } catch (error) {
+              console.error('인증 토큰 가져오기 실패:', error);
+            }
+          }
+          
+          console.log(`인증 토큰 ${authToken ? '있음' : '없음'}`);
+          
           const response = await fetch(`/api/purchase/${id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
+              'Pragma': 'no-cache',
+              'Authorization': authToken ? `Bearer ${authToken}` : '' // 인증 토큰 추가
             }
           });
           

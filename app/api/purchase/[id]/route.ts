@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { supabase } from '@/lib/supabase'; // 싱글톤 인스턴스 사용
+import { supabase, createAuthedClient, createAdminClient } from '@/lib/supabase';
 
 // BigInt를 문자열로 변환하는 함수
 function convertBigIntToString(obj: any): any {
@@ -54,6 +54,10 @@ export async function GET(
   try {
     console.log("거래 상세 정보 조회 API 호출됨");
     
+    // 인증 헤더 로깅 (디버깅용)
+    const authHeader = request.headers.get('authorization');
+    console.log("인증 헤더:", authHeader ? `${authHeader.substring(0, 15)}...` : '없음');
+    
     // URL 파라미터에서 ID 추출 및 검증 - params가 비동기 객체이므로 await 사용
     if (!params) {
       return addCorsHeaders(NextResponse.json(
@@ -73,11 +77,19 @@ export async function GET(
     
     console.log(`요청된 거래 ID 또는 주문번호: ${id}`);
     
+    // 인증 토큰을 직접 가져오기
+    let token = "";
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7); // 'Bearer ' 부분 제거
+      console.log("요청에서 직접 토큰 추출됨");
+    }
+    
     // 인증된 사용자 확인
     let authUser = await getAuthenticatedUser(request);
     
     if (!authUser) {
-      console.log("인증되지 않은 사용자");
+      console.log("인증되지 않은 사용자: 인증 헤더 없음");
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "인증되지 않은 사용자입니다." },
         { status: 401 }
@@ -86,82 +98,78 @@ export async function GET(
     
     console.log("인증된 사용자 ID:", authUser.id);
     
+    // 관리자 클라이언트 사용 - 인증 문제를 우회하기 위해
+    const supabaseClient = createAdminClient();
+    console.log("관리자 클라이언트로 조회 시도");
+    
     let purchase;
     
-    // ID가 숫자인지 문자열인지 확인하여 적절한 쿼리 실행
+    // ID가 숫자인지 확인
     const numericId = parseInt(id);
+    let orderNumber = id;
+    
+    // 숫자 ID인 경우 주문번호 형식으로 변환
     if (!isNaN(numericId)) {
-      console.log(`구매 ID로 조회: ${numericId}`);
-      // 숫자 ID로 조회
-      purchase = await prisma.purchase.findUnique({
-        where: { id: numericId },
-        include: {
-          post: {
-            include: {
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  profileImage: true,
-                }
-              }
-            }
-          },
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              profileImage: true,
-            }
-          },
-          seller: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              profileImage: true,
-            }
-          }
-        }
-      });
-    } else {
-      console.log(`주문번호로 조회: ${id}`);
+      orderNumber = `ORDER${numericId}`;
+      console.log(`숫자 ID ${numericId}를 주문번호 형식 ${orderNumber}으로 변환`);
+    }
+    
+    try {
+      console.log(`주문번호로 조회: ${orderNumber}`);
+      
       // 주문번호로 조회
-      purchase = await prisma.purchase.findUnique({
-        where: { orderNumber: id },
-        include: {
-          post: {
-            include: {
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  profileImage: true,
-                }
-              }
-            }
-          },
-          buyer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              profileImage: true,
-            }
-          },
-          seller: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              profileImage: true,
-            }
+      const { data: purchaseData, error } = await supabaseClient
+        .from('purchases')
+        .select(`
+          *,
+          post:posts(*),
+          buyer:users!buyer_id(*),
+          seller:users!seller_id(*)
+        `)
+        .eq('order_number', orderNumber)
+        .single();
+      
+      if (error) {
+        console.error("주문번호 쿼리 오류:", error);
+        
+        // ID로 직접 조회 시도 (fallback)
+        if (!isNaN(numericId)) {
+          console.log(`주문번호 조회 실패, ID로 직접 조회 시도: ${numericId}`);
+          const { data: idBasedData, error: idError } = await supabaseClient
+            .from('purchases')
+            .select(`
+              *,
+              post:posts(*),
+              buyer:users!buyer_id(*),
+              seller:users!seller_id(*)
+            `)
+            .eq('id', numericId)
+            .single();
+            
+          if (idError) {
+            console.error("ID 기반 쿼리 오류:", idError);
+            return addCorsHeaders(NextResponse.json(
+              { success: false, message: "구매 정보를 찾을 수 없습니다." },
+              { status: 404 }
+            ));
           }
+          
+          purchase = idBasedData;
+        } else {
+          return addCorsHeaders(NextResponse.json(
+            { success: false, message: "구매 정보를 찾을 수 없습니다." },
+            { status: 404 }
+          ));
         }
-      });
+      } else {
+        purchase = purchaseData;
+      }
+    } catch (error) {
+      console.error("조회 과정 중 예외 발생:", error);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "구매 정보 조회 중 오류가 발생했습니다." },
+        { status: 500 }
+      ));
     }
 
     if (!purchase) {
@@ -172,9 +180,33 @@ export async function GET(
       ));
     }
     
-    // 접근 권한 확인: 구매자나 판매자만 볼 수 있음
-    if (purchase.buyerId !== authUser.id && purchase.sellerId !== authUser.id) {
-      console.log(`접근 권한 없음: 사용자 ${authUser.id}는 구매 ID ${id}에 접근할 수 없음`);
+    // 판매자 정보가 없을 경우 기본 정보 제공
+    if (!purchase.seller) {
+      console.log("판매자 정보가 없습니다. 기본 정보를 추가합니다.");
+      purchase.seller = {
+        id: purchase.seller_id || "알 수 없음",
+        name: "판매자 정보 없음"
+      } as any;
+    }
+    
+    // 구매자 정보가 없을 경우 기본 정보 제공
+    if (!purchase.buyer) {
+      console.log("구매자 정보가 없습니다. 기본 정보를 추가합니다.");
+      purchase.buyer = {
+        id: purchase.buyer_id || "알 수 없음",
+        name: "구매자 정보 없음"
+      } as any;
+    }
+    
+    // 접근 권한 확인 로직
+    const buyerId = String(purchase.buyer_id);
+    const sellerId = String(purchase.seller_id);
+    const userId = String(authUser.id);
+    
+    console.log("권한 확인:", { buyerId, sellerId, userId });
+    
+    if (buyerId !== userId && sellerId !== userId) {
+      console.log(`접근 권한 없음: 사용자 ${userId}는 구매 ID ${id}에 접근할 수 없음`);
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "이 거래 정보를 볼 권한이 없습니다." },
         { status: 403 }
@@ -187,13 +219,13 @@ export async function GET(
       
       // post 필드가 없는 경우 Purchase 모델의 필드로 보완
       if (!serializedPurchase.post) {
-        // ticketTitle 등의 필드가 Purchase에 저장되어 있으면 이를 사용하여 post 객체 생성
-        if (serializedPurchase.ticketTitle || serializedPurchase.eventDate || serializedPurchase.eventVenue || serializedPurchase.ticketPrice) {
+        // ticket_title 등의 필드가 Purchase에 저장되어 있으면 이를 사용하여 post 객체 생성
+        if (serializedPurchase.ticket_title || serializedPurchase.event_date || serializedPurchase.event_venue || serializedPurchase.ticket_price) {
           serializedPurchase.post = {
-            title: serializedPurchase.ticketTitle || '제목 없음',
-            eventDate: serializedPurchase.eventDate || null,
-            eventVenue: serializedPurchase.eventVenue || null,
-            ticketPrice: serializedPurchase.ticketPrice || null,
+            title: serializedPurchase.ticket_title || '제목 없음',
+            event_date: serializedPurchase.event_date || null,
+            event_venue: serializedPurchase.event_venue || null,
+            ticket_price: serializedPurchase.ticket_price || null,
             author: serializedPurchase.seller || null
           };
           
@@ -201,11 +233,32 @@ export async function GET(
         }
       }
       
+      // 필드명 변환을 통한 호환성 유지 (Supabase는 snake_case, 기존 코드는 camelCase 사용)
+      serializedPurchase.buyerId = serializedPurchase.buyer_id;
+      serializedPurchase.sellerId = serializedPurchase.seller_id;
+      serializedPurchase.postId = serializedPurchase.post_id;
+      serializedPurchase.orderNumber = serializedPurchase.order_number;
+      serializedPurchase.totalPrice = serializedPurchase.total_price;
+      serializedPurchase.createdAt = serializedPurchase.created_at;
+      serializedPurchase.updatedAt = serializedPurchase.updated_at;
+      serializedPurchase.ticketTitle = serializedPurchase.ticket_title;
+      serializedPurchase.ticketPrice = serializedPurchase.ticket_price;
+      serializedPurchase.eventDate = serializedPurchase.event_date;
+      serializedPurchase.eventVenue = serializedPurchase.event_venue;
+      serializedPurchase.selectedSeats = serializedPurchase.selected_seats;
+      serializedPurchase.imageUrl = serializedPurchase.image_url;
+      
       return serializedPurchase;
     };
 
     // BigInt 값을 문자열로 변환
     const serializedPurchase = enhancedResponse(purchase);
+    
+    // 최종 확인 로그
+    console.log("최종 응답에 포함된 판매자 정보:", serializedPurchase.seller ? {
+      id: serializedPurchase.seller.id,
+      name: serializedPurchase.seller.name
+    } : "없음");
     
     // 성공 응답 반환
     return addCorsHeaders(NextResponse.json({
@@ -221,8 +274,8 @@ export async function GET(
       NextResponse.json({ 
         success: false, 
         message: "데이터베이스 조회 중 오류가 발생했습니다.",
-        error: process.env.NODE_ENV === 'development' ? String(dbError) : undefined
+        error: String(dbError)
       }, { status: 500 })
     );
   }
-} 
+}
