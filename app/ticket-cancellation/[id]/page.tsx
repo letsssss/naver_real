@@ -68,14 +68,68 @@ export default function TicketCancellationDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isAuthor, setIsAuthor] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [manualAuthorId, setManualAuthorId] = useState<string | null>(null)
 
-  // 마운트 상태 관리
+  // 마운트 상태 관리 및 사용자 ID 저장
   useEffect(() => {
     setMounted(true)
     if (user?.name) {
       setName(user.name)
     }
+    if (user?.id) {
+      setCurrentUserId(user.id.toString())
+      console.log("사용자 ID 저장됨:", user.id.toString())
+    }
   }, [user])
+
+  // 디버깅용 로그 추가
+  useEffect(() => {
+    if (mounted) {
+      console.log("현재 로그인한 사용자 ID:", currentUserId || user?.id);
+      console.log("수동 설정된 작성자 ID:", manualAuthorId);
+      console.log("isAuthor 상태:", isAuthor);
+    }
+  }, [mounted, user, currentUserId, manualAuthorId, isAuthor]);
+
+  // 작성자 여부 확인 로직
+  useEffect(() => {
+    if (!mounted || !currentUserId) return;
+    
+    // 이미 작성자로 확인된 경우 중복 체크 방지
+    if (isAuthor) return;
+    
+    const checkAuthor = async () => {
+      try {
+        // 사용자가 작성한 게시글 목록 조회
+        const response = await fetch(`/api/posts?userId=${currentUserId}`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data && data.posts) {
+            // 현재 게시글이 사용자가 작성한 게시글 목록에 있는지 확인
+            const isCreator = data.posts.some((post: any) => post.id.toString() === id);
+            
+            console.log(`사용자 ${currentUserId}가 게시글 ${id}의 작성자인가?`, isCreator);
+            
+            if (isCreator !== isAuthor) {
+              setIsAuthor(isCreator);
+              if (isCreator) {
+                toast.warning("자신의 게시물은 구매할 수 없습니다.");
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("작성자 확인 중 오류:", error);
+      }
+    };
+    
+    // 사용자 ID와 게시글 ID가 있으면 작성자 확인 수행
+    if (currentUserId && id) {
+      checkAuthor();
+    }
+  }, [currentUserId, id, mounted, isAuthor]);
 
   // 게시글 데이터 불러오기
   useEffect(() => {
@@ -102,23 +156,40 @@ export default function TicketCancellationDetail() {
         }
         
         const postData = data.post;
+        // 게시물 데이터 전체 구조 확인
+        console.log("게시물 상세 데이터:", JSON.stringify(postData, null, 2));
         
-        // 사용자가 게시글 작성자인지 먼저 확인
-        console.log("사용자 ID 확인:", user?.id?.toString());
+        // 작성자 식별 로직 개선
+        // 1. 게시물 ID를 작성자 ID로 사용 (기존 방식)
+        const postId = postData.id.toString();
+        setManualAuthorId(postId);
+        console.log("게시물 ID를 작성자 ID로 사용:", postId);
+        
+        // 2. 작성자 판별을 위한 다양한 필드 확인
+        console.log("사용자 ID 확인:", currentUserId || user?.id?.toString());
         console.log("게시글 작성자 ID 확인:", postData.author?.id?.toString());
         
-        if (user && postData.author) {
-          const userId = user.id.toString();
-          const authorId = postData.author.id.toString();
+        // 추가 확인을 위한 데이터 로깅
+        console.log("게시글 user_id 확인:", postData.user_id);
+        console.log("게시글 userId 확인:", postData.userId);
+        console.log("게시글 authorId 확인:", postData.authorId);
+        
+        // 작성자 판별을 위한 API 추가 호출
+        const creatorResponse = await fetch(`/api/posts?userId=${currentUserId || user?.id}`);
+        if (creatorResponse.ok) {
+          const creatorData = await creatorResponse.json();
+          console.log("사용자가 작성한.게시글 목록:", creatorData);
           
-          console.log("비교 결과:", userId === authorId);
-          
-          if (userId === authorId) {
-            console.log("사용자가 작성자로 확인됨");
-            setIsAuthor(true);
-            toast.warning("자신의 게시물은 구매할 수 없습니다.");
-          } else {
-            setIsAuthor(false);
+          // 현재 게시글이 사용자가 작성한 게시글 목록에 있는지 확인
+          if (creatorData && creatorData.posts) {
+            const isPostCreator = creatorData.posts.some((p: any) => p.id.toString() === id);
+            console.log("이 게시글이 사용자의 게시글인가?", isPostCreator);
+            
+            if (isPostCreator) {
+              setIsAuthor(true);
+              console.log("사용자는 이 게시글의 작성자입니다!");
+              toast.warning("자신의 게시물은 구매할 수 없습니다.");
+            }
           }
         }
         
@@ -246,13 +317,14 @@ export default function TicketCancellationDetail() {
       return
     }
 
-    if (!user) {
+    if (!currentUserId) {
       toast.error("로그인이 필요한 서비스입니다.")
       router.push("/login")
       return
     }
 
-    // 자신의 게시글인지 확인
+    // 자신의 게시글인지 확인 - 추가 안전장치
+    console.log("폼 제출 시 작성자 확인:", isAuthor);
     if (isAuthor) {
       toast.error("자신의 게시글은 구매할 수 없습니다.")
       return
@@ -510,7 +582,8 @@ export default function TicketCancellationDetail() {
 
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">취켓팅 신청하기</h2>
-              {mounted && !user && (
+              {/* 로그인 필요시 안내 */}
+              {mounted && !currentUserId && (
                 <div className="bg-yellow-50 p-4 rounded-lg mb-6">
                   <div className="flex items-start">
                     <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 mt-0.5" />
@@ -524,17 +597,19 @@ export default function TicketCancellationDetail() {
                   </div>
                 </div>
               )}
-              {mounted && user && isAuthor && (
-                <div className="bg-orange-50 p-4 rounded-lg mb-6">
-                  <div className="flex items-start">
-                    <AlertCircle className="h-5 w-5 text-orange-500 mr-2 mt-0.5" />
-                    <div>
-                      <p className="text-orange-700 font-medium">자신의 게시글은 구매할 수 없습니다</p>
-                      <p className="text-sm text-orange-600">본인이 등록한 게시글은 구매 신청이 불가능합니다.</p>
-                    </div>
-                  </div>
-                </div>
+              
+              {/* 작성자인 경우 경고 메시지 (이 부분만 남기고 다른 중복 경고는 제거) */}
+              {mounted && currentUserId && isAuthor && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  <AlertTitle>자신의 게시물은 구매할 수 없습니다</AlertTitle>
+                  <AlertDescription>
+                    본인이 등록한 게시물은 구매 신청이 불가능합니다. 다른 게시물을 선택해주세요.
+                  </AlertDescription>
+                </Alert>
               )}
+              
+              {/* 서비스 안내 - 모든 사용자에게 표시 */}
               <div className="bg-blue-50 p-4 rounded-lg mb-6">
                 <div className="flex items-start">
                   <AlertCircle className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
@@ -547,19 +622,10 @@ export default function TicketCancellationDetail() {
                 </div>
               </div>
 
-              {mounted && user && !isAuthor && (
+              {/* 폼 표시 조건 수정 - 로그인한 사용자이고 작성자가 아닐 때만 */}
+              {mounted && currentUserId && !isAuthor ? (
                 <form onSubmit={handleSubmit}>
                   <div className="space-y-6">
-                    {isAuthor && (
-                      <Alert variant="destructive" className="mb-4">
-                        <AlertCircle className="h-4 w-4 mr-2" />
-                        <AlertTitle>자신의 게시물입니다</AlertTitle>
-                        <AlertDescription>
-                          본인이 등록한 게시물은 구매할 수 없습니다. 다른 게시물을 선택해주세요.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    
                     <div>
                       <label htmlFor="seatSelection" className="block text-sm font-medium text-gray-700 mb-2">
                         좌석 선택
@@ -568,11 +634,16 @@ export default function TicketCancellationDetail() {
                         {ticketData.seatOptions.map((seat) => (
                           <div
                             key={seat.id}
-                            className={`border rounded-md p-3 cursor-pointer transition ${
+                            className={`border rounded-md p-3 ${
                               selectedSeats.includes(seat.id)
                                 ? "border-blue-500 bg-blue-50"
                                 : "border-gray-200 hover:border-gray-300"
-                            } ${isAuthor ? "opacity-50 cursor-not-allowed" : ""}`}
+                            } ${
+                              // isAuthor 조건을 더 명확하게 표시
+                              isAuthor 
+                                ? "opacity-50 cursor-not-allowed" 
+                                : "cursor-pointer transition"
+                            }`}
                             onClick={() => !isAuthor && toggleSeatSelection(seat.id)}
                           >
                             <p className="font-medium">{seat.label}</p>
@@ -661,12 +732,12 @@ export default function TicketCancellationDetail() {
                   <Button 
                     type="submit" 
                     className="w-full bg-[#0061FF] hover:bg-[#0052D6]" 
-                    disabled={isSubmitting || isAuthor}
+                    disabled={isSubmitting}
                   >
-                    {isSubmitting ? "처리 중..." : isAuthor ? "자신의 게시물은 구매할 수 없습니다" : "취켓팅 신청하기"}
+                    {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
                   </Button>
                 </form>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
