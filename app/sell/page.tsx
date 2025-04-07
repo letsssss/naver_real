@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from 'lucide-react'
@@ -68,6 +68,41 @@ export default function SellPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
+
+  useEffect(() => {
+    // 컴포넌트 마운트 시 로그인 상태 확인
+    const checkAuthStatus = async () => {
+      try {
+        // Supabase 프로젝트 ID와 토큰 키
+        const supabaseProjectId = 'jdubrjczdyqqtsppojgu';
+        const tokenKey = `sb-${supabaseProjectId}-auth-token`;
+        
+        // localStorage에서 토큰 데이터 확인
+        const tokenData = localStorage.getItem(tokenKey);
+        
+        if (!tokenData) {
+          // 토큰이 없으면 로그인되지 않은 상태로 간주
+          toast({
+            title: "로그인 필요",
+            description: "티켓을 판매하려면 로그인이 필요합니다.",
+            variant: "destructive",
+            duration: 3000,
+          });
+          
+          // 로그인 페이지로 리다이렉트
+          setTimeout(() => {
+            router.push('/login?callbackUrl=/sell');
+          }, 2000);
+        } else {
+          console.log('로그인 상태 확인됨: 인증 토큰이 존재합니다.');
+        }
+      } catch (error) {
+        console.error("인증 상태 확인 오류:", error);
+      }
+    };
+    
+    checkAuthStatus();
+  }, [router, toast]);
 
   const addSection = () => {
     setSections([...sections, { id: sections.length + 1, name: "", price: "" }])
@@ -218,11 +253,33 @@ export default function SellPage() {
 
       console.log("제출할 판매 데이터:", saleData);
 
+      // Supabase 프로젝트 ID
+      const supabaseProjectId = 'jdubrjczdyqqtsppojgu';
+      const tokenKey = `sb-${supabaseProjectId}-auth-token`;
+      
+      // localStorage에서 토큰을 가져오기
+      let authToken = '';
+      try {
+        const tokenData = localStorage.getItem(tokenKey);
+        if (tokenData) {
+          // JSON 형식으로 저장된 경우 파싱
+          const parsedToken = JSON.parse(tokenData);
+          // access_token 추출
+          authToken = parsedToken.access_token || '';
+          console.log('토큰을 성공적으로 추출했습니다.');
+        } else {
+          console.warn('로컬 스토리지에 토큰이 없습니다.');
+        }
+      } catch (error) {
+        console.error('토큰 파싱 오류:', error);
+      }
+
       // 서버에 판매 데이터 저장 (API 호출)
       const response = await fetch('/api/posts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify(saleData),
       });
