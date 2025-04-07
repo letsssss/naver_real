@@ -139,14 +139,27 @@ export async function verifyToken(token: string): Promise<any> {
     // JWT 서명 키 설정
     const secret = process.env.JWT_SECRET || JWT_SECRET; // 환경변수 없으면 기본값 사용
     
-    // 개발 환경에서는 하드코딩된 값 사용
+    // 개발 환경에서도 JWT 검증 시도
     if (isDevelopment && !secret) {
       console.log('개발 환경에서 기본 JWT_SECRET 사용');
-      return {
-        userId: DEFAULT_TEST_USER_ID,
-        email: 'test@example.com',
-        source: 'dev'
-      };
+      
+      // 개발 환경에서 Supabase 세션 확인
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!error && session && session.user) {
+          console.log('개발 환경: Supabase 세션에서 실제 사용자 ID 사용');
+          return {
+            userId: session.user.id,
+            email: session.user.email,
+            source: 'dev-session'
+          };
+        }
+      } catch (sessionError) {
+        console.error('개발 환경: 세션 확인 오류', sessionError);
+      }
+      
+      // 세션이 없는 경우 인증 실패
+      throw new Error('개발 환경: 로그인된 세션을 찾을 수 없습니다');
     }
     
     // 프로덕션 환경에서만 오류 발생
@@ -477,6 +490,22 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
         }
       } catch (e) {
         console.error('[인증] 토큰 검증 실패:', e instanceof Error ? e.message : e);
+        
+        // 개발 환경에서 토큰 검증 실패 시 세션 확인
+        if (isDev) {
+          try {
+            // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (!error && session && session.user && session.user.id) {
+              const userId = session.user.id;
+              console.log(`[인증] 개발환경: Supabase 세션에서 실제 로그인한 사용자 ID 사용: ${userId.substring(0, 8)}...`);
+              return { userId, authenticated: true, message: '개발 환경 세션 인증' };
+            }
+          } catch (sessionError) {
+            console.error('[인증] 세션 조회 오류:', sessionError);
+          }
+        }
+        
         return { 
           userId: '', 
           authenticated: false, 
@@ -485,18 +514,23 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
       }
     }
     
-    // 개발 환경에서는 기본 사용자 허용
+    // 개발 환경에서는 Supabase 세션으로 인증 시도
     if (isDev) {
-      // UUID 형식의 기본 사용자 ID 사용 (Supabase 호환성)
-      const defaultUserId = '123e4567-e89b-12d3-a456-426614174000';
-      console.log(`[인증] 개발 환경: UUID 형식의 기본 사용자 ID ${defaultUserId.substring(0, 8)}... 사용`);
-      
-      // 개발 환경에서 토큰이 없는 경우 경고 로그 출력
-      if (!token) {
-        console.warn('[인증] 개발 환경: 토큰 없음. 테스트 사용자 ID로 진행합니다.');
+      try {
+        // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!error && session && session.user && session.user.id) {
+          const userId = session.user.id;
+          console.log(`[인증] 개발환경: Supabase 세션에서 사용자 ID 확인: ${userId.substring(0, 8)}...`);
+          return { userId, authenticated: true, message: '개발 환경 세션 인증' };
+        } else {
+          console.warn('[인증] 개발환경: Supabase 세션 없음, 사용자가 로그인되지 않음');
+          return { userId: '', authenticated: false, message: '로그인이 필요합니다' };
+        }
+      } catch (sessionError) {
+        console.error('[인증] 세션 조회 오류:', sessionError);
+        return { userId: '', authenticated: false, message: '세션 확인 오류' };
       }
-      
-      return { userId: defaultUserId, authenticated: true, message: '개발 환경 자동 인증' };
     }
     
     console.warn('[인증] 인증 실패: 토큰 없음 또는 검증 실패');
@@ -504,15 +538,7 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
   } catch (e) {
     console.error('[인증] 검증 과정에서 오류 발생:', e);
     
-    // 개발 환경에서는 기본 사용자 허용
-    if (isDev) {
-      // UUID 형식의 기본 사용자 ID 사용 (Supabase 호환성)
-      const defaultUserId = '123e4567-e89b-12d3-a456-426614174000';
-      console.log(`[인증] 개발 환경: 오류 발생 시 UUID 형식 기본 사용자 ID ${defaultUserId.substring(0, 8)}... 사용`);
-      return { userId: defaultUserId, authenticated: true, message: '개발 환경 자동 인증 (오류 발생)' };
-    }
-    
-    // 오류 메시지 구성
+    // 개발 환경에서도 인증 실패로 처리
     const errorMessage = e instanceof Error ? e.message : '인증 검증 중 알 수 없는 오류 발생';
     return { userId: '', authenticated: false, message: errorMessage };
   }

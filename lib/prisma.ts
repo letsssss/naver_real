@@ -5,6 +5,24 @@
  */
 
 import { supabase } from './supabase';
+import { PrismaClient } from '@prisma/client';
+
+// PrismaClient의 전역 인스턴스 선언
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+// 개발 환경에서 핫 리로딩 시 여러 인스턴스 생성 방지
+export const prisma = global.prisma || new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+});
+
+// 개발 환경에서만 전역 변수에 할당
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}
+
+export default prisma;
 
 // Prisma API를 에뮬레이션하는 래퍼 클래스
 class SupabaseWrapper {
@@ -578,6 +596,6 @@ class SupabaseWrapper {
 }
 
 // 싱글톤 패턴으로 인스턴스 생성
-const prisma = new SupabaseWrapper();
+const prismaWrapper = new SupabaseWrapper();
 
-export { prisma as default, prisma }; 
+export { prismaWrapper as default, prismaWrapper }; 
