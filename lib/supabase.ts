@@ -99,6 +99,11 @@ export function createAdminClient(): SupabaseClient<Database> {
 }
 
 /**
+ * 관리자 권한의 Supabase 클라이언트 인스턴스 (서버에서만 사용)
+ */
+export const adminSupabase = createAdminClient();
+
+/**
  * 현재 클라이언트나 서버 환경에 맞는 Supabase 클라이언트를 반환합니다.
  */
 export function getSupabaseClient(): SupabaseClient<Database> {

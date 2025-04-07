@@ -622,6 +622,14 @@ export default function MyPage() {
       
       console.log("게시물 삭제 요청:", postId, "사용자 ID:", user.id);
       
+      // 현재 실행 중인 포트 확인 및 사용
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+      console.log("현재 접속 URL:", currentUrl);
+      
+      // 현재 호스트 URL 가져오기 (포트 포함)
+      const currentHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+      console.log("현재 호스트:", currentHost);
+      
       // Supabase 세션 토큰 가져오기
       let authToken = '';
       try {
@@ -663,7 +671,8 @@ export default function MyPage() {
       
       // userId를 항상 쿼리 파라미터로 추가 (인증 백업)
       const userId = user.id?.toString() || '';
-      let url = `${API_BASE_URL}/api/posts/${postId}?userId=${userId}`;
+      // 현재 호스트 사용 (포트 불일치 문제 해결)
+      let url = `${currentHost}/api/posts/${postId}?userId=${userId}&t=${Date.now()}`;
       
       console.log("삭제 요청 URL:", url);
       console.log("인증 헤더 포함:", !!headers['Authorization']);
@@ -688,13 +697,42 @@ export default function MyPage() {
         throw new Error(data.message || '게시물 삭제에 실패했습니다.');
       }
       
-      // 성공적으로 삭제된 경우 목록에서 제거
-      setOngoingSales(prev => prev.filter(sale => sale.id !== postId));
-      
       toast.success("게시물이 성공적으로 삭제되었습니다.");
       
-      // 목록 새로고침
-      fetchOngoingSales();
+      // UI에서 제거 (ongoingSales와 originalSales 모두 업데이트)
+      setOngoingSales(prev => prev.filter(sale => sale.id !== postId));
+      setOriginalSales(prev => prev.filter(sale => sale.id !== postId));
+      
+      // 상태 카운트 업데이트 (해당 항목의 상태에 따라)
+      const deletedItem = originalSales.find(sale => sale.id === postId);
+      if (deletedItem) {
+        if (deletedItem.status === "판매중" && deletedItem.isActive) {
+          setSaleStatus(prev => ({
+            ...prev,
+            판매중인상품: Math.max(0, prev.판매중인상품 - 1)
+          }));
+        } else if (deletedItem.status === "취켓팅 진행중") {
+          setSaleStatus(prev => ({
+            ...prev,
+            취켓팅진행중: Math.max(0, prev.취켓팅진행중 - 1)
+          }));
+        } else if (deletedItem.status === "취켓팅 완료") {
+          setSaleStatus(prev => ({
+            ...prev,
+            취켓팅완료: Math.max(0, prev.취켓팅완료 - 1)
+          }));
+        } else if (deletedItem.status === "거래완료") {
+          setSaleStatus(prev => ({
+            ...prev,
+            거래완료: Math.max(0, prev.거래완료 - 1)
+          }));
+        } else if (deletedItem.status === "거래취소") {
+          setSaleStatus(prev => ({
+            ...prev,
+            거래취소: Math.max(0, prev.거래취소 - 1)
+          }));
+        }
+      }
     } catch (error) {
       console.error('게시물 삭제 오류:', error);
       toast.error(error instanceof Error ? error.message : "게시물 삭제 중 오류가 발생했습니다.");
