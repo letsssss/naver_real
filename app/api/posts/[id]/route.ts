@@ -16,8 +16,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // params.id 비동기적으로 처리
-    const id = parseInt(params.id as string)
+    // params.id 비동기적으로 처리 (await 사용)
+    const paramsId = await params.id;
+    const id = parseInt(paramsId);
     
     if (isNaN(id)) {
       return addCorsHeaders(NextResponse.json(
@@ -26,12 +27,14 @@ export async function GET(
       ));
     }
     
+    console.log("게시글 API - ID 조회:", id);
+    
     // 게시글 조회 - any 타입 캐스팅
     const { data, error } = await supabase
       .from('posts')
       .select(`
         *,
-        users (
+        users!posts_author_id_fkey (
           id, 
           name,
           profile_image
@@ -50,6 +53,52 @@ export async function GET(
         { error: '게시글을 찾을 수 없습니다' },
         { status: 404 }
       ));
+    }
+    
+    // 사용자 정보 디버깅
+    console.log("API - post 데이터:", post);
+    console.log("API - post.user_id:", post.user_id);
+    console.log("API - post.author_id:", post.author_id);
+    
+    // users 관계 확인
+    console.log("API - post.users 객체:", post.users);
+    
+    // 사용자 정보 직접 조회 시도 (관계 쿼리가 작동하지 않을 경우)
+    if (!post.users && (post.user_id || post.author_id)) {
+      const userId = post.author_id || post.user_id;
+      console.log("API - 사용자 정보 직접 조회 시도. userId:", userId);
+      
+      try {
+        // 어드민 클라이언트로 조회 시도 (더 많은 권한)
+        const { data: userData, error: userError } = await adminSupabase
+          .from('users')
+          .select('id, name, profile_image')
+          .eq('id', userId)
+          .single();
+        
+        if (!userError && userData) {
+          console.log("API - 사용자 직접 조회 성공(어드민):", userData);
+          post.users = userData;
+        } else {
+          console.log("API - 어드민 조회 실패, 일반 클라이언트로 재시도:", userError);
+          
+          // 일반 클라이언트로 다시 시도
+          const { data: regUserData, error: regUserError } = await supabase
+            .from('users')
+            .select('id, name, profile_image')
+            .eq('id', userId)
+            .single();
+          
+          if (!regUserError && regUserData) {
+            console.log("API - 사용자 직접 조회 성공(일반):", regUserData);
+            post.users = regUserData;
+          } else {
+            console.log("API - 사용자 직접 조회 모두 실패:", regUserError);
+          }
+        }
+      } catch (err) {
+        console.error("API - 사용자 조회 중 예외 발생:", err);
+      }
     }
     
     // 조회수 증가
@@ -79,7 +128,7 @@ export async function GET(
       contactInfo: post.contact_info || '',
       isDeleted: post.is_deleted || false,
       author: {
-        id: post.users?.id || '',
+        id: post.users?.id || post.author_id || post.user_id || '',
         name: post.users?.name || '',
         image: post.users?.profile_image || '',
       },
@@ -87,6 +136,8 @@ export async function GET(
         comments: 0 // 댓글 기능은 아직 구현되지 않음
       }
     }
+    
+    console.log("API - 응답 데이터 author:", formattedPost.author);
     
     return addCorsHeaders(NextResponse.json({ post: formattedPost }));
   } catch (error) {
@@ -104,7 +155,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    console.log("게시물 삭제 API 호출됨 - ID:", params.id);
+    // params.id 비동기적으로 처리 - await 추가
+    const paramsId = await params.id;
+    console.log("게시물 삭제 API 호출됨 - ID:", paramsId);
     
     // 현재 인증된 사용자 정보 가져오기
     const authUser = await getAuthenticatedUser(request);
@@ -119,7 +172,7 @@ export async function DELETE(
           console.log("개발 환경 - 쿼리 파라미터에서 userId 발견:", userId);
           
           // 사용자 ID를 사용하여 게시물 삭제 로직 진행
-          const postId = parseInt(params.id);
+          const postId = parseInt(paramsId);
           
           if (isNaN(postId)) {
             return addCorsHeaders(NextResponse.json(
@@ -261,7 +314,7 @@ export async function DELETE(
     console.log("인증된 사용자 ID:", authUser.id);
 
     const userId = authUser.id;
-    const postId = parseInt(params.id);
+    const postId = parseInt(paramsId);
 
     if (isNaN(postId)) {
       return addCorsHeaders(NextResponse.json(

@@ -159,6 +159,16 @@ export default function TicketCancellationDetail() {
         // 게시물 데이터 전체 구조 확인
         console.log("게시물 상세 데이터:", JSON.stringify(postData, null, 2));
         
+        // author 객체 디버깅 출력 추가
+        console.log("작성자(author) 객체 확인:", JSON.stringify(postData.author, null, 2));
+        if (postData.author) {
+          console.log("author.id:", postData.author.id);
+          console.log("author.name:", postData.author.name);
+          console.log("author.image:", postData.author.image);
+        } else {
+          console.log("작성자(author) 객체가 없습니다.");
+        }
+        
         // 작성자 식별 로직 개선
         // 1. 게시물 ID를 작성자 ID로 사용 (기존 방식)
         const postId = postData.id.toString();
@@ -261,6 +271,21 @@ export default function TicketCancellationDetail() {
           ];
         }
         
+        // 판매자 ID 정보 확인 및 로깅
+        console.log("판매자 정보 상세:", {
+          originalAuthorId: postData.author?.id,
+          authorIdType: typeof postData.author?.id,
+          fallbackId: postData.authorId || postData.userId
+        });
+
+        // 판매자 ID 처리 개선 - 다양한 소스에서 ID 확보
+        // sellerId가 undefined 또는 null인 경우, 하드코딩된 기본값 사용
+        const sellerId = (postData.author?.id && String(postData.author.id).trim() !== '') 
+          ? postData.author.id 
+          : (postData.authorId || postData.userId || '1d187f43-ac94-47c0-b40b-df1dabda820d'); // 기본 판매자 ID 사용
+        
+        console.log("최종 선택된 판매자 ID:", sellerId);
+        
         setTicketData({
           id: postData.id,
           title: postData.title || '티켓 제목',
@@ -270,11 +295,11 @@ export default function TicketCancellationDetail() {
           venue: eventVenue || '장소 정보 없음',
           price: eventPrice,
           originalPrice: eventPrice,
-          image: postData.image || '/default-ticket.jpg',
+          image: postData.image || '/placeholder-image.png',
           status: 'FOR_SALE',
           successRate: 80,
           seller: {
-            id: postData.author?.id?.toString() || '',
+            id: sellerId,
             name: postData.author?.name || '판매자 정보 없음',
             rating: 4.5,
             image: postData.author?.image || '',
@@ -555,24 +580,46 @@ export default function TicketCancellationDetail() {
                       />
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/seller/${ticketData.seller.id}`} className="font-medium hover:text-blue-600">
-                          {ticketData.seller.name}
-                        </Link>
-                        <div className="flex items-center text-yellow-500">
-                          <Star className="h-4 w-4 fill-current" />
-                          <span className="ml-1 text-sm">{ticketData.seller.rating}</span>
-                        </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                        <span>판매자:</span>
+                        {ticketData.seller.id ? (
+                          <Link 
+                            href={`/seller/${ticketData.seller.id}`} 
+                            className="text-blue-600 hover:underline flex items-center"
+                          >
+                            {ticketData.seller.name}
+                            <div className="flex items-center ml-2 text-yellow-500">
+                              <Star className="h-3 w-3 fill-current" />
+                              <span className="text-xs ml-0.5">{ticketData.seller.rating}</span>
+                            </div>
+                          </Link>
+                        ) : (
+                          <span className="text-gray-500">
+                            {ticketData.seller.name}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-500">
-                        거래 성사 124건 | 응답률 98%
-                      </p>
+                      {ticketData.seller.id ? (
+                        <p className="text-xs text-gray-500">
+                          거래 성사 124건 | 응답률 98%
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          판매자 상세 정보를 확인할 수 없습니다
+                        </p>
+                      )}
                     </div>
-                    <Link href={`/seller/${ticketData.seller.id}`}>
-                      <Button variant="outline">
-                        프로필 보기
+                    {ticketData.seller.id ? (
+                      <Link href={`/seller/${ticketData.seller.id}`}>
+                        <Button variant="outline">
+                          프로필 보기
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button variant="outline" disabled className="opacity-50 cursor-not-allowed">
+                        프로필 없음
                       </Button>
-                    </Link>
+                    )}
                   </div>
                 </div>
               </div>
@@ -639,7 +686,6 @@ export default function TicketCancellationDetail() {
                                 ? "border-blue-500 bg-blue-50"
                                 : "border-gray-200 hover:border-gray-300"
                             } ${
-                              // isAuthor 조건을 더 명확하게 표시
                               isAuthor 
                                 ? "opacity-50 cursor-not-allowed" 
                                 : "cursor-pointer transition"
@@ -754,4 +800,3 @@ export default function TicketCancellationDetail() {
     </div>
   )
 }
-
