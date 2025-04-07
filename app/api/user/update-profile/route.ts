@@ -2,9 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { supabase, adminSupabase } from '@/lib/supabase';
+import { createServerSupabaseClient, adminSupabase, getSupabaseClient } from '@/lib/supabase';
 
 // ✅ 유효성 검사 스키마
 const updateProfileSchema = z.object({
@@ -58,7 +57,7 @@ async function getAuthUser(request: NextRequest) {
       
       // 토큰 확인
       const { data: { user: authUser }, error: verifyError } = 
-        await supabase.auth.getUser(token);
+        await getSupabaseClient().auth.getUser(token);
       
       if (!verifyError && authUser) {
         console.log(`✅ 토큰으로 사용자 ID 확인: ${authUser.id}`);
@@ -83,7 +82,7 @@ async function getAuthUser(request: NextRequest) {
         
         try {
           // 서버 컴포넌트에서 인증 상태 확인
-          const { data: sessionData } = await supabase.auth.getSession();
+          const { data: sessionData } = await getSupabaseClient().auth.getSession();
           
           if (sessionData?.session?.user) {
             console.log(`✅ 세션에서 사용자 발견: ${sessionData.session.user.id}`);

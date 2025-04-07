@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseClient } from "@/lib/supabase";
 import { Database } from "@/types/supabase.types";
 
 // 사용자 데이터 타입 정의
@@ -61,6 +61,9 @@ async function getAuthUser(request: NextRequest) {
     console.log("\n===== 판매자 구매 API - 사용자 인증 시작 =====");
     console.log("요청 URL:", request.url);
     
+    // 일관된 Supabase 클라이언트 인스턴스 사용
+    const client = getSupabaseClient();
+    
     // 모든 쿠키 정보 로깅
     console.log("요청에서 받은 모든 쿠키:");
     const allCookies = request.cookies.getAll();
@@ -76,13 +79,13 @@ async function getAuthUser(request: NextRequest) {
       console.log("Authorization 헤더에서 토큰 발견");
       
       try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
+        const { data: { user }, error } = await client.auth.getUser(token);
         
         if (!error && user) {
           console.log("Authorization 헤더의 토큰으로 사용자 인증 성공:", user.id);
           
           // 사용자 정보 가져오기
-          const { data: userData, error: userError } = await supabase
+          const { data: userData, error: userError } = await client
             .from('users')
             .select('*')
             .eq('id', user.id)
@@ -139,7 +142,7 @@ async function getAuthUser(request: NextRequest) {
           console.log("세션 데이터에서 액세스 토큰 발견");
           
           // 세션 객체 생성
-          const { data: { user }, error: sessionError } = await supabase.auth.getUser(
+          const { data: { user }, error: sessionError } = await client.auth.getUser(
             sessionData.access_token
           );
           
@@ -147,7 +150,7 @@ async function getAuthUser(request: NextRequest) {
             console.log("인증된 사용자 ID:", user.id);
             
             // 사용자 정보 가져오기
-            const { data: userData, error: userError } = await supabase
+            const { data: userData, error: userError } = await client
               .from('users')
               .select('*')
               .eq('id', user.id)
@@ -180,13 +183,13 @@ async function getAuthUser(request: NextRequest) {
       
       try {
         const token = accessTokenCookie.value;
-        const { data: { user }, error } = await supabase.auth.getUser(token);
+        const { data: { user }, error } = await client.auth.getUser(token);
         
         if (!error && user) {
           console.log("액세스 토큰 쿠키로 사용자 인증 성공:", user.id);
           
           // 사용자 정보 가져오기
-          const { data: userData, error: userError } = await supabase
+          const { data: userData, error: userError } = await client
             .from('users')
             .select('*')
             .eq('id', user.id)
@@ -221,56 +224,16 @@ async function getAuthUser(request: NextRequest) {
         console.log("쿼리 파라미터에서 유효한 사용자 ID 발견:", userId);
         
         try {
-          // 사용자 정보 가져오기
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', userId)
-            .single();
-          
-          if (userError) {
-            console.error("쿼리 파라미터 userId로 사용자 조회 오류:", userError.message);
-            
-            // 사용자 ID가 있으면 기본 정보로라도 인증 성공 처리 (개발 환경 전용)
-            console.log("개발 환경 - 기본 사용자 정보로 인증 허용");
-            return {
-              id: userId,
-              email: 'dev-user@example.com',
-              name: '개발 테스트 사용자',
-              role: 'USER'
-            };
-          }
-          
-          if (!userData) {
-            console.log("사용자 ID로 사용자를 찾을 수 없음, 기본 정보 사용");
-            return {
-              id: userId,
-              email: 'dev-user@example.com',
-              name: '개발 테스트 사용자',
-              role: 'USER'
-            };
-          }
-          
-          console.log("쿼리 파라미터의 사용자 ID로 인증 성공");
-          
-          // UserData 타입으로 변환
-          const userDataTyped = userData as UserData;
-          
-          return {
-            id: userId,
-            email: userDataTyped.email || 'dev-user@example.com',
-            name: userDataTyped?.name || '개발 테스트 사용자',
-            role: userDataTyped?.role || 'USER'
-          };
-        } catch (dbError) {
-          console.error("데이터베이스 조회 중 오류:", dbError);
-          // 개발 환경에서는 오류가 있어도 기본 사용자 정보 반환
+          // 개발 환경에서는 사용자 ID가 존재하면 바로 인증 성공으로 처리
+          // 데이터베이스 조회 대신 직접 사용자 정보 생성
           return {
             id: userId,
             email: 'dev-user@example.com',
             name: '개발 테스트 사용자',
             role: 'USER'
           };
+        } catch (error) {
+          console.error("개발 환경 인증 처리 중 오류:", error);
         }
       }
     }
@@ -278,14 +241,14 @@ async function getAuthUser(request: NextRequest) {
     // 5. Supabase 세션 직접 확인 (마지막 수단)
     console.log("5. Supabase 직접 세션 확인 시도...");
     try {
-      const { data: { session: supabaseSession } } = await supabase.auth.getSession();
+      const { data: { session: supabaseSession } } = await client.auth.getSession();
       console.log("Supabase 직접 세션 결과:", supabaseSession ? "세션 있음" : "세션 없음");
       
       if (supabaseSession?.user) {
         console.log("Supabase 직접 세션으로 사용자 인증 성공:", supabaseSession.user.id);
         
         // 사용자 정보 가져오기
-        const { data: userData, error: userError } = await supabase
+        const { data: userData, error: userError } = await client
           .from('users')
           .select('*')
           .eq('id', supabaseSession.user.id)
@@ -308,13 +271,10 @@ async function getAuthUser(request: NextRequest) {
       console.error("Supabase 직접 세션 확인 중 오류:", directSessionError);
     }
     
-    console.log("어떤 인증 방식으로도 사용자를 찾을 수 없음");
-    console.log("요청 URL:", request.url);
-    console.log("요청 헤더:", JSON.stringify(Object.fromEntries([...request.headers]), null, 2));
-    console.log("===== 사용자 인증 종료 =====\n");
+    console.log("유효한 인증 정보를 찾을 수 없음");
     return null;
-  } catch (error) {
-    console.error("인증 확인 중 오류:", error);
+  } catch (e) {
+    console.error("사용자 인증 오류:", e);
     return null;
   }
 }

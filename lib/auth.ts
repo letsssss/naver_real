@@ -43,8 +43,8 @@ console.log('JWT_SECRET 길이:', JWT_SECRET.length);
 console.log('JWT_SECRET 출처:', process.env.JWT_SECRET ? '환경 변수' : '하드코딩된 값');
 console.log('=========================');
 
-// 기본 테스트 사용자 ID (개발 환경에서 사용)
-const DEFAULT_TEST_USER_ID = '123e4567-e89b-12d3-a456-426614174000'; // UUID 형식으로 변경
+// 개발 환경에서도 실제 토큰 검증 시도
+// const DEFAULT_TEST_USER_ID = '123e4567-e89b-12d3-a456-426614174000'; // UUID 형식으로 변경 - 주석 처리
 
 // NextAuth 옵션 설정
 export const authOptions: NextAuthOptions = {
@@ -202,37 +202,19 @@ export function verifyAccessToken(token: string) {
   try {
     console.log("JWT 토큰 검증 시도");
     
-    // 개발 환경에서는 항상 성공 처리
-    if (isDevelopment) {
-      console.log(`개발 환경에서 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
-      return { userId: DEFAULT_TEST_USER_ID };
-    }
-    
-    // 프로덕션 환경에서 표준 검증
+    // 개발 환경에서도 실제 토큰 검증 시도
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     console.log("JWT 토큰 검증 성공", decoded);
     return decoded;
   } catch (error) {
     console.error("JWT 토큰 처리 중 오류:", error);
-    
-    // 개발 환경에서는 기본값 사용
-    if (isDevelopment) {
-      console.log(`개발 환경에서는 기본 사용자 ID(${DEFAULT_TEST_USER_ID})로 처리`);
-      return { userId: DEFAULT_TEST_USER_ID };
-    }
-    
+    // 개발 환경에서 토큰 검증에 실패해도 null을 반환하도록 수정
     return null;
   }
 }
 
 // 리프레시 토큰 유효성 검증
 export function verifyRefreshToken(token: string) {
-  // 개발 환경에서는 항상 성공 처리
-  if (isDevelopment) {
-    console.log(`개발 환경에서 리프레시 토큰 검증 건너뛰고 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 반환`);
-    return { userId: DEFAULT_TEST_USER_ID };
-  }
-  
   try {
     return jsonwebtoken.verify(token, JWT_REFRESH_SECRET);
   } catch (error) {
@@ -322,14 +304,9 @@ export async function getAuthenticatedUser(request: NextRequest) {
           };
         }
         
-        // 사용자를 찾을 수 없는 경우 기본 정보 반환
-        console.log("쿼리 파라미터 userId로 사용자를 찾을 수 없어 기본 정보 사용");
-        return {
-          id: userId,
-          name: '개발 사용자',
-          email: 'dev@example.com',
-          role: 'USER'
-        };
+        // 사용자를 찾을 수 없으면 null 반환 (기본 사용자로 폴백하지 않음)
+        console.log("쿼리 파라미터 userId로 사용자를 찾을 수 없음");
+        return null;
       }
     }
     
@@ -421,17 +398,7 @@ export async function getAuthenticatedUser(request: NextRequest) {
       }
     }
     
-    // 5. 개발 환경에서는 기본 테스트 사용자 사용 (마지막 대안)
-    if (isDevelopment) {
-      console.log(`개발 환경 대체: 기본 사용자 ID(${DEFAULT_TEST_USER_ID}) 사용`);
-      return {
-        id: DEFAULT_TEST_USER_ID,
-        name: '개발 테스트 사용자',
-        email: 'test@example.com',
-        role: 'USER'
-      };
-    }
-    
+    // 모든 인증 방법이 실패할 경우 null 반환 (개발 환경에서도 로그인 필요)
     console.log('인증된 사용자를 찾을 수 없음');
     return null;
 
@@ -441,35 +408,13 @@ export async function getAuthenticatedUser(request: NextRequest) {
   }
 }
 
-// 임시 개발용 토큰 생성 함수
-export function generateDevToken(userId: number, name: string = '개발 테스트 사용자'): string {
-  if (!isDevelopment) {
-    console.warn('개발 환경이 아닌 곳에서 개발용 토큰을 생성하려고 합니다. 보안상 위험할 수 있습니다.');
-  }
-  
-  // JWT 토큰 생성
-  try {
-    const token = jsonwebtoken.sign(
-      { userId, name, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 604800 },
-      JWT_SECRET
-    );
-    return token;
-  } catch (error) {
-    console.error('개발용 토큰 생성 실패:', error);
-    // 대체 토큰 방식 (보안에 취약하니 개발용으로만 사용)
-    return `dev-jwt-${userId}-${Date.now()}`;
-  }
-}
-
 /**
  * 요청에서 인증 토큰을 검증하고 사용자 ID를 반환합니다.
  * @param req 요청 객체
  * @returns 검증된 사용자 정보 또는 null
  */
 export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
-  // 개발 환경 감지
-  const isDev = process.env.NODE_ENV === 'development';
-  console.log(`[인증] 요청 검증 시작 - 개발 환경: ${isDev}`);
+  console.log(`[인증] 요청 검증 시작`);
   
   try {
     // 토큰 가져오기
@@ -490,22 +435,6 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
         }
       } catch (e) {
         console.error('[인증] 토큰 검증 실패:', e instanceof Error ? e.message : e);
-        
-        // 개발 환경에서 토큰 검증 실패 시 세션 확인
-        if (isDev) {
-          try {
-            // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (!error && session && session.user && session.user.id) {
-              const userId = session.user.id;
-              console.log(`[인증] 개발환경: Supabase 세션에서 실제 로그인한 사용자 ID 사용: ${userId.substring(0, 8)}...`);
-              return { userId, authenticated: true, message: '개발 환경 세션 인증' };
-            }
-          } catch (sessionError) {
-            console.error('[인증] 세션 조회 오류:', sessionError);
-          }
-        }
-        
         return { 
           userId: '', 
           authenticated: false, 
@@ -514,27 +443,22 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
       }
     }
     
-    // 개발 환경에서는 Supabase 세션으로 인증 시도
-    if (isDev) {
-      try {
-        // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (!error && session && session.user && session.user.id) {
-          const userId = session.user.id;
-          console.log(`[인증] 개발환경: Supabase 세션에서 사용자 ID 확인: ${userId.substring(0, 8)}...`);
-          return { userId, authenticated: true, message: '개발 환경 세션 인증' };
-        } else {
-          console.warn('[인증] 개발환경: Supabase 세션 없음, 사용자가 로그인되지 않음');
-          return { userId: '', authenticated: false, message: '로그인이 필요합니다' };
-        }
-      } catch (sessionError) {
-        console.error('[인증] 세션 조회 오류:', sessionError);
-        return { userId: '', authenticated: false, message: '세션 확인 오류' };
+    // Supabase 세션으로 인증 시도
+    try {
+      // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (!error && session && session.user && session.user.id) {
+        const userId = session.user.id;
+        console.log(`[인증] Supabase 세션에서 사용자 ID 확인: ${userId.substring(0, 8)}...`);
+        return { userId, authenticated: true, message: '세션 인증' };
+      } else {
+        console.warn('[인증] Supabase 세션 없음, 사용자가 로그인되지 않음');
+        return { userId: '', authenticated: false, message: '로그인이 필요합니다' };
       }
+    } catch (sessionError) {
+      console.error('[인증] 세션 조회 오류:', sessionError);
+      return { userId: '', authenticated: false, message: '세션 확인 오류' };
     }
-    
-    console.warn('[인증] 인증 실패: 토큰 없음 또는 검증 실패');
-    return { userId: '', authenticated: false, message: '인증되지 않은 요청' };
   } catch (e) {
     console.error('[인증] 검증 과정에서 오류 발생:', e);
     

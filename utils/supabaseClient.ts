@@ -7,44 +7,67 @@ const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 // 브라우저 환경인지 확인 (디버깅 목적으로만 사용)
 const isBrowser = () => typeof window !== 'undefined';
 
-// 클라이언트를 생성하는 함수 (지연 초기화)
+// 싱글톤 인스턴스 관리를 위한 변수
 let supabaseInstance: SupabaseClient | null = null;
+let initializationAttempted = false; // 초기화 시도 여부 추적
 
+/**
+ * Supabase 클라이언트 인스턴스를 반환하는 함수 (싱글톤 패턴)
+ * 클라이언트가 이미 존재하면 기존 인스턴스를 반환하고, 없으면 새로 생성
+ */
 const getSupabase = (): SupabaseClient | null => {
-  if (!supabaseInstance) {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Supabase URL과 Anon Key가 설정되어 있지 않습니다. 환경 변수를 확인해주세요.');
-      console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '설정됨' : '설정되지 않음');
-      console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '설정됨' : '설정되지 않음');
+  // 이미 인스턴스가 있으면 그대로 반환
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
+  // 이전에 초기화를 시도했지만 실패한 경우 재시도하지 않음
+  if (initializationAttempted) {
+    console.warn('이전 Supabase 클라이언트 초기화 실패, 재시도하지 않음');
+    return null;
+  }
+
+  // 초기화 시도 상태 설정
+  initializationAttempted = true;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Supabase URL과 Anon Key가 설정되어 있지 않습니다.');
+    return null;
+  }
+  
+  try {
+    const env = isBrowser() ? '브라우저' : '서버';
+    console.log(`[Supabase] ${env} 환경에서 클라이언트 초기화 시작`);
+    
+    // 클라이언트 생성 시 옵션 추가하여 초기화
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    });
+    
+    // 초기화 검증
+    if (!supabaseInstance || !supabaseInstance.auth) {
+      console.error('[Supabase] 클라이언트 초기화 실패');
       return null;
     }
     
-    try {
-      console.log('Supabase 클라이언트 초기화 - 환경:', isBrowser() ? '브라우저' : '서버');
-      supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
-      
-      // 초기화 검증
-      if (!supabaseInstance || !supabaseInstance.auth) {
-        console.error('Supabase 클라이언트 초기화에 실패했습니다');
-        return null;
-      }
-      
-      console.log('Supabase 클라이언트 초기화 성공');
-    } catch (error) {
-      console.error('Supabase 클라이언트 초기화 중 오류 발생:', error);
-      return null;
-    }
+    console.log('[Supabase] 클라이언트 초기화 성공');
+    return supabaseInstance;
+  } catch (error) {
+    console.error('[Supabase] 클라이언트 초기화 중 오류 발생:', error);
+    return null;
   }
-  
-  return supabaseInstance;
 };
 
-// 지연 초기화를 위한 프록시
+// 지연 초기화를 위한 프록시 - 메서드 호출 시 자동으로 인스턴스 초기화
 export const supabase = new Proxy({} as SupabaseClient, {
   get: (target, prop: string | symbol) => {
     const client = getSupabase();
     if (!client) {
-      console.error('Supabase 클라이언트를 초기화할 수 없습니다. prop:', String(prop));
+      console.error(`[Supabase] 클라이언트 초기화 실패 (prop: ${String(prop)})`);
       return () => Promise.reject(new Error('Supabase 클라이언트 초기화 실패'));
     }
     

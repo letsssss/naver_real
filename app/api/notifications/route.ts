@@ -4,7 +4,8 @@ import {
   createServerSupabaseClient, 
   createAuthClient, 
   formatUserId, 
-  transformers 
+  transformers,
+  getSupabaseClient
 } from '@/lib/supabase';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 
@@ -87,18 +88,39 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
     
     // 개발 환경에서는 기본 사용자 허용
     if (isDev) {
-      console.log('[인증] 개발 환경 기본 사용자 사용');
-      return { userId: '123e4567-e89b-12d3-a456-426614174000', authenticated: true };
+      console.log('[인증] 개발 환경이지만 유효한 인증 필요');
+      // 쿼리 파라미터에서 userId 확인 (개발용)
+      const url = new URL(req.url);
+      const queryUserId = url.searchParams.get('userId');
+      
+      if (queryUserId && queryUserId.length > 10) {
+        console.log(`[인증] 개발 환경 - 쿼리 파라미터 userId 사용: ${queryUserId}`);
+        return { userId: queryUserId, authenticated: true };
+      }
+      
+      return { userId: '', authenticated: false };
     }
     
     return { userId: '', authenticated: false };
   } catch (e) {
     console.error('[인증] 통합 인증 오류:', e);
     
-    // 개발 환경에서는 기본 사용자 허용
+    // 개발 환경에서도 인증 필요
     if (isDev) {
-      console.log('[인증] 개발 환경 기본 사용자 사용 (오류 복구)');
-      return { userId: '3', authenticated: true };
+      console.log('[인증] 개발 환경이지만 유효한 인증 필요 (오류 복구)');
+      
+      // 쿼리 파라미터에서 userId 확인 (개발용)
+      try {
+        const url = new URL(req.url);
+        const queryUserId = url.searchParams.get('userId');
+        
+        if (queryUserId && queryUserId.length > 10) {
+          console.log(`[인증] 개발 환경 - 쿼리 파라미터 userId 사용: ${queryUserId}`);
+          return { userId: queryUserId, authenticated: true };
+        }
+      } catch (err) {
+        console.error('[인증] URL 파싱 오류:', err);
+      }
     }
     
     return { userId: '', authenticated: false };
@@ -118,8 +140,8 @@ export async function GET(req: Request) {
     }
     
     try {
-      // Supabase 클라이언트 생성
-      const client = createServerSupabaseClient();
+      // Supabase 클라이언트 가져오기 - 싱글톤 패턴 적용
+      const client = getSupabaseClient();
       
       // 페이지네이션 파라미터 처리
       const url = new URL(req.url);
@@ -142,45 +164,6 @@ export async function GET(req: Request) {
       
       if (error) {
         console.error('[알림 API] Supabase 조회 오류:', error);
-        
-        // 개발 환경에서는 오류 상황에서도 모의 데이터 제공
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[알림 API] 개발 환경에서 오류 발생 시 모의 데이터 제공');
-          
-          const mockNotifications = [
-            {
-              id: 1,
-              title: '테스트 알림 1',
-              message: '이것은 개발 환경에서의 첫 번째 테스트 알림입니다.',
-              link: '/mypage',
-              isRead: false,
-              createdAt: new Date().toISOString(),
-              type: 'SYSTEM',
-              formattedDate: '방금 전'
-            },
-            {
-              id: 2,
-              title: '티켓 구매 완료',
-              message: '티켓 구매가 완료되었습니다. 마이페이지에서 확인하세요.',
-              link: '/mypage',
-              isRead: true,
-              createdAt: new Date(Date.now() - 86400000).toISOString(), // 하루 전
-              type: 'PURCHASE_COMPLETE',
-              formattedDate: '1일 전'
-            }
-          ];
-          
-          return createApiResponse({
-            success: true,
-            notifications: mockNotifications,
-            pagination: {
-              totalCount: mockNotifications.length,
-              totalPages: 1,
-              currentPage: page,
-              hasMore: false
-            }
-          });
-        }
         
         return createErrorResponse(
           '알림을 불러오는 중 오류가 발생했습니다.',
@@ -238,35 +221,6 @@ export async function GET(req: Request) {
     } catch (innerError) {
       console.error('[알림 API] 내부 처리 오류:', innerError);
       
-      // 개발 환경일 경우 모의 데이터 제공
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[알림 API] 개발 환경에서 오류 복구 - 모의 데이터 제공');
-        
-        const fallbackNotifications = [
-          {
-            id: 999,
-            title: '오류 복구 알림',
-            message: '서버 오류가 발생했지만 개발 환경에서 복구된 알림입니다.',
-            link: '/mypage',
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            type: 'SYSTEM',
-            formattedDate: '방금 전'
-          }
-        ];
-        
-        return createApiResponse({
-          success: true,
-          notifications: fallbackNotifications,
-          pagination: {
-            totalCount: 1,
-            totalPages: 1,
-            currentPage: 1,
-            hasMore: false
-          }
-        });
-      }
-      
       return createErrorResponse(
         '알림 데이터를 처리하는 중 오류가 발생했습니다.',
         'PROCESSING_ERROR',
@@ -276,35 +230,6 @@ export async function GET(req: Request) {
     }
   } catch (error) {
     console.error('[알림 API] 전역 오류:', error);
-    
-    // 개발 환경에서 오류 복구
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[알림 API] 개발 환경에서 전역 오류 복구');
-      
-      const emergencyNotifications = [
-        {
-          id: 0,
-          title: '긴급 복구 알림',
-          message: '심각한 서버 오류가 발생했지만 개발 환경에서 복구되었습니다.',
-          link: '/mypage',
-          isRead: false,
-          createdAt: new Date().toISOString(),
-          type: 'SYSTEM',
-          formattedDate: '방금 전'
-        }
-      ];
-      
-      return createApiResponse({
-        success: true,
-        notifications: emergencyNotifications,
-        pagination: {
-          totalCount: 1,
-          totalPages: 1,
-          currentPage: 1,
-          hasMore: false
-        }
-      });
-    }
     
     return createErrorResponse(
       '서버에서 오류가 발생했습니다.',

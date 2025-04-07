@@ -212,6 +212,14 @@ export default function MyPage() {
         console.error("판매자 구매 내역 가져오기 실패:", purchaseResponse.status);
         const errorText = await purchaseResponse.text().catch(() => "");
         console.error("오류 응답:", errorText);
+        
+        try {
+          // JSON 응답인 경우 구조적으로 파싱하여 표시
+          const errorJson = JSON.parse(errorText);
+          console.error("오류 응답:", errorJson);
+        } catch (e) {
+          // JSON이 아닌 경우 그냥 텍스트 로깅
+        }
       }
         
       // API 응답을 화면에 표시할 형식으로 변환
@@ -349,7 +357,7 @@ export default function MyPage() {
       
       // 구매 목록 API 호출 (인증 토큰 포함)
       console.log("구매 목록 불러오기 시도... 사용자 ID:", user.id);
-      const response = await fetch(`${API_BASE_URL}/api/purchase`, {
+      const response = await fetch(`${API_BASE_URL}/api/purchase?userId=${user.id}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : '',
@@ -485,7 +493,7 @@ export default function MyPage() {
         ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
         : '';
       
-      const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+      const response = await fetch(`${API_BASE_URL}/api/notifications?userId=${user?.id || ''}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : ''
@@ -583,7 +591,7 @@ export default function MyPage() {
         ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
         : '';
       
-      const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+      const response = await fetch(`${API_BASE_URL}/api/notifications?userId=${user?.id || ''}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -22,18 +22,45 @@ const options = {
   },
 };
 
-// ✅ 싱글톤 Supabase 인스턴스 생성
-const supabase: SupabaseClient<Database> = createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  options
-);
+// ✅ 싱글톤 인스턴스 관리용 변수들
+let supabaseInstance: SupabaseClient<Database> | null = null;
+let adminSupabaseInstance: SupabaseClient<Database> | null = null;
+let initAttempted = false;
 
-// ✅ 디버깅용 로그 (선택사항)
-if (typeof window !== 'undefined') {
-  console.log('✅ Supabase 클라이언트 초기화 완료');
-  console.log('🔗 URL:', SUPABASE_URL);
-}
+// ✅ 싱글톤 Supabase 인스턴스 생성
+const createSupabaseInstance = (): SupabaseClient<Database> => {
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+  
+  if (initAttempted) {
+    console.warn('[Supabase] 이전 초기화 시도가 있었지만 생성되지 않았습니다. 재시도합니다.');
+  }
+  
+  initAttempted = true;
+  
+  try {
+    supabaseInstance = createClient<Database>(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      options
+    );
+    
+    // 디버깅용 로그
+    if (typeof window !== 'undefined') {
+      console.log('✅ Supabase 클라이언트 초기화 완료');
+      console.log('🔗 URL:', SUPABASE_URL.substring(0, 15) + '...');
+    }
+    
+    return supabaseInstance;
+  } catch (error) {
+    console.error('[Supabase] 클라이언트 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 초기 인스턴스 생성
+const supabase = createSupabaseInstance();
 
 /**
  * Next.js 서버 컴포넌트에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
@@ -43,7 +70,17 @@ export const createServerSupabaseClient = () => {
   try {
     // 동적으로 cookies 가져오기
     const { cookies } = require('next/headers');
-    return createServerComponentClient({ cookies });
+    
+    // createServerComponentClient 사용
+    try {
+      // 기본 호출 시도
+      return createServerComponentClient({ cookies });
+    } catch (e) {
+      console.error('기본 서버 컴포넌트 클라이언트 생성 실패:', e);
+      
+      // 대체: 싱글톤 인스턴스 반환
+      return getSupabaseClient();
+    }
   } catch (error) {
     console.error('[Supabase] 서버 컴포넌트 클라이언트 생성 오류:', error);
     // Pages Router에서는 대체 메서드 사용
@@ -58,6 +95,7 @@ export const createServerSupabaseClient = () => {
  */
 export function createLegacyServerClient(): SupabaseClient<Database> {
   console.log('[Supabase] 레거시 서버 클라이언트 생성');
+  // 기존 인스턴스를 재사용하는 대신, 서버용 옵션이 필요한 경우에만 새 인스턴스 생성
   return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: false,
@@ -70,28 +108,32 @@ export function createLegacyServerClient(): SupabaseClient<Database> {
  * 권한 확인을 위한 인증 전용 클라이언트를 생성합니다.
  */
 export function createAuthClient(): SupabaseClient<Database> {
-  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
+  // 새 인스턴스를 생성하지 않고 기존 인스턴스 재사용
+  return getSupabaseClient();
 }
 
 /**
  * 관리자 권한 Supabase 클라이언트를 생성합니다.
  * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
+ * 싱글톤 패턴으로 한 번만 생성됩니다.
  */
 export function createAdminClient(): SupabaseClient<Database> {
+  // 이미 생성된 인스턴스가 있으면 재사용
+  if (adminSupabaseInstance) {
+    return adminSupabaseInstance;
+  }
+  
   console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}...`);
   
   try {
-    return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    // 새 인스턴스 생성 및 저장
+    adminSupabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
       }
     });
+    return adminSupabaseInstance;
   } catch (error) {
     console.error('[Supabase] 관리자 클라이언트 생성 오류:', error);
     throw error;
@@ -100,6 +142,7 @@ export function createAdminClient(): SupabaseClient<Database> {
 
 /**
  * 관리자 권한의 Supabase 클라이언트 인스턴스 (서버에서만 사용)
+ * 싱글톤 패턴으로 생성
  */
 export const adminSupabase = createAdminClient();
 
@@ -107,7 +150,7 @@ export const adminSupabase = createAdminClient();
  * 현재 클라이언트나 서버 환경에 맞는 Supabase 클라이언트를 반환합니다.
  */
 export function getSupabaseClient(): SupabaseClient<Database> {
-  return supabase;
+  return supabase || createSupabaseInstance();
 }
 
 /**

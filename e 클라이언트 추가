@@ -1,0 +1,3 @@
+app/api/posts/[id]/route.ts
+app/mypage/page.tsx
+lib/supabase.ts

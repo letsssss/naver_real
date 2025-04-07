@@ -1,13 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { convertBigIntToString } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { Database } from "@/types/supabase.types";
-import { createClient } from "@supabase/supabase-js";
-
-// 하드코딩된 값으로 설정
-const SUPABASE_URL = 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -34,8 +29,29 @@ export async function GET(request: NextRequest) {
     console.log("구매 목록 API 호출됨");
     
     // 현재 인증된 사용자 정보 가져오기
-    const authUser = await getAuthenticatedUser(request);
+    let authUser = await getAuthenticatedUser(request);
     
+    // 개발 환경에서 userId 쿼리 파라미터를 사용한 인증 처리
+    if (!authUser && process.env.NODE_ENV === 'development') {
+      const { searchParams } = new URL(request.url);
+      const userId = searchParams.get('userId');
+      
+      console.log("개발 환경 - 쿼리 파라미터 userId 확인:", userId);
+      
+      if (userId) {
+        console.log("개발 환경 - 쿼리 파라미터에서 userId 발견:", userId);
+        
+        // 개발 환경에서는 쿼리 파라미터의 userId로 mock 사용자 생성
+        authUser = {
+          id: userId,
+          name: 'Dev User',
+          email: 'dev-user@example.com',
+          role: 'user'
+        };
+      }
+    }
+    
+    // 인증된 사용자가 없으면 401 에러 반환
     if (!authUser) {
       console.log("인증된 사용자를 찾을 수 없음");
       return addCorsHeaders(NextResponse.json(
@@ -56,16 +72,13 @@ export async function GET(request: NextRequest) {
     // 페이지네이션 계산
     const skip = (page - 1) * limit;
 
-    // 디버깅: 환경 출력
-    console.log("NODE_ENV:", process.env.NODE_ENV);
+    // 싱글톤 Supabase 클라이언트 인스턴스 가져오기
+    const supabase = getSupabaseClient();
     console.log("Supabase 클라이언트 있음:", !!supabase);
-    
-    // 타입 문제를 해결하기 위해 any 타입으로 캐스팅된 supabase 클라이언트 생성
-    const supabaseAny = supabase as any;
     
     try {
       // Supabase에서 구매 목록 조회
-      let { data: purchases, error, count } = await supabaseAny
+      let { data: purchases, error, count } = await supabase
         .from('purchases')
         .select(`
           *,

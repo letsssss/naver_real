@@ -117,8 +117,18 @@ export function NotificationDropdown() {
       if (!authToken) {
         authToken = localStorage.getItem('token');
       }
+
+      // 개발 환경에서 사용할 userId 추가
+      const isDev = process.env.NODE_ENV === 'development';
+      const userId = user?.id;
+      const apiUrl = isDev && userId 
+        ? `/api/notifications?userId=${userId}` 
+        : '/api/notifications';
       
-      const response = await fetch('/api/notifications', {
+      console.log('알림 API 호출 URL:', apiUrl);
+      console.log('현재 사용자 ID:', userId);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -193,7 +203,14 @@ export function NotificationDropdown() {
         authToken = localStorage.getItem('token');
       }
       
-      const response = await fetch('/api/notifications', {
+      // 개발 환경에서 사용할 userId 추가
+      const isDev = process.env.NODE_ENV === 'development';
+      const userId = user?.id;
+      const apiUrl = isDev && userId 
+        ? `/api/notifications?userId=${userId}` 
+        : '/api/notifications';
+      
+      const response = await fetch(apiUrl, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -226,7 +243,14 @@ export function NotificationDropdown() {
         authToken = localStorage.getItem('token');
       }
       
-      const response = await fetch('/api/notifications/mark-all-read', {
+      // 개발 환경에서 사용할 userId 추가
+      const isDev = process.env.NODE_ENV === 'development';
+      const userId = user?.id;
+      const apiUrl = isDev && userId 
+        ? `/api/notifications/mark-all-read?userId=${userId}` 
+        : '/api/notifications/mark-all-read';
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
