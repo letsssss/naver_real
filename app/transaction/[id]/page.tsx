@@ -24,6 +24,44 @@ import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { ChatInterface } from "@/components/ChatInterface"
 import { useChat } from "@/hooks/useChat"
 
+// 인증 토큰을 가져오는 공통 함수
+const getAuthToken = (): string => {
+  // 브라우저 환경이 아니면 빈 문자열 반환
+  if (typeof window === 'undefined') return '';
+  
+  let authToken = '';
+  
+  try {
+    // 1. Supabase 저장소 키 찾기
+    const supabaseStorageKey = Object.keys(localStorage).find(key => 
+      key.startsWith('sb-') && key.endsWith('-auth-token')
+    );
+    
+    if (supabaseStorageKey) {
+      // Supabase 세션 데이터 파싱
+      const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
+      if (supabaseSession.access_token) {
+        authToken = supabaseSession.access_token;
+        console.log("✅ Supabase 세션 토큰 발견");
+      }
+    }
+    
+    // 2. 일반 토큰 저장소 확인 (폴백)
+    if (!authToken) {
+      authToken = localStorage.getItem('token') || 
+                localStorage.getItem('accessToken') || 
+                localStorage.getItem('auth_token') || 
+                localStorage.getItem('supabase_token') || '';
+      
+      if (authToken) console.log("✅ 일반 저장소에서 토큰 발견");
+    }
+  } catch (error) {
+    console.error('인증 토큰 가져오기 실패:', error);
+  }
+  
+  return authToken;
+};
+
 // 거래 및 단계 관련 타입 정의
 interface StepDates {
   payment: string;
@@ -202,6 +240,22 @@ export default function TransactionDetail() {
       try {
         setIsLoading(true);
         
+        // 토큰 갱신을 위해 Supabase 세션 업데이트
+        try {
+          console.log("Supabase 세션 갱신 중...");
+          // 동적으로 Supabase 클라이언트 임포트
+          const { supabase } = await import("@/lib/supabase");
+          
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error) {
+            console.error("세션 가져오기 오류:", error.message);
+          } else {
+            console.log("Supabase 세션 갱신 성공:", session ? "세션 있음" : "세션 없음");
+          }
+        } catch (sessionError) {
+          console.error("Supabase 세션 갱신 실패:", sessionError);
+        }
+        
         // 거래 ID 가져오기 (useParams 사용)
         const id = params?.id as string; 
         
@@ -221,41 +275,11 @@ export default function TransactionDetail() {
         // 거래 정보 가져오기 (오류 처리 개선)
         console.log(`API 요청 시작: /api/purchase/${id}`);
         try {
-          // 인증 토큰 가져오기
-          let authToken = '';
-          
-          // 클라이언트 사이드에서만 실행
-          if (typeof window !== 'undefined') {
-            try {
-              // 1. Supabase 저장소 키 찾기
-              const supabaseStorageKey = Object.keys(localStorage).find(key => 
-                key.startsWith('sb-') && key.endsWith('-auth-token')
-              );
-              
-              if (supabaseStorageKey) {
-                // Supabase 세션 데이터 파싱
-                const supabaseSession = JSON.parse(localStorage.getItem(supabaseStorageKey) || '{}');
-                if (supabaseSession.access_token) {
-                  authToken = supabaseSession.access_token;
-                  console.log("✅ Supabase 세션 토큰 발견");
-                }
-              }
-              
-              // 2. 일반 토큰 저장소 확인 (폴백)
-              if (!authToken) {
-                authToken = localStorage.getItem('token') || 
-                          localStorage.getItem('accessToken') || 
-                          localStorage.getItem('auth_token') || 
-                          localStorage.getItem('supabase_token') || '';
-                
-                if (authToken) console.log("✅ 일반 저장소에서 토큰 발견");
-              }
-            } catch (error) {
-              console.error('인증 토큰 가져오기 실패:', error);
-            }
-          }
+          // 갱신된 세션에서 인증 토큰 가져오기
+          const authToken = getAuthToken();
           
           console.log(`인증 토큰 ${authToken ? '있음' : '없음'}`);
+          console.log("최종 Authorization 헤더:", authToken ? `Bearer ${authToken.substring(0, 15)}...` : '(없음)');
           
           const response = await fetch(`/api/purchase/${id}`, {
             method: 'GET',
@@ -532,12 +556,16 @@ export default function TransactionDetail() {
       setIsSubmitting(true);
       console.log(`상태 변경 요청: ${newStatus}, 거래 ID: ${params.id}`);
       
+      // 인증 토큰 가져오기
+      const authToken = getAuthToken();
+      
       // API 호출
       const response = await fetch(`/api/purchase/${params.id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Authorization': authToken ? `Bearer ${authToken}` : '' // 인증 토큰 추가
         },
         body: JSON.stringify({ status: newStatus }),
       });
@@ -718,12 +746,16 @@ export default function TransactionDetail() {
       setIsSubmitting(true);
       console.log(`구매 확정 요청 알림 전송: 거래 ID: ${params.id}`);
       
+      // 인증 토큰 가져오기
+      const authToken = getAuthToken();
+      
       // API 호출 (알림만 보냄)
       const response = await fetch(`/api/purchase/${params.id}/confirmation-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Authorization': authToken ? `Bearer ${authToken}` : '' // 인증 토큰 추가
         }
       });
       

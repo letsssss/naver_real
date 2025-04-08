@@ -46,6 +46,12 @@ export async function OPTIONS() {
   return addCorsHeaders(new NextResponse(null, { status: 200 }));
 }
 
+// 정규화된 문자열 ID로 변환하는 함수
+function normalizeId(id: any): string {
+  if (id === null || id === undefined) return '';
+  return String(id).trim();
+}
+
 // GET 요청 처리 함수
 export async function GET(
   request: NextRequest,
@@ -81,7 +87,7 @@ export async function GET(
     let token = "";
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7); // 'Bearer ' 부분 제거
+      token = authHeader.substring(7).trim(); // 'Bearer ' 부분 제거 및 공백 제거
       console.log("요청에서 직접 토큰 추출됨");
     }
     
@@ -98,9 +104,12 @@ export async function GET(
     
     console.log("인증된 사용자 ID:", authUser.id);
     
-    // 관리자 클라이언트 사용 - 인증 문제를 우회하기 위해
-    const supabaseClient = createAdminClient();
-    console.log("관리자 클라이언트로 조회 시도");
+    // 토큰이 있으면 인증된 클라이언트 사용, 없으면 관리자 클라이언트 사용
+    const supabaseClient = token 
+      ? createAuthedClient(token) 
+      : createAdminClient();
+    
+    console.log(token ? "인증된 클라이언트로 조회 시도" : "관리자 클라이언트로 조회 시도");
     
     let purchase;
     
@@ -198,15 +207,25 @@ export async function GET(
       } as any;
     }
     
-    // 접근 권한 확인 로직
-    const buyerId = String(purchase.buyer_id);
-    const sellerId = String(purchase.seller_id);
-    const userId = String(authUser.id);
+    // 접근 권한 확인 로직 개선 - 문자열로 정규화하여 비교
+    const buyerId = normalizeId(purchase.buyer_id);
+    const sellerId = normalizeId(purchase.seller_id);
+    const userId = normalizeId(authUser.id);
     
-    console.log("권한 확인:", { buyerId, sellerId, userId });
+    // 디버깅을 위해 ID 값과 타입 모두 로깅
+    console.log("권한 확인:", { 
+      buyerId, 
+      sellerId, 
+      userId,
+      buyerIdType: typeof purchase.buyer_id,
+      sellerIdType: typeof purchase.seller_id,
+      userIdType: typeof authUser.id
+    });
     
+    // ID 비교 시 정규화된 문자열 사용
     if (buyerId !== userId && sellerId !== userId) {
       console.log(`접근 권한 없음: 사용자 ${userId}는 구매 ID ${id}에 접근할 수 없음`);
+      console.log(`구매자 ID: ${buyerId}, 판매자 ID: ${sellerId}, 사용자 ID: ${userId}`);
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "이 거래 정보를 볼 권한이 없습니다." },
         { status: 403 }

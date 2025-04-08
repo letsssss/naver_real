@@ -8,6 +8,10 @@ import supabase from '@/lib/supabase';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
+// @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
+import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { Database } from '@/types/supabase.types';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -271,155 +275,42 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
   return cookies['accessToken'] || cookies['sb-access-token'] || null;
 }
 
-/**
- * 요청에서 인증된 사용자 정보를 가져오는 함수 (Supabase 버전)
- * @param request Next.js 요청 객체
- * @returns 인증된 사용자 객체 또는 null
- */
+// 디버그용 로그는 주석 처리
+// console.log('===== Supabase 인증 헬퍼 디버깅 =====');
+// console.log('@supabase/auth-helpers-nextjs에서 사용 가능한 내보내기:', Object.keys(require('@supabase/auth-helpers-nextjs')));
+// console.log('cookies 타입:', typeof cookies, cookies);
+// console.log('==================================');
+
+// 기존 getAuthenticatedUser 함수를 새로운 버전으로 교체
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
-    // 1. 먼저 쿼리 파라미터로 전달된 userId 확인 (개발 환경용 백업 방식)
-    if (process.env.NODE_ENV === 'development') {
-      const userId = request.nextUrl.searchParams.get('userId');
-      console.log("개발 환경 - 쿼리 파라미터 userId 확인:", userId);
-      
-      if (userId) {
-        console.log("개발 환경 - 쿼리 파라미터에서 userId 발견:", userId);
-        
-        // Supabase에서 사용자 정보 조회
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        
-        if (!userError && userData) {
-          console.log("쿼리 파라미터 userId로 사용자 조회 성공");
-          const user = userData as any; // 타입 캐스팅
-          return {
-            id: userId,
-            name: user.name || '개발 사용자',
-            email: user.email || 'dev@example.com',
-            role: user.role || 'USER',
-            token: '' // 개발 환경에서는 토큰 없음
-          };
-        }
-        
-        // 사용자를 찾을 수 없으면 null 반환 (기본 사용자로 폴백하지 않음)
-        console.log("쿼리 파라미터 userId로 사용자를 찾을 수 없음");
-        return null;
-      }
-    }
-    
-    // 2. JWT 토큰 확인 (쿠키 또는 헤더에서)
+    // 1. 요청에서 직접 토큰 추출
     const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
     
-    if (token) {
-      // JWT 토큰 검증
-      const decoded = await verifyToken(token);
-      if (decoded && decoded.userId) {
-        // Supabase에서 사용자 정보 조회
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('id, name, email, role')
-          .eq('id', decoded.userId)
-          .single();
-        
-        if (userData && !error) {
-          console.log('JWT 토큰으로 인증된 사용자:', userData);
-          const user = userData as any; // 타입 캐스팅
-          return {
-            id: user.id,
-            name: user.name || '',
-            email: user.email || '',
-            role: user.role || 'USER',
-            token  // ✅ 토큰 추가
-          };
-        }
-      }
+    if (!token) {
+      console.log("❌ 인증 토큰을 찾을 수 없습니다");
+      return null;
     }
     
-    // 3. Supabase 세션 직접 확인
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (!error && session) {
-        const userId = session.user.id;
-        console.log("Supabase 세션에서 인증된 사용자 ID:", userId);
-        
-        // 세션 액세스 토큰 확인
-        const sessionToken = session.access_token || '';
-        
-        // Supabase에서 사용자 정보 조회
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('id, name, email, role')
-          .eq('id', userId)
-          .single();
-        
-        if (!userError && userData) {
-          console.log("Supabase 세션으로 사용자 조회 성공");
-          const user = userData as any; // 타입 캐스팅
-          return {
-            id: userId,
-            name: user.name || '사용자',
-            email: user.email || '',
-            role: user.role || 'USER',
-            token: sessionToken // ✅ 세션 토큰 추가
-          };
-        }
-        
-        // 사용자 테이블에 없지만 인증은 된 경우
-        return {
-          id: userId,
-          name: session.user.user_metadata?.name || '사용자',
-          email: session.user.email || '',
-          role: session.user.user_metadata?.role || 'USER',
-          token: sessionToken // ✅ 세션 토큰 추가
-        };
-      }
-    } catch (sessionError) {
-      console.error("Supabase 세션 확인 오류:", sessionError);
+    // 2. 기존 Supabase 클라이언트에 토큰 직접 전달
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error) {
+      console.error("❌ 사용자 인증 실패:", error.message);
+      return null;
     }
     
-    // 4. JWT 인증 실패 시 NextAuth 세션 확인
-    const session = await getServerSession(authOptions);
-    
-    if (session?.user?.email) {
-      // Supabase에서 사용자 정보 조회
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('id, name, email, role')
-        .eq('email', session.user.email.toLowerCase())
-        .single();
-      
-      if (userData && !error) {
-        console.log('NextAuth 세션에서 인증된 사용자:', userData);
-        const user = userData as any; // 타입 캐스팅
-        return {
-          id: user.id,
-          name: user.name || '',
-          email: user.email || '',
-          role: user.role || 'USER',
-          token: token || '' // ✅ 토큰 추가 (없을 경우 빈 문자열)
-        };
-      }
-    }
-    
-    // 모든 인증 방법이 실패할 경우 null 반환 (개발 환경에서도 로그인 필요)
-    console.log('인증된 사용자를 찾을 수 없음');
-    return null;
-
+    return user;
   } catch (error) {
-    console.error('사용자 인증 정보 가져오기 중 오류:', error);
+    console.error("❌ 인증 처리 중 오류 발생:", error);
     return null;
   }
 }
 
 /**
- * 요청에서 인증 토큰을 검증하고 사용자 ID를 반환합니다.
- * @param req 요청 객체
- * @returns 검증된 사용자 정보 또는 null
+ * 요청에서 인증된 사용자 정보를 가져오는 함수 (Supabase 버전)
+ * @param request Next.js 요청 객체
+ * @returns 인증된 사용자 객체 또는 null
  */
 export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
   console.log(`[인증] 요청 검증 시작`);

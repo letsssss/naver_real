@@ -410,6 +410,22 @@ export default function MyPage() {
     try {
       console.log("📣 fetchOngoingPurchases 호출됨, 사용자 ID:", user.id);
       
+      // Supabase 세션 갱신 먼저 시도
+      try {
+        console.log("Supabase 세션 갱신 중...");
+        // 동적으로 Supabase 클라이언트 임포트
+        const { supabase } = await import("@/lib/supabase");
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("세션 가져오기 오류:", error.message);
+        } else {
+          console.log("Supabase 세션 갱신 성공:", session ? "세션 있음" : "세션 없음");
+        }
+      } catch (sessionError) {
+        console.error("Supabase 세션 갱신 실패:", sessionError);
+      }
+      
       // Supabase 저장소 키 찾기 (디버깅용)
       let authToken = '';
       const authTokenSources = [];
