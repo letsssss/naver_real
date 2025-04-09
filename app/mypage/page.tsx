@@ -594,8 +594,7 @@ export default function MyPage() {
           
           if (adminData.success && adminData.purchases && adminData.purchases.length > 0) {
             console.log(`어드민 API에서 ${adminData.purchases.length}개의 구매 내역 발견`);
-            processPurchaseData(adminData.purchases);
-            return;
+            purchasesArray = adminData.purchases;
           } else {
             console.log("어드민 API에서도 구매 내역을 찾지 못함");
             setOngoingPurchases([]);
@@ -609,6 +608,62 @@ export default function MyPage() {
       }
       
       console.log(`API에서 ${purchasesArray.length}개의 구매 내역 불러옴:`, purchasesArray);
+      
+      // 누락된 post 정보 가져오기
+      const postIds = purchasesArray
+        .filter((p: any) => p.post_id)
+        .map((p: any) => p.post_id);
+      
+      console.log("게시물 ID 목록:", postIds);
+      
+      if (postIds.length > 0) {
+        try {
+          // 게시물 정보 가져오기
+          const postsMap: Record<string | number, any> = {};
+          
+          // 각 게시물 정보 가져오기
+          for (const postId of postIds) {
+            try {
+              console.log(`게시물 ID ${postId} 정보 가져오기 시도...`);
+              const postResponse = await fetch(`${API_BASE_URL}/api/posts/${postId}?t=${timestamp}`, {
+                method: 'GET',
+                headers,
+                credentials: 'include'
+              });
+              
+              if (postResponse.ok) {
+                const postData = await postResponse.json();
+                if (postData && postData.post) {
+                  console.log(`✅ 게시물 ID ${postId} 정보 가져오기 성공:`, postData.post);
+                  postsMap[postId] = postData.post;
+                }
+              } else {
+                console.error(`❌ 게시물 ID ${postId} 정보 가져오기 실패:`, postResponse.status);
+              }
+            } catch (error) {
+              console.error(`❌ 게시물 ID ${postId} 정보 가져오기 오류:`, error);
+            }
+          }
+          
+          // 구매 항목에 post 정보 연결
+          if (Object.keys(postsMap).length > 0) {
+            console.log("게시물 정보 매핑:", postsMap);
+            purchasesArray = purchasesArray.map(purchase => {
+              const postId = purchase.post_id;
+              if (postId && postsMap[postId]) {
+                return {
+                  ...purchase,
+                  post: postsMap[postId]
+                };
+              }
+              return purchase;
+            });
+            console.log("게시물 정보가 연결된 구매 데이터:", purchasesArray);
+          }
+        } catch (postError) {
+          console.error("게시물 정보 가져오기 오류:", postError);
+        }
+      }
       
       // 구매 내역 처리
       processPurchaseData(purchasesArray);
@@ -662,18 +717,67 @@ export default function MyPage() {
       // 게시물 데이터 안전하게 접근
       const post = purchase.post || {};
       const seller = purchase.seller || {};
-      const title = post.title || purchase.ticket_title || post.event_name || '제목 없음';
+      
+      // 제목 정보를 다양한 소스에서 찾기
+      let title = '제목 없음';
+      
+      // 1. API에서 가져온 post 객체에서 찾기
+      if (post) {
+        if (post.title) {
+          title = post.title;
+          console.log(`[제목] post.title에서 찾음: ${title}`);
+        } else if (post.eventName || post.event_name) {
+          title = post.eventName || post.event_name;
+          console.log(`[제목] post.eventName에서 찾음: ${title}`);
+        }
+      }
+      
+      // 2. purchase 객체 자체에서 찾기
+      if (title === '제목 없음') {
+        if (purchase.ticket_title) {
+          title = purchase.ticket_title;
+          console.log(`[제목] purchase.ticket_title에서 찾음: ${title}`);
+        } else if (purchase.ticketTitle) {
+          title = purchase.ticketTitle;
+          console.log(`[제목] purchase.ticketTitle에서 찾음: ${title}`);
+        } else if (purchase.event_name) {
+          title = purchase.event_name;
+          console.log(`[제목] purchase.event_name에서 찾음: ${title}`);
+        } else if (purchase.eventName) {
+          title = purchase.eventName;
+          console.log(`[제목] purchase.eventName에서 찾음: ${title}`);
+        }
+      }
+      
+      console.log(`구매 항목 최종 제목: "${title}"`);
+      
+      // 디버깅: 제목 정보 로깅
+      console.log(`구매 항목 제목 결정 과정:`, {
+        'post.title': post.title,
+        'post.eventName': post.eventName,
+        'post.event_name': post.event_name,
+        'purchase.ticket_title': purchase.ticket_title,
+        'purchase.ticketTitle': purchase.ticketTitle,
+        'purchase.event_name': purchase.event_name,
+        'purchase.eventName': purchase.eventName,
+        '최종 선택 제목': title
+      });
       
       const formattedPurchase = {
         id: purchase.id,
-        order_number: purchase.order_number,
+        order_number: purchase.order_number || purchase.orderNumber,
+        orderNumber: purchase.order_number || purchase.orderNumber,
         postId: purchase.post_id || purchase.postId,
-        title,
+        title: title,
+        // 원본 데이터도 보존
+        ticketTitle: purchase.ticket_title || purchase.ticketTitle,
+        eventName: purchase.event_name || post.event_name || post.eventName,
+        post: post,
         status: purchaseStatus,
         seller: seller.name || '판매자 정보 없음',
         sellerId: purchase.seller_id || seller.id,
         quantity: purchase.quantity || 1,
-        price: purchase.total_price || post.ticket_price || 0,
+        price: purchase.total_price || post.ticket_price || post.ticketPrice || 0,
         createdAt: purchase.created_at || new Date().toISOString(),
         updatedAt: purchase.updated_at || purchase.created_at || new Date().toISOString(),
       };
@@ -1240,10 +1344,20 @@ export default function MyPage() {
                 ) : (
                   ongoingPurchases.map((item) => (
                     <div key={item.id} className="border-b py-4 last:border-b-0">
-                      <h3 className="font-medium">{item.title}</h3>
+                      <h3 className="font-medium">
+                        {item.title !== '제목 없음' 
+                          ? item.title 
+                          : (item.post && item.post.title) 
+                            || (item.post && (item.post.eventName || item.post.event_name))
+                            || item.ticketTitle 
+                            || item.eventName 
+                            || '제목 없음'}
+                      </h3>
                       <p className="text-sm text-gray-600">{item.date}</p>
                       <p className="text-sm font-semibold">
-                        {item.price}
+                        {typeof item.price === 'number' 
+                          ? item.price.toLocaleString() + '원'
+                          : item.price}
                       </p>
                       <p className="text-sm text-blue-600">{item.status}</p>
                       <div className="flex mt-2 gap-2">
