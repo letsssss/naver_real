@@ -85,7 +85,7 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
   // 마지막 메시지 ID를 저장하는 상태 추가
   const [lastMessageId, setLastMessageId] = useState<string | null>(null);
   // 폴링 간격을 저장하는 ref (ms 단위)
-  const pollingIntervalRef = useRef<number>(30000); // 30초 유지
+  const pollingIntervalRef = useRef<number>(60000); // 30초에서 60초로 증가
   // 폴링 타이머 ID를 저장하는 ref
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
   // 활성 폴링 여부를 저장하는 ref
@@ -95,6 +95,10 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
   const isRequestInProgressRef = useRef<boolean>(false);
   const lastRequestTimeRef = useRef<number>(0);
   const requestLimitTimeRef = useRef<number>(5000); // 요청 빈도 제한 (5초)
+  
+  // 인증 오류 카운터 추가
+  const authErrorCountRef = useRef<number>(0);
+  const maxAuthErrorsBeforeStop = 1; // 3번에서 1번으로 변경 - 첫 번째 인증 오류 발생 시 바로 중지
   
   // 사용자 타이핑 상태 추적 개선
   const isUserTypingRef = useRef<boolean>(false);
@@ -407,7 +411,13 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
   }, []);
 
   // 메시지 목록 가져오기 함수를 먼저 선언 (순환 참조 문제 해결)
-  const fetchMessages = useCallback(async (options: { force?: boolean, forceScrollToBottom?: boolean, smoothScroll?: boolean, silent?: boolean } = {}): Promise<boolean> => {
+  const fetchMessages = useCallback(async (options: {
+    force?: boolean;
+    forceScrollToBottom?: boolean;
+    smoothScroll?: boolean;
+    silent?: boolean;
+    isTyping?: boolean;
+  } = {}): Promise<boolean> => {
     const { force = false, forceScrollToBottom = false, smoothScroll = false, silent = false } = options;
     
     // 강제 요청이 아닌 경우 타이핑 차단 확인
@@ -486,6 +496,24 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
         }
       });
       
+      // 인증 오류 처리 추가
+      if (response.status === 401) {
+        authErrorCountRef.current += 1;
+        console.warn(`[useChat] 인증 오류 발생 - 폴링을 완전히 중지합니다.`);
+        
+        // 첫 번째 인증 오류 발생 시 즉시 폴링 중지
+        if (pollingTimerRef.current) {
+          console.log('[useChat] 인증 오류로 인해 폴링 타이머를 즉시 제거합니다.');
+          clearInterval(pollingTimerRef.current);
+          pollingTimerRef.current = null;
+        }
+        
+        throw new Error('인증 오류로 폴링 중지');
+      }
+      
+      // 성공 시 인증 오류 카운터 초기화
+      authErrorCountRef.current = 0;
+      
       if (!response.ok) {
         throw new Error(`메시지 가져오기 실패: ${response.status} ${response.statusText}`);
       }
@@ -496,6 +524,9 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
         messagesCount: data.messages?.length || 0,
         hasRoom: !!data.room
       });
+      
+      // API 응답 전체 구조 로깅 추가
+      console.log('[useChat] API 응답 전체 구조:', Object.keys(data));
       
       // 추가 정보 설정 - 룸 ID 설정을 메시지 처리보다 먼저 수행
       if (data.room) {
@@ -562,16 +593,57 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
         }
       }
       
+      // 거래 정보 로깅 및 설정
       if (data.transaction) {
+        console.log('[useChat] 거래 정보 설정:', {
+          id: data.transaction.id,
+          status: data.transaction.status,
+          hasSellerInfo: !!data.transaction.seller,
+          hasBuyerInfo: !!data.transaction.buyer,
+          sellerType: data.transaction.seller ? (Array.isArray(data.transaction.seller) ? 'array' : 'object') : 'none',
+          buyerType: data.transaction.buyer ? (Array.isArray(data.transaction.buyer) ? 'array' : 'object') : 'none'
+        });
+        
+        // 판매자/구매자 정보 상세 로깅
+        if (data.transaction.seller) {
+          console.log('[useChat] 판매자 정보:', 
+            Array.isArray(data.transaction.seller) 
+              ? data.transaction.seller[0] 
+              : data.transaction.seller
+          );
+        } else {
+          console.log('[useChat] 판매자 정보 없음');
+        }
+        
+        if (data.transaction.buyer) {
+          console.log('[useChat] 구매자 정보:', 
+            Array.isArray(data.transaction.buyer) 
+              ? data.transaction.buyer[0] 
+              : data.transaction.buyer
+          );
+        } else {
+          console.log('[useChat] 구매자 정보 없음');
+        }
+        
         setTransactionInfo(data.transaction);
+      } else {
+        console.log('[useChat] 거래 정보 없음');
       }
+      
+      // 상대방 사용자 정보 로깅 및 설정
       if (data.otherUser) {
+        console.log('[useChat] 상대방 사용자 정보 설정:', data.otherUser);
         setOtherUserInfo(data.otherUser);
+      } else {
+        console.log('[useChat] 상대방 사용자 정보 없음');
       }
+      
       if (data.conversations) {
+        console.log('[useChat] 대화 목록 설정:', data.conversations.length + '개 항목');
         setConversations(data.conversations);
       }
       if (data.hasMore !== undefined) {
+        console.log('[useChat] hasMore 설정:', data.hasMore);
         setHasMore(data.hasMore);
       }
       
@@ -617,6 +689,12 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
       return;
     }
     
+    // 인증 오류 카운터가 한계 이상이면 폴링 시작 불가
+    if (authErrorCountRef.current > 0) {
+      console.log('[useChat] 이전 인증 오류로 인해 폴링 시작 불가');
+      return;
+    }
+    
     // 기존 타이머 정리
     if (pollingTimerRef.current) {
       console.log('[useChat] 기존 폴링 타이머 제거');
@@ -624,13 +702,21 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
       pollingTimerRef.current = null;
     }
 
-    console.log('[useChat] HTTP 폴링으로 전환합니다.');
+    console.log('[useChat] HTTP 폴링으로 전환합니다. (단 한 번만 요청 시도)');
+    
+    // 인증 오류 카운터 초기화
+    authErrorCountRef.current = 0;
     
     // 즉시 첫 번째 메시지를 가져옴 - 타이핑 중이 아닐 때만
     if (!isUserTypingRef.current) {
-      fetchMessages({ force: true }).catch(err => 
-        console.error('메시지 로드 실패:', err)
-      );
+      fetchMessages({ force: true }).catch(err => {
+        console.error('메시지 로드 실패:', err);
+        // 인증 오류가 발생하면 다시 요청하지 않음
+        if (err.message && (err.message.includes('인증') || err.message.includes('auth'))) {
+          console.log('[useChat] 인증 오류로 인해 추가 폴링 시도를 중단합니다.');
+          authErrorCountRef.current = 1;
+        }
+      });
     }
     
     // HTTP 폴링 상태 및 마지막 성공 시간 추적
@@ -641,6 +727,16 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
     // 폴링 함수 정의
     const pollFunction = () => {
       const now = Date.now();
+      
+      // 인증 오류 횟수가 0보다 크면 폴링 즉시 중지
+      if (authErrorCountRef.current > 0) {
+        console.log('[useChat] 이전 인증 오류로 인해 폴링 중지');
+        if (pollingTimerRef.current) {
+          clearInterval(pollingTimerRef.current);
+          pollingTimerRef.current = null;
+        }
+        return;
+      }
       
       // 타이핑 차단이 활성화되어 있고 사용자가 타이핑 중이면 완전히 폴링 건너뜀
       if (isTypingBlockingRef.current && isUserTypingRef.current) {
@@ -678,42 +774,34 @@ export function useChat(options: ChatOptions | null = null): ChatReturn {
         return;
       }
       
-      console.log('[useChat] HTTP 폴링으로 메시지 업데이트 시도');
+      console.log('[useChat] HTTP 폴링으로 메시지 업데이트 시도 (이후 타이머 제거)');
+      
+      // 요청 직후 타이머를 제거하여 한 번만 실행되도록 함
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
+      
       fetchMessages({ force: true, silent: true })
         .then(success => {
           if (success) {
             lastSuccessfulPoll = now;
             consecutiveFailures = 0;
-            
-            // 폴링 간격 원래대로 복원 (점진적으로)
-            if (currentPollingInterval > pollingIntervalRef.current) {
-              currentPollingInterval = Math.max(pollingIntervalRef.current, currentPollingInterval * 0.8);
-              
-              // 폴링 간격 조정
-              clearInterval(pollingTimerRef.current!);
-              pollingTimerRef.current = setInterval(pollFunction, currentPollingInterval);
-              console.log(`[useChat] 폴링 간격 감소: ${currentPollingInterval}ms`);
-            }
+            console.log('[useChat] 폴링 성공했으나 추가 폴링은 수행하지 않습니다.');
           }
         })
         .catch(err => {
           console.error('[useChat] 폴링 메시지 로드 실패:', err);
-          consecutiveFailures++;
-          
-          // 연속 실패 시 폴링 간격 증가 (최대 30초)
-          if (consecutiveFailures > 2) {
-            currentPollingInterval = Math.min(30000, currentPollingInterval * 1.5);
-            
-            // 폴링 간격 조정
-            clearInterval(pollingTimerRef.current!);
-            pollingTimerRef.current = setInterval(pollFunction, currentPollingInterval);
-            console.log(`[useChat] 폴링 간격 증가: ${currentPollingInterval}ms (연속 실패: ${consecutiveFailures}회)`);
+          // 인증 오류가 발생하면 다시 요청하지 않음
+          if (err.message && (err.message.includes('인증') || err.message.includes('auth'))) {
+            console.log('[useChat] 인증 오류로 인해 추가 폴링 시도를 중단합니다.');
+            authErrorCountRef.current = 1;
           }
         });
     };
     
-    // 새 폴링 타이머 설정
-    pollingTimerRef.current = setInterval(pollFunction, pollingIntervalRef.current);
+    // 새 폴링 타이머 설정 - 첫 번째 실행 후 타이머 제거하여 한 번만 실행
+    pollingTimerRef.current = setTimeout(pollFunction, 100);
     
     return () => {
       if (pollingTimerRef.current) {
