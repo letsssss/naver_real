@@ -33,7 +33,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       <p className="text-sm font-semibold">
         {sale.price}
       </p>
-      <SaleStatusBadge status={sale.status} />
+      
       <div className="flex mt-2 justify-between items-center">
         <div className="flex gap-2">
           {/* 판매중 상태가 아닌 경우(즉, 누군가 구매한 상품인 경우)에만 "거래상세보기"와 "메시지" 버튼 표시 */}

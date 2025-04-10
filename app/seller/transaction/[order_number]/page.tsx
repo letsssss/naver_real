@@ -6,14 +6,14 @@ import { useParams, useRouter } from "next/navigation"
 export default function SellerTransactionRedirect() {
   const params = useParams()
   const router = useRouter()
-  const transactionId = params?.id as string
+  const orderNumber = params?.order_number as string
 
   useEffect(() => {
-    if (transactionId) {
-      // transaction/[id] 페이지로 리다이렉트
-      router.push(`/transaction/${transactionId}`)
+    if (orderNumber) {
+      // transaction/[order_number] 페이지로 리다이렉트
+      router.push(`/transaction/${orderNumber}`)
     }
-  }, [transactionId, router])
+  }, [orderNumber, router])
 
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -23,5 +23,4 @@ export default function SellerTransactionRedirect() {
       </div>
     </div>
   )
-}
-
+} 

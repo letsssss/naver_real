@@ -8,9 +8,13 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { WithdrawModal } from "@/components/withdraw-modal"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { FaTrash } from "react-icons/fa"
+import ProfileSection from "@/components/ProfileSection"
+import AccountBalance from "@/components/AccountBalance"
+import WithdrawSection from "@/components/WithdrawSection"
+import PurchasesSection from "@/components/PurchasesSection"
+import SalesSection from "@/components/SalesSection"
 
 // API 기본 URL 설정 (환경별로 다른 호스트 사용)
 const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -1169,26 +1173,7 @@ export default function MyPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-6 border-l-4 border-[#0061FF]">
-              <h2 className="text-lg font-medium text-gray-700 mb-1">나의 예치금</h2>
-              <p className="text-2xl font-bold text-[#0061FF]">120,000원</p>
-              <div className="flex justify-between items-center mt-4">
-                <Link
-                  href="/mypage/deposit-history"
-                  className="text-sm text-gray-500 hover:text-[#0061FF] transition-colors"
-                >
-                  거래내역 보기
-                </Link>
-                <Button
-                  className="bg-[#FFD600] hover:bg-[#FFE600] text-black px-5 py-2"
-                  onClick={() => setIsWithdrawModalOpen(true)}
-                >
-                  출금하기
-                </Button>
-              </div>
-            </div>
-          </div>
+          <AccountBalance balance={120000} onWithdraw={() => setIsWithdrawModalOpen(true)} />
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-6 border-l-4 border-[#FF2F6E]">
@@ -1306,252 +1291,36 @@ export default function MyPage() {
           <div className="p-6">
             {/* 이 부분은 현재 로그인한 사용자만 볼 수 있는 개인 정보입니다 */}
             {activeTab === "profile" && (
-              <div>
-                <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                  <p className="text-blue-700 text-sm">이 정보는 회원님만 볼 수 있는 개인 정보입니다.</p>
-                </div>
-                <h2 className="text-xl font-semibold mb-4">프로필 정보</h2>
-                <p>
-                  <strong>이름:</strong> {user.name || "이름 정보 없음"}
-                </p>
-                <p>
-                  <strong>이메일:</strong> {user.email || "이메일 정보 없음"}
-                </p>
-                <p>
-                  <strong>가입일:</strong> {new Date().toLocaleDateString()}
-                </p>
-                <Link href="/mypage/edit-profile">
-                  <Button className="mt-4 bg-[#FFD600] hover:bg-[#FFE600] text-black px-6 py-2">프로필 수정</Button>
-                </Link>
-              </div>
+              <ProfileSection user={user} />
             )}
 
             {activeTab === "ongoing-purchases" && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">진행중인 구매</h2>
-                {isLoadingPurchases ? (
-                  <div className="text-center py-8"><Loader size={30} /></div>
-                ) : ongoingPurchases.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">구매 내역이 없습니다</p>
-                    <Button 
-                      onClick={() => router.push('/tickets')} 
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      티켓 구매하러 가기
-                    </Button>
-                  </div>
-                ) : (
-                  ongoingPurchases.map((item) => (
-                    <div key={item.id} className="border-b py-4 last:border-b-0">
-                      <h3 className="font-medium">
-                        {item.title !== '제목 없음' 
-                          ? item.title 
-                          : (item.post && item.post.title) 
-                            || (item.post && (item.post.eventName || item.post.event_name))
-                            || item.ticketTitle 
-                            || item.eventName 
-                            || '제목 없음'}
-                      </h3>
-                      <p className="text-sm text-gray-600">{item.date}</p>
-                      <p className="text-sm font-semibold">
-                        {typeof item.price === 'number' 
-                          ? item.price.toLocaleString() + '원'
-                          : item.price}
-                      </p>
-                      <p className="text-sm text-blue-600">{item.status}</p>
-                      <div className="flex mt-2 gap-2">
-                        <Link href={`/transaction/${item.orderNumber || item.id}`}>
-                          <Button 
-                            className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
-                            variant="outline"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                            </svg>
-                            거래 상세 보기
-                          </Button>
-                        </Link>
-                        <Link href={`/transaction/${item.orderNumber || item.id}`}>
-                          <Button 
-                            variant="outline" 
-                            className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                            </svg>
-                            메시지
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <PurchasesSection 
+                purchases={ongoingPurchases} 
+                isLoading={isLoadingPurchases} 
+                router={router} 
+              />
             )}
 
             {activeTab === "ongoing-sales" && (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold">판매중인 상품</h2>
-                  <button
-                    onClick={filterActiveSales}
-                    className={`px-3 py-1 rounded text-sm flex items-center ${
-                      showOnlyActive 
-                        ? "bg-blue-500 text-white" 
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    {showOnlyActive ? "전체 상품 보기" : "판매 가능한 상품만 보기 (" + saleStatus.판매중인상품 + ")"}
-                  </button>
-                </div>
-                {isLoadingSales ? (
-                  <div className="text-center py-8"><Loader size={30} /></div>
-                ) : ongoingSales.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">판매 중인 티켓이 없습니다</p>
-                    <Button
-                      onClick={() => router.push('/sell')}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-                    >
-                      티켓 판매하러 가기
-                    </Button>
-                  </div>
-                ) : (
-                  ongoingSales.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className="border-b py-4 last:border-b-0"
-                    >
-                      <div className="flex justify-between mb-1">
-                        <h3 className="font-medium">{item.title}</h3>
-                        {item.status === "취켓팅 진행중" && (
-                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                            취켓팅 진행중
-                          </span>
-                        )}
-                        {item.isActive && item.status === "판매중" && (
-                          <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                            판매 가능
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">{item.date}</p>
-                      <p className="text-sm font-semibold">
-                        {item.price}
-                      </p>
-                      <p className={`text-sm ${
-                        item.status === "판매중" ? "text-green-600" : 
-                        item.status.includes("취켓팅 진행중") ? "text-blue-600 font-medium" : 
-                        item.status.includes("취켓팅") ? "text-blue-600" : 
-                        item.status === "거래완료" ? "text-purple-600" : 
-                        item.status === "거래취소" ? "text-red-600" : "text-gray-600"
-                      }`}>{item.status}</p>
-                      <div className="flex mt-2 justify-between items-center">
-                        <div className="flex gap-2">
-                          {/* 판매중 상태가 아닌 경우(즉, 누군가 구매한 상품인 경우)에만 "거래상세보기"와 "메시지" 버튼 표시 */}
-                          {item.status !== "판매중" && (
-                            <>
-                              <Link href={`/seller/transaction/${item.orderNumber || item.id}`}>
-                                <Button 
-                                  className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
-                                  variant="outline"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                                  </svg>
-                                  거래 상세 보기
-                                </Button>
-                              </Link>
-                              <Link href={`/transaction/${item.orderNumber || item.id}`}>
-                                <Button 
-                                  variant="outline" 
-                                  className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                  </svg>
-                                  메시지
-                                </Button>
-                              </Link>
-                            </>
-                          )}
-                        </div>
-                        {item.status === "판매중" && (
-                          <AlertDialog>
-                            <AlertDialogTrigger>
-                              <div 
-                                className="text-sm bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded cursor-pointer inline-flex items-center justify-center font-medium"
-                              >
-                                삭제
-                              </div>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>판매 상품 삭제</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  이 상품을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>취소</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => deletePost(item.id)}>삭제</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <SalesSection 
+                sales={ongoingSales} 
+                isLoading={isLoadingSales}
+                saleStatus={saleStatus}
+                showOnlyActive={showOnlyActive}
+                setShowOnlyActive={setShowOnlyActive}
+                router={router}
+                deletePost={deletePost}
+              />
             )}
           </div>
         </div>
       </main>
-      <WithdrawModal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} balance={120000} />
+      <WithdrawSection 
+        balance={120000} 
+        isOpen={isWithdrawModalOpen} 
+        onOpenChange={setIsWithdrawModalOpen} 
+      />
     </div>
   )
 }
