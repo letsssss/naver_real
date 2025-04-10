@@ -1470,49 +1470,54 @@ export default function MyPage() {
                       }`}>{item.status}</p>
                       <div className="flex mt-2 justify-between items-center">
                         <div className="flex gap-2">
-                          <Link href={`/seller/transaction/${item.orderNumber || item.id}`}>
-                            <Button 
-                              className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
-                              variant="outline"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                              </svg>
-                              거래 상세 보기
-                            </Button>
-                          </Link>
-                          <Link href={`/transaction/${item.orderNumber || item.id}`}>
-                            <Button 
-                              variant="outline" 
-                              className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                              </svg>
-                              메시지
-                            </Button>
-                          </Link>
+                          {/* 판매중 상태가 아닌 경우(즉, 누군가 구매한 상품인 경우)에만 "거래상세보기"와 "메시지" 버튼 표시 */}
+                          {item.status !== "판매중" && (
+                            <>
+                              <Link href={`/seller/transaction/${item.orderNumber || item.id}`}>
+                                <Button 
+                                  className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
+                                  variant="outline"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                                  </svg>
+                                  거래 상세 보기
+                                </Button>
+                              </Link>
+                              <Link href={`/transaction/${item.orderNumber || item.id}`}>
+                                <Button 
+                                  variant="outline" 
+                                  className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                  </svg>
+                                  메시지
+                                </Button>
+                              </Link>
+                            </>
+                          )}
                         </div>
                         {item.status === "판매중" && (
                           <AlertDialog>

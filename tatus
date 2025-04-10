@@ -13,3 +13,6 @@ warning: in the working copy of 'pnpm-lock.yaml', LF will be replaced by CRLF th
  prisma/dev.db                  | Bin [31m94208[m -> [32m94208[m bytes
  prisma/schema.prisma           |   4 [32m+[m[31m-[m
  11 files changed, 640 insertions(+), 86 deletions(-)
+warning: in the working copy of 'pnpm-lock.yaml', LF will be replaced by CRLF the next time Git touches it
+app/mypage/page.tsx
+pnpm-lock.yaml
