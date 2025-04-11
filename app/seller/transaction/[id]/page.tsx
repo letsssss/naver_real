@@ -9,36 +9,36 @@ import { ArrowLeft, Calendar, MapPin, Clock, CreditCard, Play, ThumbsUp, CheckCi
 import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
+import { useAuth } from "@/contexts/auth-context"
 
-// 임시 데이터 (실제로는 API에서 가져와야 합니다)
-const transactionData = {
-  id: "1",
-  type: "sale", // 판매자용으로 변경
-  status: "취켓팅 시작",
-  currentStep: "ticketing_started", // 현재 단계
+// 기본 거래 데이터 (로딩 중에 표시할 데이터)
+const defaultTransaction = {
+  id: "",
+  type: "sale",
+  status: "로딩 중...",
+  currentStep: "",
   stepDates: {
-    payment: "2024-03-15 14:30",
-    ticketing_started: "2024-03-16 09:15",
+    payment: null as string | null,
+    ticketing_started: null as string | null,
     ticketing_completed: null as string | null,
     confirmed: null as string | null,
   },
   ticket: {
-    title: "세븐틴 콘서트",
-    date: "2024-03-20",
-    time: "19:00",
-    venue: "잠실종합운동장 주경기장",
-    seat: "VIP석 A구역 23열 15번",
+    title: "로딩 중...",
+    date: "",
+    time: "",
+    venue: "",
+    seat: "",
     image: "/placeholder.svg",
   },
-  price: 165000,
-  paymentMethod: "신용카드",
-  paymentStatus: "결제 완료",
-  ticketingStatus: "취켓팅 진행중",
+  price: 0,
+  paymentMethod: "",
+  paymentStatus: "",
+  ticketingStatus: "",
   ticketingInfo: "취소표 발생 시 알림을 보내드립니다. 취소표 발생 시 빠르게 예매를 진행해 드립니다.",
   buyer: {
-    // 구매자 정보로 변경
-    id: "buyer123",
-    name: "콘서트팬",
+    id: "",
+    name: "",
     profileImage: "/placeholder.svg?height=50&width=50",
   },
 }
@@ -65,6 +65,61 @@ const initialMessages = [
   },
 ]
 
+// 상태 변환 함수들
+const getStatusText = (status: string) => {
+  switch (status) {
+    case "PENDING":
+    case "PENDING_PAYMENT":
+    case "PROCESS":
+    case "PROCESSING":
+      return "취켓팅 시작"
+    case "COMPLETED":
+      return "취켓팅 완료"
+    case "CONFIRMED":
+      return "구매 확정"
+    case "CANCELLED":
+      return "거래 취소"
+    default:
+      return "알 수 없음"
+  }
+}
+
+const getCurrentStep = (status: string) => {
+  switch (status) {
+    case "PENDING":
+    case "PENDING_PAYMENT":
+    case "PROCESS":
+    case "PROCESSING":
+      return "ticketing_started"
+    case "COMPLETED":
+      return "ticketing_completed"
+    case "CONFIRMED":
+      return "confirmed"
+    case "CANCELLED":
+      return "cancelled"
+    default:
+      return ""
+  }
+}
+
+const getTicketingStatusText = (status: string) => {
+  switch (status) {
+    case "PENDING":
+    case "PENDING_PAYMENT":
+    case "PROCESS":
+    case "PROCESSING":
+      return "취켓팅 진행중"
+    case "COMPLETED":
+      return "취켓팅 완료"
+    case "CONFIRMED":
+      return "구매 확정"
+    case "CANCELLED":
+      return "거래 취소"
+    default:
+      return "알 수 없음"
+  }
+}
+
 interface Message {
   id: number;
   senderId: string;
@@ -75,7 +130,11 @@ interface Message {
 export default function SellerTransactionDetail() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const [transaction, setTransaction] = useState(transactionData)
+  const { user: currentUser } = useAuth() // 로그인한 사용자 정보
+
+  const [transaction, setTransaction] = useState(defaultTransaction)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [newMessage, setNewMessage] = useState("")
@@ -83,26 +142,102 @@ export default function SellerTransactionDetail() {
 
   // 실제 구현에서는 이 부분에서 API를 호출하여 거래 정보를 가져와야 합니다
   useEffect(() => {
-    // API 호출 및 데이터 설정 로직
-    if (params && params.id) {
-      console.log("Transaction ID:", params.id)
-      
-      // 실제 구현 시 아래와 같이 API를 호출하여 데이터를 가져옴
-      // const fetchTransaction = async () => {
-      //   try {
-      //     // id가 주문번호인지 거래 ID인지 확인하지 않고 API에서 처리
-      //     const response = await fetch(`/api/transactions/seller/${params.id}`);
-      //     if (response.ok) {
-      //       const data = await response.json();
-      //       setTransaction(data);
-      //     }
-      //   } catch (error) {
-      //     console.error("Error fetching transaction:", error);
-      //   }
-      // };
-      // 
-      // fetchTransaction();
+    const fetchTransaction = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        if (!params?.id) {
+          throw new Error("주문번호가 없습니다.")
+        }
+        
+        const orderId = params.id
+        console.log("Transaction ID:", orderId)
+        
+        // API 경로 수정 - /api/purchase 엔드포인트 사용
+        const response = await fetch(`/api/purchase/${orderId}`, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("로그인이 필요합니다.")
+          } else if (response.status === 403) {
+            throw new Error("이 거래에 접근할 권한이 없습니다.")
+          } else if (response.status === 404) {
+            throw new Error("거래 정보를 찾을 수 없습니다.")
+          }
+          const errorText = await response.text()
+          console.error("API 응답 에러:", errorText)
+          throw new Error("거래 정보를 불러오는데 실패했습니다.")
+        }
+        
+        const data = await response.json()
+        
+        // API 응답을 UI용 데이터로 변환
+        const formattedData = {
+          id: data.id.toString(),
+          type: "sale", // 판매자 관점
+          status: getStatusText(data.status),
+          currentStep: getCurrentStep(data.status),
+          stepDates: {
+            payment: data.created_at as string | null,
+            ticketing_started: data.created_at as string | null,
+            ticketing_completed: (data.status === "COMPLETED" || data.status === "CONFIRMED")
+              ? (data.updated_at || new Date().toISOString()) as string | null
+              : null,
+            confirmed: data.status === "CONFIRMED"
+              ? (data.updated_at || new Date().toISOString()) as string | null
+              : null,
+          },
+          ticket: {
+            title: data.post?.title || "제목 없음",
+            date: data.post?.event_date || "",
+            time: "미정", // API에서 시간 정보가 없는 경우
+            venue: data.post?.event_venue || "",
+            seat: data.selected_seats || "",
+            image: data.post?.image_url || "/placeholder.svg",
+          },
+          price: Number(data.total_price) || 0,
+          paymentMethod: data.payment_method || "신용카드",
+          paymentStatus: "결제 완료",
+          ticketingStatus: getTicketingStatusText(data.status),
+          ticketingInfo: "취소표 발생 시 알림을 보내드립니다. 취소표 발생 시 빠르게 예매를 진행해 드립니다.",
+          buyer: {
+            id: data.buyer?.id || "",
+            name: data.buyer?.name || "구매자",
+            profileImage: data.buyer?.profile_image || "/placeholder.svg?height=50&width=50",
+          },
+        }
+        
+        setTransaction(formattedData)
+        
+        // 메시지 데이터 불러오기
+        try {
+          const messageResponse = await fetch(`/api/messages/${orderId}`, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          })
+          if (messageResponse.ok) {
+            const messageData = await messageResponse.json()
+            setMessages(messageData)
+          }
+        } catch (messageError) {
+          console.error("메시지 데이터 로딩 에러:", messageError)
+          // 메시지 로딩 실패는 전체 페이지 에러로 처리하지 않음
+        }
+      } catch (error) {
+        console.error("거래 정보 로딩 에러:", error)
+        setError(error instanceof Error ? error.message : "거래 정보를 불러오는데 실패했습니다.")
+      } finally {
+        setIsLoading(false)
+      }
     }
+    
+    fetchTransaction()
   }, [params])
 
   // 채팅창이 열릴 때 스크롤을 맨 아래로 이동
@@ -177,18 +312,25 @@ export default function SellerTransactionDetail() {
     if (transaction.currentStep === "ticketing_started") {
       // 취켓팅 완료 처리 로직
       try {
-        // 실제로는 API 호출하여 상태 업데이트
-        // const response = await fetch(`/api/transactions/seller/${params.id}`, {
-        //   method: 'PUT',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     currentStep: 'ticketing_completed',
-        //     stepDates: {
-        //       ...transaction.stepDates,
-        //       ticketing_completed: new Date().toISOString()
-        //     }
-        //   })
-        // });
+        // API 경로 수정 - /api/purchase 엔드포인트 사용
+        const response = await fetch(`/api/purchase/${params?.id}/complete-ticketing`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            stepDates: {
+              ...transaction.stepDates,
+              ticketing_completed: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("API 응답 에러:", errorText)
+          throw new Error("취켓팅 완료 처리에 실패했습니다.")
+        }
 
         // 성공 시 상태 업데이트
         setTransaction({
@@ -227,6 +369,20 @@ export default function SellerTransactionDetail() {
 
     setMessages([...messages, newMsg])
     setNewMessage("")
+    
+    // API 호출
+    fetch(`/api/messages/${params?.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text: newMessage,
+        recipientId: transaction.buyer.id
+      }),
+    }).catch(error => {
+      console.error("메시지 전송 에러:", error)
+    })
   }
 
   const formatMessageTime = (timestamp: string) => {
@@ -246,6 +402,31 @@ export default function SellerTransactionDetail() {
       default:
         return "다음 단계로"
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md">
+          <h3 className="text-lg font-medium">오류가 발생했습니다</h3>
+          <p>{error}</p>
+          <button
+            onClick={() => router.push("/seller/dashboard")}
+            className="mt-4 px-4 py-2 bg-teal-100 text-teal-700 rounded-md hover:bg-teal-200"
+          >
+            판매자 대시보드로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -293,37 +474,37 @@ export default function SellerTransactionDetail() {
               <div className="md:w-2/3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <Calendar className="h-5 w-5 mr-3 text-blue-500" />
+                    <Calendar className="h-5 w-5 mr-3 text-teal-500" />
                     <div>
                       <span className="text-xs text-gray-500 block">공연 날짜</span>
                       <span className="font-medium">{transaction.ticket.date}</span>
                     </div>
                   </div>
                   <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <Clock className="h-5 w-5 mr-3 text-blue-500" />
+                    <Clock className="h-5 w-5 mr-3 text-teal-500" />
                     <div>
                       <span className="text-xs text-gray-500 block">공연 시간</span>
                       <span className="font-medium">{transaction.ticket.time}</span>
                     </div>
                   </div>
                   <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <MapPin className="h-5 w-5 mr-3 text-blue-500" />
+                    <MapPin className="h-5 w-5 mr-3 text-teal-500" />
                     <div>
                       <span className="text-xs text-gray-500 block">공연 장소</span>
                       <span className="font-medium">{transaction.ticket.venue}</span>
                     </div>
                   </div>
                   <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <CreditCard className="h-5 w-5 mr-3 text-blue-500" />
+                    <CreditCard className="h-5 w-5 mr-3 text-teal-500" />
                     <div>
                       <span className="text-xs text-gray-500 block">판매 금액</span>
                       <span className="font-medium">{transaction.price.toLocaleString()}원</span>
                     </div>
                   </div>
                 </div>
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="mt-6 p-4 bg-teal-50 rounded-lg border border-teal-100">
                   <div className="flex items-center">
-                    <div className="p-2 bg-blue-100 rounded-full mr-3">
+                    <div className="p-2 bg-teal-100 rounded-full mr-3">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="20"
@@ -334,15 +515,15 @@ export default function SellerTransactionDetail() {
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="text-blue-600"
+                        className="text-teal-600"
                       >
                         <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" />
                         <path d="M15 3v6h6" />
                       </svg>
                     </div>
                     <div>
-                      <span className="text-xs text-blue-600 block">좌석 정보</span>
-                      <span className="font-medium text-blue-800">{transaction.ticket.seat}</span>
+                      <span className="text-xs text-teal-600 block">좌석 정보</span>
+                      <span className="font-medium text-teal-800">{transaction.ticket.seat}</span>
                     </div>
                   </div>
                 </div>
@@ -375,15 +556,15 @@ export default function SellerTransactionDetail() {
                 }
                 updatedAt={
                   transaction.currentStep === "ticketing_completed" && transaction.stepDates.ticketing_completed
-                    ? transaction.stepDates.ticketing_completed
-                    : "2024-03-16 09:15"
+                    ? transaction.stepDates.ticketing_completed || undefined
+                    : transaction.stepDates.ticketing_started || undefined
                 }
               />
 
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <span className="text-xs text-gray-500 block mb-1">취켓팅 상태</span>
-                  <span className="font-medium text-blue-600">
+                  <span className="font-medium text-teal-600">
                     {transaction.currentStep === "ticketing_completed" ? "취켓팅 완료" : transaction.ticketingStatus}
                   </span>
                 </div>
@@ -437,7 +618,7 @@ export default function SellerTransactionDetail() {
               {transaction.currentStep === "confirmed" && (
                 <Button
                   onClick={handleAction}
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
+                  className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
                 >
                   구매자 리뷰 작성
                 </Button>
