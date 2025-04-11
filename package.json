@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "tailwind:build": "npx tailwindcss -i ./app/globals.css -o ./app/output.css --watch",
     "migrate:to:supabase": "node --loader ts-node/esm scripts/migrate-to-supabase.ts"
   },
   "dependencies": {

@@ -84,7 +84,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
           // 구매 확정 완료 상태로 업데이트된 페이지로 이동
           if (transactionId) {
-            window.location.href = `/transaction/${transactionId}?status=confirmed`
+            // ID가 숫자로만 구성되어 있고 ORDER 접두사가 없는 경우 접두사 추가
+            const formattedId = /^\d+$/.test(transactionId) ? `ORDER-${transactionId}` : transactionId
+            window.location.href = `/transaction/${formattedId}?status=confirmed`
           } else {
             // 트랜잭션 ID가 없는 경우 마이페이지로 이동
             window.location.href = "/mypage"

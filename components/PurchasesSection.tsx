@@ -52,7 +52,7 @@ export default function PurchasesSection({ purchases, isLoading, router }: Purch
             </p>
             <p className="text-sm text-blue-600">{item.status}</p>
             <div className="flex mt-2 gap-2">
-              <Link href={`/transaction/${item.orderNumber || item.id}`}>
+              <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
                 <Button 
                   className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
                   variant="outline"
@@ -74,7 +74,7 @@ export default function PurchasesSection({ purchases, isLoading, router }: Purch
                   거래 상세 보기
                 </Button>
               </Link>
-              <Link href={`/transaction/${item.orderNumber || item.id}`}>
+              <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
                 <Button 
                   variant="outline" 
                   className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"

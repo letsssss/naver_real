@@ -32,7 +32,7 @@ export default function RootLayout({
       <head>
         <meta name="naver-site-verification" content="877909cff89a029e033c97399331d77f7ca29013" />
       </head>
-      <body className={inter.className} suppressHydrationWarning={true}>
+      <body className={`${inter.className} bg-gray-50 min-h-screen`} suppressHydrationWarning={true}>
         <AuthProvider>
           <SyncUser />
           {children}
