@@ -1,7 +1,9 @@
+// 목적: 구매자가 거래 상태를 'CONFIRMED'로 업데이트하는 API
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { supabase, createAdminClient } from '@/lib/supabase';
 import { cors } from '@/lib/cors';
+import { PostgrestFilterBuilder } from '@supabase/supabase-js';
 
 // OPTIONS 요청 처리 (CORS 지원)
 export async function OPTIONS() {
@@ -9,7 +11,7 @@ export async function OPTIONS() {
     status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PUT, PATCH, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     }
   });
@@ -18,12 +20,11 @@ export async function OPTIONS() {
 // GET 요청 처리 - 특정 거래 정보 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { order_number: string } }
 ) {
   try {
-    // Next.js 15에서는 params를 사용하기 전에 await 필요
-    const id = await params.id;
-    console.log(`거래 상세 정보 API 호출됨 - ID: ${id}`);
+    const order_number = params.order_number;
+    console.log(`거래 상세 정보 API 호출됨 - ID/주문번호: ${order_number}`);
     
     // 인증된 사용자 확인
     const user = await getAuthenticatedUser(request);
@@ -45,13 +46,13 @@ export async function GET(
     console.log('인증된 사용자 ID:', userId);
     
     // 거래 ID 확인 (number 또는 string 형식 모두 지원)
-    const transactionId = id;
+    const transactionId = order_number;
     
     // 관리자 권한으로 Supabase 클라이언트 생성 (RLS 정책 우회를 위해)
     const adminSupabase = createAdminClient();
     
     // 거래 정보 조회 (purchases 테이블에서)
-    let query = adminSupabase
+    let query: PostgrestFilterBuilder<any> = adminSupabase
       .from('purchases')
       .select(`
         *,
@@ -109,20 +110,6 @@ export async function GET(
       );
     }
     
-    // 디버깅을 위해 purchase 객체 출력
-    console.log('Purchase 데이터:', JSON.stringify(purchase, null, 2));
-    
-    // 판매자와 구매자 정보가 올바른지 확인
-    console.log('판매자 정보:', JSON.stringify(purchase.seller, null, 2));
-    console.log('구매자 정보:', JSON.stringify(purchase.buyer, null, 2));
-    
-    // seller가 배열인지 단일 객체인지 확인
-    console.log('seller 타입:', Array.isArray(purchase.seller) ? '배열' : typeof purchase.seller);
-    if (Array.isArray(purchase.seller)) {
-      console.log('seller 배열 길이:', purchase.seller.length);
-      console.log('seller[0]:', purchase.seller[0]);
-    }
-
     // 현재 사용자가 구매자 또는 판매자인지 확인
     if (purchase.buyer_id !== userId && purchase.seller_id !== userId) {
       return new NextResponse(
@@ -196,8 +183,6 @@ export async function GET(
       },
     };
     
-    console.log('거래 정보 조회 성공:', purchase.id);
-    
     return new NextResponse(
       JSON.stringify(transactionData),
       { 
@@ -209,11 +194,11 @@ export async function GET(
       }
     );
   } catch (error) {
-    console.error('거래 조회 중 오류:', error);
+    console.error('거래 정보 조회 중 오류:', error);
     return new NextResponse(
       JSON.stringify({ 
-        error: '거래 조회 중 오류가 발생했습니다.',
-        details: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+        error: '거래 정보를 조회하는 중 오류가 발생했습니다.',
+        details: error instanceof Error ? error.message : '알 수 없는 오류'
       }),
       { 
         status: 500,
@@ -226,15 +211,19 @@ export async function GET(
   }
 }
 
-// PUT 요청 처리 - 거래 상태 업데이트
+// PUT 요청 처리 - 거래 정보 업데이트
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { order_number: string } }
 ) {
   try {
-    // Next.js 15에서는 params를 사용하기 전에 await 필요
-    const id = await params.id;
-    console.log(`거래 상태 업데이트 API 호출됨 - ID: ${id}`);
+    const order_number = params.order_number;
+    console.log(`거래 정보 업데이트 API 호출됨 - ID/주문번호: ${order_number}`);
+    
+    // 요청 본문 파싱
+    const bodyText = await request.text();
+    const body = JSON.parse(bodyText);
+    console.log('업데이트 요청 내용:', body);
     
     // 인증된 사용자 확인
     const user = await getAuthenticatedUser(request);
@@ -255,48 +244,27 @@ export async function PUT(
     const userId = user.id;
     console.log('인증된 사용자 ID:', userId);
     
-    // 요청 바디 파싱
-    const body = await request.json();
-    const { currentStep } = body;
-    
-    // 거래 ID 확인
-    const transactionId = id;
-    
     // 관리자 권한으로 Supabase 클라이언트 생성
     const adminSupabase = createAdminClient();
     
     // 거래 정보 조회
-    let query = adminSupabase
-      .from('purchases')
-      .select(`
-        *,
-        buyer:users!buyer_id (
-          id, 
-          name
-        ),
-        seller:users!seller_id (
-          id, 
-          name
-        )
-      `);
+    let query: PostgrestFilterBuilder<any> = adminSupabase.from('purchases');
     
     // ID가 숫자인지 오더번호(ORDER-*)인지 확인하여 적절한 쿼리 실행
-    if (/^ORDER-/.test(transactionId)) {
-      console.log('오더 번호로 조회:', transactionId);
-      query = query.eq('order_number', transactionId);
+    if (/^ORDER-/.test(order_number)) {
+      query = query.select('*').eq('order_number', order_number);
     } else {
-      console.log('ID 번호로 조회:', transactionId);
-      query = query.eq('id', Number(transactionId));
+      query = query.select('*').eq('id', Number(order_number));
     }
     
-    const { data: purchase, error: fetchError } = await query.single();
+    const { data: purchase, error: queryError } = await query.single();
     
-    if (fetchError || !purchase) {
-      console.error('거래 조회 중 Supabase 오류:', fetchError);
+    if (queryError || !purchase) {
+      console.error('거래 조회 중 Supabase 오류:', queryError);
       return new NextResponse(
         JSON.stringify({ 
           error: '거래를 찾을 수 없습니다.',
-          details: fetchError?.message || '데이터베이스 조회 오류'
+          details: queryError?.message || '데이터베이스 조회 오류'
         }),
         { 
           status: 404,
@@ -308,10 +276,13 @@ export async function PUT(
       );
     }
     
-    // 현재 사용자가 구매자 또는 판매자인지 확인
-    if (purchase.buyer_id !== userId && purchase.seller_id !== userId) {
+    // 사용자가 구매자인지 확인 (판매자는 일부 필드만 수정 가능)
+    const isBuyer = purchase.buyer_id === userId;
+    const isSeller = purchase.seller_id === userId;
+    
+    if (!isBuyer && !isSeller) {
       return new NextResponse(
-        JSON.stringify({ error: '이 거래에 접근할 권한이 없습니다.' }),
+        JSON.stringify({ error: '이 거래를 수정할 권한이 없습니다.' }),
         { 
           status: 403,
           headers: {
@@ -322,31 +293,54 @@ export async function PUT(
       );
     }
     
-    // 현재 단계에 따른 새 상태 계산
-    let newStatus = purchase.status;
-    if (currentStep === 'ticketing_completed' && purchase.status === 'PROCESSING') {
-      newStatus = 'COMPLETED';
-    } else if (currentStep === 'confirmed' && 
-              (purchase.status === 'COMPLETED' || purchase.status === 'PROCESSING')) {
-      newStatus = 'CONFIRMED';
+    // 업데이트할 필드 준비
+    const updateData: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+    
+    // 구매 확정 (currentStep = confirmed인 경우)
+    if (body.currentStep === 'confirmed' && purchase.status === 'COMPLETED' && isBuyer) {
+      updateData.status = 'CONFIRMED';
     }
     
-    // 거래 상태 업데이트
-    const { data: updatedPurchase, error: updateError } = await adminSupabase
-      .from('purchases')
-      .update({ 
-        status: newStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', Number(transactionId))
-      .select()
-      .single();
+    // 판매자가 취켓팅 완료 처리
+    if (body.currentStep === 'ticketing_completed' && ['PENDING', 'PROCESSING'].includes(purchase.status) && isSeller) {
+      updateData.status = 'COMPLETED';
+    }
     
-    if (updateError) {
-      console.error('거래 상태 업데이트 중 Supabase 오류:', updateError);
+    // 변경할 내용이 없으면 조기 반환
+    if (Object.keys(updateData).length <= 1) { // updated_at만 있는 경우
       return new NextResponse(
         JSON.stringify({ 
-          error: '거래 상태를 업데이트하는 중 오류가 발생했습니다.',
+          message: '변경할 내용이 없습니다.',
+          transaction: purchase
+        }),
+        { 
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            ...cors
+          }
+        }
+      );
+    }
+    
+    // 거래 정보 업데이트
+    let updateQuery: PostgrestFilterBuilder<any> = adminSupabase.from('purchases');
+    
+    if (/^ORDER-/.test(order_number)) {
+      updateQuery = updateQuery.update(updateData).eq('order_number', order_number);
+    } else {
+      updateQuery = updateQuery.update(updateData).eq('id', Number(order_number));
+    }
+    
+    const { data: updatedPurchase, error: updateError } = await updateQuery.select().single();
+    
+    if (updateError) {
+      console.error('거래 업데이트 중 Supabase 오류:', updateError);
+      return new NextResponse(
+        JSON.stringify({ 
+          error: '거래 정보를 업데이트하는 중 오류가 발생했습니다.',
           details: updateError.message
         }),
         { 
@@ -359,18 +353,11 @@ export async function PUT(
       );
     }
     
-    // 응답 생성
-    const responseData = {
-      id: updatedPurchase.id.toString(),
-      status: getStatusText(updatedPurchase.status),
-      currentStep: getCurrentStep(updatedPurchase.status),
-      message: '거래 상태가 성공적으로 업데이트되었습니다.'
-    };
-    
-    console.log('거래 상태 업데이트 성공:', updatedPurchase.id, updatedPurchase.status);
-    
     return new NextResponse(
-      JSON.stringify(responseData),
+      JSON.stringify({ 
+        message: '거래 정보가 성공적으로 업데이트되었습니다.',
+        transaction: updatedPurchase
+      }),
       { 
         status: 200,
         headers: {
@@ -380,11 +367,11 @@ export async function PUT(
       }
     );
   } catch (error) {
-    console.error('거래 상태 업데이트 중 오류:', error);
+    console.error('거래 정보 업데이트 중 오류:', error);
     return new NextResponse(
       JSON.stringify({ 
-        error: '거래 상태 업데이트 중 오류가 발생했습니다.',
-        details: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+        error: '거래 정보를 업데이트하는 중 오류가 발생했습니다.',
+        details: error instanceof Error ? error.message : '알 수 없는 오류'
       }),
       { 
         status: 500,
@@ -397,45 +384,46 @@ export async function PUT(
   }
 }
 
-// 상태 텍스트 변환 함수
+// PATCH 요청 처리 - 구매자가 거래 상태를 'CONFIRMED'로 업데이트
+export async function PATCH(
+  req: Request,
+  { params }: { params: { order_number: string } }
+) {
+  const { order_number } = params;
+
+  if (!order_number) {
+    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { status: 400 });
+  }
+
+  const body = await req.json();
+  const newStatus = body.currentStep === "confirmed" ? "CONFIRMED" : null;
+
+  if (!newStatus) {
+    return NextResponse.json({ error: "유효하지 않은 상태입니다." }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("purchases")
+    .update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("order_number", order_number);
+
+  if (error) {
+    console.error("거래 상태 업데이트 오류:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+// 상태 변환 유틸리티 함수
 function getStatusText(status: string): string {
   switch (status) {
     case 'PENDING':
-      return '결제 완료';
-    case 'PROCESSING':
-      return '취켓팅 시작';
-    case 'COMPLETED':
-      return '취켓팅 완료';
-    case 'CONFIRMED':
-      return '구매 확정';
-    case 'CANCELLED':
-      return '취소됨';
-    default:
-      return '진행 중';
-  }
-}
-
-// 현재 단계 변환 함수
-function getCurrentStep(status: string): string {
-  switch (status) {
-    case 'PENDING':
-      return 'payment';
-    case 'PROCESSING':
-      return 'ticketing_started';
-    case 'COMPLETED':
-      return 'ticketing_completed';
-    case 'CONFIRMED':
-      return 'confirmed';
-    default:
-      return 'payment';
-  }
-}
-
-// 취켓팅 상태 텍스트 변환 함수
-function getTicketingStatusText(status: string): string {
-  switch (status) {
-    case 'PENDING':
-      return '결제 완료';
     case 'PROCESSING':
       return '취켓팅 진행중';
     case 'COMPLETED':
@@ -443,8 +431,40 @@ function getTicketingStatusText(status: string): string {
     case 'CONFIRMED':
       return '구매 확정';
     case 'CANCELLED':
-      return '취소됨';
+      return '거래 취소';
     default:
-      return '진행 중';
+      return '알 수 없음';
+  }
+}
+
+function getCurrentStep(status: string): string {
+  switch (status) {
+    case 'PENDING':
+    case 'PROCESSING':
+      return 'ticketing_started';
+    case 'COMPLETED':
+      return 'ticketing_completed';
+    case 'CONFIRMED':
+      return 'confirmed';
+    case 'CANCELLED':
+      return 'cancelled';
+    default:
+      return '';
+  }
+}
+
+function getTicketingStatusText(status: string): string {
+  switch (status) {
+    case 'PENDING':
+    case 'PROCESSING':
+      return '취켓팅 진행중';
+    case 'COMPLETED':
+      return '취켓팅 완료';
+    case 'CONFIRMED':
+      return '구매 확정';
+    case 'CANCELLED':
+      return '거래 취소';
+    default:
+      return '알 수 없음';
   }
 } 
