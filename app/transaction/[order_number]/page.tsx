@@ -567,14 +567,6 @@ export default function TransactionDetail() {
                   </Button>
                 </Link>
               )}
-              {transaction.currentStep !== "ticketing_started" && (
-                <Button
-                  onClick={handleAction}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 transition-colors"
-                >
-                  {getActionButtonText()}
-                </Button>
-              )}
             </div>
             {/* 오른쪽 아래 구매확정 버튼 */}
             <div className="mt-10 flex flex-col items-end gap-2">
