@@ -807,11 +807,15 @@ export default function MyPage() {
     
     console.log("정렬된 구매 데이터:", sortedPurchases);
     
-    // 상태 업데이트
-    setOngoingPurchases(sortedPurchases);
+    // ✅ CONFIRMED 상태의 구매 항목 필터링 (진행중인 구매만 표시)
+    const ongoingPurchasesOnly = sortedPurchases.filter((p: any) => p.status !== 'CONFIRMED');
+    console.log("진행중인 구매 데이터 (CONFIRMED 제외):", ongoingPurchasesOnly);
+    
+    // 상태 업데이트 - 진행중인 구매만 표시
+    setOngoingPurchases(ongoingPurchasesOnly);
     setPurchaseStatus(newPurchaseStatus);
     
-    console.log("구매 데이터 로딩 완료:", sortedPurchases.length, "개 항목");
+    console.log("구매 데이터 로딩 완료:", sortedPurchases.length, "개 항목 중", ongoingPurchasesOnly.length, "개 진행중");
   };
 
   // 상태 텍스트 변환 함수

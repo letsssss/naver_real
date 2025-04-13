@@ -202,6 +202,7 @@ export async function GET(request: NextRequest) {
           .from('purchases')
           .select('*')
           .eq('buyer_id', authUser.id) // 명시적 필터 다시 추가
+          .neq('status', 'CANCELED') // 취소된 거래 제외
           .order('created_at', { ascending: false });
         
         if (directError) {
@@ -228,6 +229,7 @@ export async function GET(request: NextRequest) {
             .from('purchases')
             .select('*')
             .eq('buyer_id', authUser.id)
+            .neq('status', 'CANCELED') // 취소된 거래 제외
             .order('created_at', { ascending: false });
           
           if (adminError) {
@@ -251,7 +253,9 @@ export async function GET(request: NextRequest) {
         const { data: originalIdData, error: originalIdError } = await supabase
           .from('purchases')
           .select('*')
-          .eq('buyer_id', userIdStr); // 문자열로 변환한 ID 사용
+          .eq('buyer_id', userIdStr) // 문자열로 변환한 ID 사용
+          .neq('status', 'CANCELED') // 취소된 거래 제외
+          .order('created_at', { ascending: false });
         
         if (originalIdError) {
           console.error("문자열 ID 쿼리 오류:", originalIdError);
@@ -308,7 +312,9 @@ export async function GET(request: NextRequest) {
         const { data: processStatusData, error: processError } = await supabase
           .from('purchases')
           .select('*')
-          .eq('buyer_id', userIdStr);
+          .eq('buyer_id', userIdStr)
+          .neq('status', 'CANCELED') // 취소된 거래 제외
+          .order('created_at', { ascending: false });
         
         if (processError) {
           console.error("PROCESS 상태 쿼리 오류:", processError);
@@ -356,7 +362,8 @@ export async function GET(request: NextRequest) {
                 *,
                 post:posts(*),
                 seller:users!seller_id(id, name, email)
-              `);
+              `)
+              .neq('status', 'CANCELED'); // 취소된 거래 제외
             
             // 작은 배열만 처리 (성능 이슈 방지)
             if (purchaseIds.length <= 10) {
@@ -396,10 +403,19 @@ export async function GET(request: NextRequest) {
       const safePurchasesList = paginatedPurchases || [];
       console.log(`${safePurchasesList.length}개의 구매를 찾았습니다.`);
       
+      // 상태값에 따른 분류 추가
+      const ongoingPurchases = safePurchasesList.filter(p => p.status !== 'CONFIRMED');
+      const completedPurchases = safePurchasesList.filter(p => p.status === 'CONFIRMED');
+      
       // 성공 응답 반환
       return addCorsHeaders(NextResponse.json({
         success: true,
         purchases: safePurchasesList,
+        counts: {
+          total: safePurchasesList.length,
+          ongoing: ongoingPurchases.length,
+          completed: completedPurchases.length
+        },
         raw_user_id: authUser.id,
         user_id_string: userIdStr,
         user_id_type: typeof authUser.id,
