@@ -34,6 +34,7 @@ const getPriceNumber = (price: string | number) => {
 export default function SearchResults() {
   const searchParams = useSearchParams()
   const query = searchParams?.get("query") || ""
+  const category = searchParams?.get("category") || null
   const [sortOrder, setSortOrder] = useState<"asc" | "desc" | null>(null)
   const [results, setResults] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +44,15 @@ export default function SearchResults() {
     const fetchSearchResults = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/posts?search=${encodeURIComponent(query)}`)
+        
+        // 카테고리 파라미터가 있는 경우 API 요청에 포함
+        let apiUrl = `/api/posts?search=${encodeURIComponent(query)}`
+        if (category) {
+          apiUrl += `&category=${encodeURIComponent(category)}`
+        }
+        
+        console.log(`검색 API 호출: ${apiUrl}`)
+        const response = await fetch(apiUrl)
         const data = await response.json()
         
         if (data.success) {
@@ -61,7 +70,7 @@ export default function SearchResults() {
     }
 
     fetchSearchResults()
-  }, [query])
+  }, [query, category])
 
   // 정렬 함수
   const sortedResults = [...results].sort((a, b) => {
@@ -104,8 +113,33 @@ export default function SearchResults() {
             <ArrowLeft className="h-5 w-5 mr-2" />
             <span>홈으로 돌아가기</span>
           </Link>
-          <h1 className="text-3xl font-bold mt-4">검색 결과</h1>
-          <p className="text-gray-600 mt-2">&quot;{query}&quot;에 대한 검색 결과</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mt-4">검색 결과</h1>
+              <p className="text-gray-600 mt-2">
+                &quot;{query}&quot;에 대한 검색 결과
+                {category && <span className="ml-2 text-blue-500">({getCategoryName(category)})</span>}
+              </p>
+            </div>
+            
+            {/* 카테고리 필터 표시 */}
+            {category && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800">
+                <span>{getCategoryName(category)}</span>
+                <button 
+                  onClick={() => {
+                    // 카테고리 필터 제거하고 재검색
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('category');
+                    window.location.href = `/search?${params.toString()}`;
+                  }}
+                  className="ml-2 text-blue-500 hover:text-blue-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -208,5 +242,18 @@ export default function SearchResults() {
       </main>
     </div>
   )
+}
+
+// 카테고리 이름 표시 함수
+function getCategoryName(category: string): string {
+  const categoryMap: Record<string, string> = {
+    'ticket-cancellation': '취소표 예매',
+    'concert': '콘서트',
+    'musical': '뮤지컬/연극',
+    'sports': '스포츠',
+    'exhibition': '전시/행사'
+  };
+  
+  return categoryMap[category] || category;
 }
 

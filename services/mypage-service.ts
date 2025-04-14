@@ -20,6 +20,8 @@ export const fetchOngoingSales = async (
     // 요청 URL에 userId 및 타임스탬프 추가 (캐시 방지)
     const salesTimestamp = Date.now();
     console.log("판매 목록 불러오기 시도... 사용자 ID:", user.id);
+    
+    // 판매자 본인의 판매 상품은 기존과 동일하게 모든 상품 표시
     const response = await fetch(`${API_BASE_URL}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
       headers: {
         'Content-Type': 'application/json',
@@ -156,22 +158,17 @@ export const fetchOngoingSales = async (
     
     // 상태 업데이트
     setSaleStatus(newSaleStatus);
-      
-    console.log("변환된 판매 데이터:", salesData);
-    console.log("정렬된 판매 데이터:", sortedSalesData);
-    console.log("판매 상태별 카운트:", newSaleStatus);
-    console.log(`전체 상품 수: ${salesData.length}`);
-    console.log(`판매 가능한 상품(ACTIVE) 수: ${newSaleStatus.판매중인상품}`);
-    setOriginalSales(sortedSalesData);
     setOngoingSales(sortedSalesData);
+    setOriginalSales(sortedSalesData);
+    
+    console.log("판매 데이터 로딩 완료:", sortedSalesData.length, "개 항목");
   } catch (error) {
-    console.error('판매 목록 로딩 오류:', error);
-    toast.error('판매 목록을 불러오는데 실패했습니다.');
-    // 더미 데이터로 대체
-    setOngoingSales([
-      { id: 2, title: "웃는 남자 [더미 데이터]", date: "2024-01-09", price: "110,000원", status: "취켓팅 진행중", isActive: false, sortPriority: 1 },
-      { id: 1, title: "아이브 팬미팅 [더미 데이터]", date: "2024-04-05", price: "88,000원", status: "판매중", isActive: true, sortPriority: 2 },
-    ]);
+    console.error("판매 목록 불러오기 오류:", error);
+    toast.error('판매 내역을 불러오는 중 오류가 발생했습니다.');
+    
+    // 오류 발생해도 빈 배열 설정하여 화면 렌더링은 계속 진행
+    setOngoingSales([]);
+    setOriginalSales([]);
   } finally {
     setIsLoadingSales(false);
   }

@@ -173,7 +173,9 @@ export default function TicketCancellationPage() {
       })
       return
     }
-    router.push(`/search?query=${encodeURIComponent(searchQuery)}`)
+    
+    // 카테고리 및 검색어를 포함하여 검색 페이지로 이동
+    router.push(`/search?query=${encodeURIComponent(searchQuery)}&category=ticket-cancellation`)
   }
 
   const handleLogin = () => {
@@ -425,6 +427,7 @@ export default function TicketCancellationPage() {
               className="flex-1 h-12 rounded-lg sm:rounded-r-none border-0 bg-white text-black placeholder:text-gray-500"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="검색어 입력"
             />
             <Button
               type="submit"
@@ -686,29 +689,6 @@ export default function TicketCancellationPage() {
                 {index < popularTickets.length - 1 && <div className="border-b border-gray-200 my-2"></div>}
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 티켓 찾기 배너 섹션 (기존) */}
-      <section className="bg-blue-50 py-8 md:py-12">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
-            취켓팅으로 놓친 공연 티켓 찾기
-          </h1>
-          <p className="text-gray-600 mb-6 max-w-2xl">
-            취켓팅은 취소표를 대신 찾아주는 서비스입니다. 원하는 공연의 티켓이 매진되었다면,
-            취켓팅을 신청하고 취소표가 나올 때 알림을 받아보세요.
-          </p>
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <Input
-              type="search"
-              placeholder="공연명 또는 아티스트 검색"
-              className="pl-10 pr-4 py-2 w-full"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
           </div>
         </div>
       </section>

@@ -148,13 +148,12 @@ export async function POST(request: NextRequest) {
       ));
     }
 
-    // 이미 구매 진행 중인지 확인
+    // 이미 구매 진행 중인지 확인 (모든 상태 체크 - 한 번이라도 구매되었으면 중복 구매 불가)
     const { data: existingPurchases, error: purchaseError } = await adminSupabase
       .from('purchases')
       .select('*')
-      .eq('post_id', postId)
-      .in('status', ['PENDING', 'PROCESSING', 'COMPLETED']);
-
+      .eq('post_id', postId);
+      
     if (purchaseError) {
       console.error("구매 정보 조회 오류:", purchaseError);
       return addCorsHeaders(NextResponse.json(
@@ -164,9 +163,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingPurchases && existingPurchases.length > 0) {
-      console.log(`게시글 ID ${postId}는 이미 구매가 진행 중입니다.`);
+      console.log(`게시글 ID ${postId}는 이미 구매된 상품입니다. 중복 구매가 불가능합니다.`);
       return addCorsHeaders(NextResponse.json(
-        { success: false, message: "이미 다른 사용자가 구매 중인 게시글입니다." },
+        { success: false, message: "이미 구매된 상품입니다. 각 티켓은 단 한 번만 구매 가능합니다." },
         { status: 400 }
       ));
     }
