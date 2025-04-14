@@ -10,8 +10,25 @@ const Loader = ({ size = 24 }: { size?: number }) => (
   </div>
 );
 
+// 구매 데이터 인터페이스 정의
+interface Purchase {
+  id: number;
+  orderNumber?: string;
+  title?: string;
+  date?: string;
+  price?: string | number;
+  status?: string;
+  post?: {
+    title?: string;
+    eventName?: string;
+    event_name?: string;
+  };
+  ticketTitle?: string;
+  eventName?: string;
+}
+
 interface PurchasesSectionProps {
-  purchases: any[];
+  purchases: Purchase[];
   isLoading: boolean;
   router: AppRouterInstance;
 }

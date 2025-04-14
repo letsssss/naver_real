@@ -9,8 +9,10 @@ export type Sale = {
   id: number;
   title: string;
   date: string;
-  price: number;
+  price: string | number;
   status: string;
+  isActive?: boolean;
+  sortPriority?: number;
   orderNumber?: string;
 };
 
