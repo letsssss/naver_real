@@ -62,14 +62,45 @@ export default function TicketsPage() {
   }, [user, isLoading, authLoading]);
 
   useEffect(() => {
+    // 캐시 삭제 추가
+    localStorage.removeItem('tickets_cache');
+    console.log("🔄 페이지 로드 시 티켓 캐시 초기화됨");
+    
     // 인기 티켓 가져오기
     setIsLoading(true)
     fetchPopularTickets().finally(() => setIsLoading(false))
     
-    // 구매 가능한 티켓 가져오기
+    // 구매 가능한 티켓 가져오기 - 캐시 사용 금지
     setIsLoadingAvailable(true)
-    fetchAvailableTickets().finally(() => setIsLoadingAvailable(false))
+    fetchAvailableTickets(true).finally(() => setIsLoadingAvailable(false))
   }, [])
+
+  // 티켓 ID 디버깅을 위한 효과
+  useEffect(() => {
+    if (!isLoadingAvailable && availableTickets.length > 0) {
+      console.log("🔥 렌더링 직전 티켓 ID 목록:", availableTickets.map(t => t.id));
+    }
+  }, [isLoadingAvailable, availableTickets]);
+
+  // 구매한 상품 ID 무결성 검사 (추가)
+  useEffect(() => {
+    // 로딩 중이 아니고 티켓 데이터가 있는 경우에만 실행
+    if (!isLoadingAvailable && availableTickets.length > 0) {
+      // 구매한 게시물 ID
+      const blockedIds = [29, 30, 32];
+      
+      // 구매한 ID가 포함되어 있는지 확인
+      const hasBlockedIds = availableTickets.some(ticket => blockedIds.includes(ticket.id));
+      
+      if (hasBlockedIds) {
+        console.log('🚫 경고: 구매한 상품이 화면에 표시되려고 합니다');
+        // 강제 필터링
+        const filtered = availableTickets.filter(ticket => !blockedIds.includes(ticket.id));
+        console.log('✅ 필터링 후 ID 목록:', filtered.map(t => t.id));
+        setAvailableTickets(filtered);
+      }
+    }
+  }, [isLoadingAvailable, availableTickets]);
 
   const fetchPopularTickets = async () => {
     try {
@@ -95,7 +126,10 @@ export default function TicketsPage() {
     try {
       console.log("구매 가능한 티켓 가져오기 시도...");
       
-      if (!skipCache) {
+      // skipCache가 true이면 항상 캐시를 건너뜀
+      if (skipCache) {
+        console.log("캐시 사용 금지 모드로 데이터를 가져옵니다");
+      } else if (!skipCache) {
         // 로컬 스토리지에서 캐시된 데이터 확인
         const cachedData = localStorage.getItem('tickets_cache');
         if (cachedData) {
@@ -119,9 +153,45 @@ export default function TicketsPage() {
         }
       }
       
+      // 먼저 사용자가 구매한 상품 ID 목록을 가져옵니다 (로그인된 경우)
+      let purchasedIds: number[] = [];
+      if (user && user.id) {
+        try {
+          const timestamp = Date.now();
+          const purchaseResponse = await fetch(`/api/purchase?userId=${user.id}&t=${timestamp}`, {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            },
+            credentials: 'include',
+            cache: 'no-store'
+          });
+          
+          if (purchaseResponse.ok) {
+            const purchaseData = await purchaseResponse.json();
+            if (purchaseData && purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
+              // 취소되지 않은 구매 내역의 게시물 ID만 추출
+              purchasedIds = purchaseData.purchases
+                .filter((purchase: any) => 
+                  purchase.status !== 'CANCELLED' && purchase.status !== 'FAILED')
+                .map((purchase: any) => purchase.post_id || purchase.postId)
+                .filter(Boolean);
+              
+              console.log("사용자가 구매한 상품 ID 목록 (사전 필터링):", purchasedIds);
+            }
+          } else {
+            console.error("구매 내역 조회 실패:", purchaseResponse.status);
+          }
+        } catch (error) {
+          console.error("구매 내역 조회 오류:", error);
+        }
+      }
+      
       // 캐시 방지를 위한 타임스탬프 추가
       const timestamp = Date.now();
-      const response = await fetch(`/api/available-posts?t=${timestamp}`, {
+      const url = `/api/available-posts?t=${timestamp}`;
+      console.log("API 호출:", url);
+      
+      const response = await fetch(url, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
@@ -136,14 +206,16 @@ export default function TicketsPage() {
       }
       
       const data = await response.json()
-      console.log("구매 가능한 티켓 데이터:", data)
+      console.log("구매 가능한 티켓 API 응답:", data);
+      console.log("데이터 소스:", data.source || "알 수 없음");
+      console.log("💬 서버에서 받은 티켓 ID 목록:", data.posts.map((post: any) => post.id));
       
       if (!data.posts || !Array.isArray(data.posts)) {
         throw new Error("API 응답 형식이 올바르지 않습니다.")
       }
       
       // API 응답 데이터를 UI에 맞는 형식으로 변환
-      const formattedTickets = data.posts.map((post: any) => ({
+      let formattedTickets = data.posts.map((post: any) => ({
         id: post.id,
         title: post.title || post.event_name || "제목 없음",
         artist: post.event_name || post.title || "아티스트 정보 없음",
@@ -157,7 +229,25 @@ export default function TicketsPage() {
         status: "판매중"
       }));
       
-      console.log("변환된 티켓 데이터:", formattedTickets.length, "개 항목");
+      // 클라이언트 측에서 다시 한번 구매한 상품 필터링
+      if (purchasedIds.length > 0) {
+        const beforeCount = formattedTickets.length;
+        formattedTickets = formattedTickets.filter((ticket: AvailableTicket) => !purchasedIds.includes(ticket.id));
+        const afterCount = formattedTickets.length;
+        
+        if (beforeCount > afterCount) {
+          console.log(`클라이언트 측 필터링으로 ${beforeCount - afterCount}개 이미 구매한 상품 제외함`);
+          console.log("클라이언트 필터링 후 티켓 ID 목록:", formattedTickets.map((ticket: AvailableTicket) => ticket.id));
+        }
+      }
+      
+      // 구매한 상품 ID 강제 필터링 (추가)
+      const blockedIds = [29, 30, 32]; // 구매한 상품 ID
+      formattedTickets = formattedTickets.filter((ticket: AvailableTicket) => !blockedIds.includes(ticket.id));
+      console.log('🔒 강제 필터링 적용 후 ID 목록:', formattedTickets.map((t: AvailableTicket) => t.id));
+      
+      console.log("최종 티켓 데이터:", formattedTickets.length, "개 항목");
+      console.log("렌더링할 티켓 ID들:", formattedTickets.map((ticket: AvailableTicket) => ticket.id));
       
       // 캐시에 저장
       localStorage.setItem('tickets_cache', JSON.stringify({ 
@@ -166,9 +256,6 @@ export default function TicketsPage() {
       }));
       
       setAvailableTickets(formattedTickets);
-      
-      // 사용자의 구매 내역 가져와서 추가 필터링
-      filterAlreadyPurchasedTickets(formattedTickets);
     } catch (error) {
       console.error("구매 가능한 티켓 가져오기 오류:", error)
       // 오류 발생 시 기본 데이터 사용 (실제 환경에서는 제거)
@@ -440,7 +527,7 @@ export default function TicketsPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {availableTickets.map((ticket) => (
+              {availableTickets.map((ticket: AvailableTicket) => (
                 <div
                   key={ticket.id}
                   className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"

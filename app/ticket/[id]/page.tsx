@@ -2,9 +2,6 @@ import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "sonner"
 
 // 이 데이터는 실제로는 API나 데이터베이스에서 가져와야 합니다.
 const ticketData = {
@@ -71,39 +68,6 @@ const ticketData = {
 }
 
 export default function TicketDetail({ params }: { params: { id: string } }) {
-  const [isPurchased, setIsPurchased] = useState(false);
-  const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
-  const { user } = useAuth();
-
-  // 이미 구매된 티켓인지 확인
-  useEffect(() => {
-    const checkIfAlreadyPurchased = async () => {
-      if (!params.id || !user) {
-        setIsCheckingPurchase(false);
-        return;
-      }
-
-      try {
-        setIsCheckingPurchase(true);
-        // 서버에 이 티켓이 이미 구매됐는지 확인 요청
-        const response = await fetch(`/api/check-purchase?postId=${params.id}`, {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setIsPurchased(data.isPurchased);
-        }
-      } catch (error) {
-        console.error('구매 확인 오류:', error);
-      } finally {
-        setIsCheckingPurchase(false);
-      }
-    };
-
-    checkIfAlreadyPurchased();
-  }, [params.id, user]);
-
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
@@ -193,17 +157,6 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
                           <div className="text-right">
                             <div className="text-sm text-gray-500 mb-1">{ticket.quantity}장</div>
                             <div className="text-lg font-bold text-orange-500">₩{ticket.price.toLocaleString()}</div>
-                          </div>
-                          <div className="mt-4">
-                            {isPurchased ? (
-                              <Button disabled className="w-full bg-gray-400 hover:bg-gray-400 cursor-not-allowed">
-                                이미 구매됨
-                              </Button>
-                            ) : (
-                              <Button className="w-full" disabled={isCheckingPurchase}>
-                                {isCheckingPurchase ? '확인 중...' : '구매하기'}
-                              </Button>
-                            )}
                           </div>
                         </div>
                       </div>

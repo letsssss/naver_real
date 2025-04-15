@@ -1,25 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { adminSupabase, supabase } from "@/lib/supabase";
-
-// available_posts 뷰에 대한 타입 정의
-type AvailablePost = {
-  id: number;
-  title: string;
-  content?: string;
-  created_at: string;
-  updated_at?: string | null;
-  status?: string;
-  user_id?: string;
-  category?: string;
-  price?: number;
-  is_deleted?: boolean;
-  ticket_price?: number;
-  event_name?: string;
-  event_date?: string;
-  event_venue?: string;
-  image_url?: string;
-  published?: boolean;
-};
+import { createAdminClient } from "@/lib/supabase";
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -35,120 +15,139 @@ function addCorsHeaders(response: NextResponse) {
   return response;
 }
 
+// 사용 가능한 게시물을 위한 타입 정의
+type AvailablePost = {
+  id: number;
+  title: string;
+  content?: string;
+  author_id?: string;
+  category?: string;
+  created_at?: string;
+  updated_at?: string;
+  status?: string;
+  is_deleted?: boolean;
+  ticket_price?: number;
+  event_name?: string;
+  event_date?: string;
+  event_venue?: string;
+  image_url?: string;
+  user_id?: string;
+};
+
 /**
  * 구매 가능한 상품 목록을 제공하는 API
- * available_posts 뷰를 사용하여 이미 구매된 상품은 자동으로 제외됨
+ * get_available_posts() 함수를 사용하여 이미 구매된 상품은 자동으로 제외됨
  */
 export async function GET(req: NextRequest) {
   try {
+    console.log("[사용 가능한 게시물 API] GET 요청 시작");
+    
     // URL 쿼리 파라미터 추출
     const url = new URL(req.url);
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
-    const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '10');
     const category = url.searchParams.get('category');
-    const searchQuery = url.searchParams.get('search');
-    // 캐시 방지를 위한 타임스탬프
-    const timestamp = Date.now();
-
-    console.log(`[Available Posts API] 요청 받음: page=${page}, limit=${limit}, category=${category}, search=${searchQuery}, t=${timestamp}`);
-
-    // ----- available_posts 뷰 조회 -----
-    console.log("[Available Posts API] available_posts 뷰 데이터 확인 중...");
+    const search = url.searchParams.get('search');
     
-    // 💡 available_posts 뷰 직접 사용: 타입 오류 우회를 위해 as any 사용
-    let query = (adminSupabase
-      .from('available_posts') as any)  // ✅ 반드시 뷰 사용!
-      .select('*', { count: 'exact' });
-
-    // 활성 상태이고 삭제되지 않은 상품만 선택
-    query = query.eq('status', 'ACTIVE')
-      .eq('is_deleted', false);
-
-    // 카테고리 필터링
+    console.log(`[사용 가능한 게시물 API] 요청 파라미터: page=${page}, limit=${limit}, category=${category}, search=${search}`);
+    
+    // 페이지네이션 계산
+    const offset = (page - 1) * limit;
+    
+    // Supabase Admin 클라이언트 생성
+    const adminSupabase = createAdminClient();
+    
+    // RPC 함수 호출로 구매 가능한 게시물 가져오기
+    // from('available_posts') 대신 rpc('get_available_posts') 사용
+    // 먼저 rpc 함수 실행하여 구매 가능한 게시물 가져오기
+    const { data: availablePosts, error: rpcError } = await adminSupabase
+      .rpc('get_available_posts');
+    
+    if (rpcError) {
+      console.error("[사용 가능한 게시물 API] RPC 함수 호출 오류:", rpcError);
+      
+      return addCorsHeaders(NextResponse.json({
+        success: false,
+        message: '구매 가능한 게시물 목록을 조회하는 중 오류가 발생했습니다.',
+        error: process.env.NODE_ENV === 'development' ? rpcError : undefined
+      }, { status: 500 }));
+    }
+    
+    // 함수에서 반환된 게시물에 필터 적용
+    let filteredPosts = availablePosts || [];
+    
+    // 카테고리 필터링 추가
     if (category) {
-      query = query.eq('category', category);
+      console.log(`[사용 가능한 게시물 API] 카테고리 필터링: ${category}`);
+      filteredPosts = filteredPosts.filter((post: any) => post.category === category);
     }
-
-    // 검색어 필터링
-    if (searchQuery) {
-      query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
+    
+    // 검색어 필터링 추가
+    if (search) {
+      console.log(`[사용 가능한 게시물 API] 검색어 필터링: ${search}`);
+      const searchLower = search.toLowerCase();
+      filteredPosts = filteredPosts.filter((post: any) => 
+        (post.title && post.title.toLowerCase().includes(searchLower)) || 
+        (post.content && post.content.toLowerCase().includes(searchLower))
+      );
     }
-
+    
+    // 생성 날짜 기준 정렬 (내림차순)
+    filteredPosts.sort((a: any, b: any) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA; // 내림차순
+    });
+    
     // 페이지네이션 적용
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    // 최종 쿼리 실행
-    query = query.order('created_at', { ascending: false })
-      .range(from, to);
-      
-    const { data: posts, error, count } = await query;
+    const totalCount = filteredPosts.length;
+    const posts = filteredPosts.slice(offset, offset + limit);
     
-    if (error) {
-      console.error('[Available Posts API] 데이터 조회 오류:', error);
-      return addCorsHeaders(NextResponse.json(
-        { success: false, message: '구매 가능한 상품 목록을 조회하는 중 오류가 발생했습니다.' },
-        { status: 500 }
-      ));
-    }
-
-    // 각 게시물의 ID 출력 (디버깅용)
-    if (posts) {
-      console.log("반환되는 게시물 ID 목록:", posts.map((post: AvailablePost) => post.id));
-      
-      // 구매 여부 체크 (디버깅용)
-      console.log("반환되는 게시물 상세 정보:");
-      posts.forEach((post: AvailablePost) => {
-        console.log(`- 상품 ID: ${post.id}, 제목: ${post.title}, 구매됨: 아니오(available_posts 뷰에서 가져옴)`);
-      });
-    }
+    console.log(`[사용 가능한 게시물 API] 조회 성공: ${posts?.length || 0}개 게시물 발견 (총 ${totalCount}개 중)`);
     
-    console.log(`[Available Posts API] 응답: ${posts?.length || 0}개 항목, 총 ${count || 0}개`);
-
-    // 총 개수 별도 조회 (available_posts 뷰 count가 정확하지 않을 경우를 대비)
-    let totalCount = count;  // 기본적으로 쿼리 결과의 count 사용
-
-    // count가 없거나 부정확한 경우, 별도로 count 쿼리 실행
-    if (!count) {
-      try {
-        const countResult = await (adminSupabase
-          .from('available_posts') as any)
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'ACTIVE')
-          .eq('is_deleted', false);
-        
-        if (countResult && countResult.count !== undefined) {
-          totalCount = countResult.count;
-          console.log(`[Available Posts API] 별도 count 쿼리 결과: ${totalCount}개`);
-        }
-      } catch (countError) {
-        console.error('[Available Posts API] count 조회 오류:', countError);
-      }
-    }
-
-    // 응답 데이터 구성
+    // 응답 데이터 구성 - 결과를 any로 타입 변환하여 처리
+    const formattedPosts = posts?.map((post: any) => ({
+      id: post.id,
+      title: post.title,
+      content: post.content?.substring(0, 100) + (post.content && post.content.length > 100 ? '...' : ''),
+      category: post.category || 'GENERAL',
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      ticketPrice: post.ticket_price || 0,
+      eventName: post.event_name || post.title,
+      eventDate: post.event_date || null,
+      eventVenue: post.event_venue || null,
+      imageUrl: post.image_url || null,
+      authorId: post.author_id || post.user_id
+    })) || [];
+    
     return addCorsHeaders(NextResponse.json({
       success: true,
-      posts: posts || [],
+      posts: formattedPosts,
       pagination: {
-        totalCount: totalCount || 0,
-        totalPages: Math.ceil((totalCount || 0) / limit),
+        totalCount: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
         currentPage: page,
-        pageSize: limit,
-        hasMore: (from + (posts?.length || 0)) < (totalCount || 0)
+        hasMore: offset + (posts?.length || 0) < totalCount
       },
-      timestamp,
-      filteredBy: {
-        using_view: 'available_posts', // ✅ 뷰 사용 명시
-        category,
-        searchQuery
-      }
-    }));
+      filters: {
+        category: category || null,
+        search: search || null
+      },
+      source: 'get_available_posts_function' // 데이터 소스 표시 업데이트
+    }, { status: 200 }));
   } catch (error) {
-    console.error('[Available Posts API] 처리 중 오류 발생:', error);
-    return addCorsHeaders(NextResponse.json(
-      { success: false, message: '요청을 처리하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    ));
+    console.error("[사용 가능한 게시물 API] 오류:", error);
+    
+    return addCorsHeaders(NextResponse.json({
+      success: false,
+      message: '게시물 목록을 조회하는 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? String(error) : undefined
+    }, { status: 500 }));
   }
+}
+
+// OPTIONS 메서드 처리 (CORS 프리플라이트 요청을 위한)
+export async function OPTIONS() {
+  return addCorsHeaders(new NextResponse(null, { status: 200 }));
 }

@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, RefreshCw } from "lucide-react"
 import { useState, useEffect } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -44,22 +44,53 @@ export default function SearchResults() {
     const fetchSearchResults = async () => {
       try {
         setLoading(true)
+        setError("")
         
         // 카테고리 파라미터가 있는 경우 API 요청에 포함
-        let apiUrl = `/api/posts?search=${encodeURIComponent(query)}`
+        let apiUrl = `/api/available-posts?search=${encodeURIComponent(query)}`
         if (category) {
           apiUrl += `&category=${encodeURIComponent(category)}`
         }
         
-        console.log(`검색 API 호출: ${apiUrl}`)
-        const response = await fetch(apiUrl)
+        console.log(`검색 API 호출 (구매 가능 게시물): ${apiUrl}`)
+        
+        // 캐시 방지를 위한 타임스탬프 추가
+        apiUrl += `&t=${Date.now()}`
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          cache: 'no-store',
+          next: { revalidate: 0 }
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
         const data = await response.json()
         
+        // 디버깅을 위한 전체 응답 로깅
+        console.log("검색 API 응답:", data)
+        
         if (data.success) {
-          setResults(data.posts)
-          console.log("검색 결과 로드 완료:", data.posts.length, "개 항목")
+          console.log("검색 결과:", data.posts)
+          if (data.posts && data.posts.length > 0) {
+            // 첫 번째 항목 정보 확인
+            console.log("첫 번째 검색 결과 항목:", data.posts[0])
+          }
+          setResults(data.posts || [])
+          console.log("검색 결과 로드 완료:", data.posts?.length || 0, "개 항목")
+          
+          if (data.posts?.length === 0) {
+            console.log("검색 결과가 없습니다.")
+          }
         } else {
-          setError("검색 결과를 불러오는데 실패했습니다.")
+          console.error("API 응답 오류:", data.error || "알 수 없는 오류")
+          setError(data.error || "검색 결과를 불러오는데 실패했습니다.")
         }
       } catch (err) {
         console.error("검색 결과 불러오기 오류:", err)
@@ -81,6 +112,55 @@ export default function SearchResults() {
     }
     return 0
   })
+
+  // 재시도 처리 함수
+  const handleRetry = () => {
+    setResults([])
+    setError("")
+    
+    // fetchSearchResults 함수를 새로 실행
+    const fetchSearchResults = async () => {
+      try {
+        setLoading(true)
+        
+        let apiUrl = `/api/available-posts?search=${encodeURIComponent(query)}`
+        if (category) {
+          apiUrl += `&category=${encodeURIComponent(category)}`
+        }
+        
+        apiUrl += `&t=${Date.now()}`
+        
+        const response = await fetch(apiUrl, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          cache: 'no-store',
+          next: { revalidate: 0 }
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        
+        if (data.success) {
+          setResults(data.posts || [])
+        } else {
+          setError(data.error || "검색 결과를 불러오는데 실패했습니다.")
+        }
+      } catch (err) {
+        console.error("재시도 중 오류:", err)
+        setError("검색 결과를 불러오는데 실패했습니다.")
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchSearchResults()
+  }
 
   // 로딩 상태 표시
   if (loading) {
@@ -169,8 +249,36 @@ export default function SearchResults() {
 
         {error ? (
           <div className="text-center py-12">
-            <p className="text-xl text-red-600">{error}</p>
-            <p className="mt-2 text-gray-500">잠시 후 다시 시도해 주세요.</p>
+            <div className="flex flex-col items-center">
+              <div className="text-red-500 mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mx-auto mb-4"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <p className="text-xl font-medium">{error}</p>
+              </div>
+              <p className="mt-2 text-gray-500 mb-4">검색 중 오류가 발생했습니다. 다시 시도해 주세요.</p>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-600"
+                onClick={handleRetry}
+              >
+                <RefreshCw className="h-4 w-4" />
+                다시 시도하기
+              </Button>
+            </div>
           </div>
         ) : sortedResults.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

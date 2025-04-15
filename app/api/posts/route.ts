@@ -104,10 +104,16 @@ export async function GET(req: Request) {
       return await getPostById(postId);
     }
     
-    // 전체 게시물 목록 조회
+    // 전체 게시물 목록 조회를 위한 파라미터 추출
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const pageSize = parseInt(url.searchParams.get('limit') || '10', 10);
     const category = url.searchParams.get('category');
+    const searchQuery = url.searchParams.get('search');
+    
+    // 검색 요청인 경우 로그 출력
+    if (searchQuery) {
+      console.log(`[게시물 API] 검색 요청: "${searchQuery}"`);
+    }
     
     return await getPosts(req, page, pageSize, category);
   } catch (error) {
@@ -197,6 +203,9 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
   // URL에서 userId 파라미터 추출
   const url = new URL(req.url);
   const userId = url.searchParams.get('userId');
+  const searchQuery = url.searchParams.get('search');  // 검색어 파라미터 추가
+  
+  console.log(`[게시물 API] 쿼리 파라미터: page=${page}, limit=${pageSize}, category=${category}, search=${searchQuery}`);
   
   // 쿼리 빌더 준비 (adminSupabase 사용)
   let query = adminSupabase
@@ -217,6 +226,13 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
   if (userId) {
     console.log(`[게시물 API] 작성자 ID 필터링: ${userId}`);
     query = query.eq('author_id', userId);
+  }
+  
+  // 검색어 필터링 추가
+  if (searchQuery && searchQuery.trim()) {
+    console.log(`[게시물 API] 검색어 필터링: ${searchQuery}`);
+    // 제목이나 내용에 검색어가 포함된 게시물 검색
+    query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
   }
   
   // 최종 쿼리 실행
@@ -261,6 +277,7 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
   });
   
   return createApiResponse({
+    success: true,
     posts: formattedPosts,
     pagination: {
       totalCount: count || 0,
@@ -268,6 +285,10 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
       currentPage: page,
       pageSize,
       hasMore: (offset + posts.length) < (count || 0)
+    },
+    filters: {
+      category,
+      search: searchQuery || null
     }
   });
 }

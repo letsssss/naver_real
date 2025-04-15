@@ -104,22 +104,29 @@ export default function TicketCancellationPage() {
       setError("")
       console.log("취켓팅 가능 티켓 불러오기 시작...")
       
-      // 먼저 일반 티켓 게시물 확인 - 카테고리 없이 모든 게시물 조회
-      let apiUrl = '/api/posts'
-      console.log("기본 API 호출 (모든 게시물):", apiUrl)
+      // API 호출을 available-posts로 변경
+      let apiUrl = '/api/available-posts' // 변경됨: /api/posts -> /api/available-posts
+      console.log("수정된 API 호출 (구매 가능한 게시물):", apiUrl)
+      
+      // 캐시 방지를 위한 타임스탬프 추가
+      const timestamp = Date.now();
+      apiUrl = `${apiUrl}?t=${timestamp}`;
       
       let response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
-        cache: 'no-store'
+        cache: 'no-store',
+        next: { revalidate: 0 } // 데이터 재검증 비활성화
       })
       
-      console.log("기본 API 응답 상태:", response.status)
+      console.log("API 응답 상태:", response.status)
       let data = await response.json()
       console.log("전체 게시물 수:", data.posts?.length || 0)
+      console.log("데이터 소스:", data.source || "알 수 없음");
       
       if (!data.posts || data.posts.length === 0) {
         console.log("게시물이 없습니다. API 응답:", data);
