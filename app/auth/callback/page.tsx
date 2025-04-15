@@ -37,6 +37,14 @@ export default function AuthCallback() {
           refresh_token: data.session.refresh_token,
         });
 
+        // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
+        if (typeof document !== 'undefined') {
+          const projectRef = 'jdubrjczdyqqtsppojgu';
+          document.cookie = `sb-${projectRef}-access-token=${data.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
+          document.cookie = `sb-${projectRef}-refresh-token=${data.session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
+          console.log('✅ 소셜 로그인 콜백: 세션 쿠키를 명시적으로 설정했습니다');
+        }
+
         const authMode = localStorage.getItem('kakao_auth_mode') || 'login';
         const { data: userData, error: userError } = await supabase.auth.getUser();
 

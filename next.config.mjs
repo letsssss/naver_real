@@ -21,6 +21,11 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  env: {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    JWT_SECRET: process.env.JWT_SECRET,
+  }
 }
 
 mergeConfig(nextConfig, userConfig)

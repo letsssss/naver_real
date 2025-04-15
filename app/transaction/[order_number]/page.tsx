@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
+import ChatWithOrderInit from "@/components/ChatWithOrderInit"
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -42,28 +43,6 @@ const defaultTransaction = {
     profileImage: "/placeholder.svg?height=50&width=50",
   },
 }
-
-// 샘플 메시지 데이터
-const initialMessages = [
-  {
-    id: 1,
-    senderId: "seller123",
-    text: "안녕하세요! 세븐틴 콘서트 티켓 구매해주셔서 감사합니다. 취켓팅 진행 중이니 조금만 기다려주세요.",
-    timestamp: "2024-03-16T10:30:00",
-  },
-  {
-    id: 2,
-    senderId: "user",
-    text: "네, 감사합니다. 혹시 취켓팅 완료 예상 시간이 언제인가요?",
-    timestamp: "2024-03-16T10:35:00",
-  },
-  {
-    id: 3,
-    senderId: "seller123",
-    text: "보통 공연 1-2일 전에 완료되지만, 취소표가 빨리 나오면 더 일찍 완료될 수도 있어요. 상황에 따라 다를 수 있으니 메시지로 안내해 드릴게요.",
-    timestamp: "2024-03-16T10:40:00",
-  },
-]
 
 // 상태 변환 함수들
 const getStatusText = (status: string) => {
@@ -130,9 +109,6 @@ export default function TransactionDetail() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
-  const [messages, setMessages] = useState(initialMessages)
-  const [newMessage, setNewMessage] = useState("")
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // API에서 거래 정보 불러오기
   useEffect(() => {
@@ -199,14 +175,6 @@ export default function TransactionDetail() {
         }
         
         setTransaction(formattedData)
-        
-        // 메시지 데이터 불러오기
-        // 실제 구현 시 메시지도 API에서 불러와야 함
-        // const messageResponse = await fetch(`/api/messages/${orderNumber}`)
-        // if (messageResponse.ok) {
-        //   const messageData = await messageResponse.json()
-        //   setMessages(messageData)
-        // }
       } catch (error) {
         console.error("거래 정보 로딩 에러:", error)
         setError(error instanceof Error ? error.message : "거래 정보를 불러오는데 실패했습니다.")
@@ -218,16 +186,8 @@ export default function TransactionDetail() {
     loadData()
   }, [orderNumber, currentUser])
 
-  // 채팅창이 열릴 때 스크롤을 맨 아래로 이동
-  useEffect(() => {
-    if (isChatOpen) {
-      scrollToBottom()
-    }
-  }, [isChatOpen, messages])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
+  const openChat = () => setIsChatOpen(true)
+  const closeChat = () => setIsChatOpen(false)
 
   const handleAction = async () => {
     if (transaction.currentStep === "ticketing_started") {
@@ -274,40 +234,6 @@ export default function TransactionDetail() {
       // 이미 구매 확정된 경우 리뷰 페이지로 이동
       router.push(`/review/${orderNumber}`)
     }
-  }
-
-  const openChat = () => setIsChatOpen(true)
-  const closeChat = () => setIsChatOpen(false)
-
-  const handleSendMessage = () => {
-    if (newMessage.trim() === "") return
-
-    const newMsg = {
-      id: messages.length + 1,
-      senderId: "user",
-      text: newMessage,
-      timestamp: new Date().toISOString(),
-    }
-
-    setMessages([...messages, newMsg])
-    setNewMessage("")
-    
-    // 실제 구현 시 메시지 전송 API 호출
-    // fetch(`/api/messages/${orderNumber}`, {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({
-    //     text: newMessage,
-    //     recipientId: transaction.seller.id
-    //   }),
-    // })
-  }
-
-  const formatMessageTime = (timestamp: string) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
   }
 
   // 현재 단계에 따른 버튼 텍스트 결정
@@ -637,50 +563,14 @@ export default function TransactionDetail() {
               </button>
             </div>
 
-            {/* 채팅 메시지 영역 */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderId === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.senderId === "user"
-                          ? "bg-blue-500 text-white rounded-tr-none"
-                          : "bg-gray-200 text-gray-800 rounded-tl-none"
-                      }`}
-                    >
-                      <p className="text-sm">{message.text}</p>
-                      <p className={`text-xs mt-1 ${message.senderId === "user" ? "text-blue-100" : "text-gray-500"}`}>
-                        {formatMessageTime(message.timestamp)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            {/* 메시지 입력 영역 */}
-            <div className="p-4 border-t bg-white">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                  placeholder="메시지를 입력하세요..."
-                  className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            {/* 실제 채팅 컴포넌트 */}
+            <div className="flex-1 overflow-hidden">
+              {currentUser?.id && (
+                <ChatWithOrderInit 
+                  orderNumber={String(orderNumber)} 
+                  currentUserId={String(currentUser.id)} 
                 />
-                <button
-                  onClick={handleSendMessage}
-                  className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
-                >
-                  <Send className="h-5 w-5" />
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

@@ -4,14 +4,15 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 // 직접 import하지 않고 필요할 때 동적으로 가져오도록 수정
 // import { cookies } from 'next/headers';
 
-// ✅ 환경 변수 설정
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+// ✅ 환경 변수 설정 - 하드코딩된 값으로 변경하여 환경 변수 로딩 문제 해결
+const SUPABASE_URL = 'https://jdubrjczdyqqtsppojgu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
+const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("❌ Supabase 환경 변수가 누락되었습니다.");
-}
+// 환경 변수가 설정되어 있는지 검증하는 대신 상수 사용
+// if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+//   throw new Error("❌ Supabase 환경 변수가 누락되었습니다.");
+// }
 
 // ✅ Supabase 클라이언트 옵션
 const options = {
@@ -116,8 +117,20 @@ export function createAuthClient(): SupabaseClient<Database> {
  * 관리자 권한 Supabase 클라이언트를 생성합니다.
  * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
  * 싱글톤 패턴으로 한 번만 생성됩니다.
+ * @param cookieStore 선택적으로 쿠키 스토어를 전달하여 인증된 세션을 유지할 수 있습니다.
  */
-export function createAdminClient(): SupabaseClient<Database> {
+export function createAdminClient(cookieStore?: any): SupabaseClient<Database> {
+  // 쿠키가 제공된 경우 서버 컴포넌트 클라이언트 생성 시도
+  if (cookieStore && typeof cookieStore === 'object') {
+    try {
+      const { createServerComponentClient } = require('@supabase/auth-helpers-nextjs');
+      return createServerComponentClient({ cookies: () => cookieStore });
+    } catch (error) {
+      console.warn('[Supabase] 쿠키를 사용한 서버 컴포넌트 클라이언트 생성 실패:', error);
+      // 실패 시 일반 관리자 클라이언트로 폴백
+    }
+  }
+  
   // 이미 생성된 인스턴스가 있으면 재사용
   if (adminSupabaseInstance) {
     return adminSupabaseInstance;

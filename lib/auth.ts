@@ -12,6 +12,7 @@ import { jwtVerify, createRemoteJWKSet } from 'jose';
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { Database } from '@/types/supabase.types';
+import { createClient } from '@supabase/supabase-js';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -23,9 +24,7 @@ declare module "next-auth" {
       image?: string | null;
     }
   }
-}
-
-declare module 'next-auth/jwt' {
+  
   interface JWT {
     id: string;
   }
@@ -365,4 +364,51 @@ export async function validateRequestToken(req: Request | NextRequest): Promise<
     const errorMessage = e instanceof Error ? e.message : '인증 검증 중 알 수 없는 오류 발생';
     return { userId: '', authenticated: false, message: errorMessage };
   }
+}
+
+// ✅ 쿠키 이름 상수 정의 (미들웨어와 일치)
+const projectRef = 'jdubrjczdyqqtsppojgu';
+const accessCookie = `sb-${projectRef}-access-token`;
+const refreshCookie = `sb-${projectRef}-refresh-token`;
+const authStatusCookie = 'auth-status';
+
+/**
+ * 로그인 성공 시 세션 토큰을 저장합니다.
+ * 미들웨어와 API에서 인식 가능한 쿠키를 설정합니다.
+ * 주의: 이 함수는 클라이언트 측에서만 사용해야 합니다.
+ */
+export async function handleAuthSuccess(session: any) {
+  if (!session) return false;
+  
+  try {
+    // 브라우저 환경인지 확인
+    if (typeof window !== 'undefined') {
+      // 로컬 스토리지에 토큰 저장 (클라이언트 측에서만)
+      localStorage.setItem('token', session.access_token);
+      localStorage.setItem('refresh_token', session.refresh_token);
+    }
+    
+    // 쿠키 설정 (클라이언트 측에서만)
+    setCookie(accessCookie, session.access_token, 1); // 1일 유효
+    setCookie(refreshCookie, session.refresh_token, 7); // 7일 유효
+    setCookie(authStatusCookie, 'authenticated', 1); // 인증 상태 표시
+    
+    console.log('✅ 인증 성공: 토큰과 쿠키가 저장되었습니다');
+    return true;
+  } catch (error) {
+    console.error('❌ 인증 정보 저장 실패:', error);
+    return false;
+  }
+}
+
+/**
+ * 쿠키를 설정하는 헬퍼 함수
+ * 주의: 이 함수는 클라이언트 측에서만 동작합니다.
+ */
+function setCookie(name: string, value: string, days: number) {
+  // 브라우저 환경인지 확인
+  if (typeof document === 'undefined') return;
+  
+  const maxAge = days * 24 * 60 * 60;
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
 } 

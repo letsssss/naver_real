@@ -168,6 +168,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 사용자 정보 저장
         safeLocalStorageSet("user", JSON.stringify(userData));
         setUser(userData);
+        
+        // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
+        if (typeof document !== 'undefined') {
+          const projectRef = 'jdubrjczdyqqtsppojgu';
+          document.cookie = `sb-${projectRef}-access-token=${session.access_token}; path=/; max-age=86400; SameSite=Lax`;
+          document.cookie = `sb-${projectRef}-refresh-token=${session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
+          console.log('✅ 세션 쿠키를 명시적으로 설정했습니다:', session.access_token.substring(0, 10) + '...');
+        }
+        
         setLoading(false);
         return true;
       }
@@ -428,6 +437,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const sessionStr = JSON.stringify(sessionData.session);
           safeLocalStorageSet("supabase_session", sessionStr);
           console.log('Supabase 세션 객체를 localStorage에 저장했습니다.');
+          
+          // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
+          if (typeof document !== 'undefined' && sessionData.session) {
+            const projectRef = 'jdubrjczdyqqtsppojgu';
+            document.cookie = `sb-${projectRef}-access-token=${sessionData.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
+            document.cookie = `sb-${projectRef}-refresh-token=${sessionData.session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
+            console.log('✅ 로그인 성공 후 세션 쿠키를 명시적으로 설정했습니다');
+          }
         } catch (sessionStoreError) {
           console.error('세션 객체 저장 오류:', sessionStoreError);
         }
@@ -449,6 +466,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await checkAuthStatus();
       
       setLoading(false);
+      
+      // ✅ 로그인 후 페이지 새로고침 (서버가 새 세션을 인식하도록)
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          router.refresh(); // Next.js의 라우터 갱신 (캐시된 페이지 리프레시)
+          console.log('✅ 세션 인식을 위해 페이지를 새로고침합니다');
+        }, 500);
+      }
+      
       return { success: true };
     } catch (error) {
       console.error("Login error:", error);
