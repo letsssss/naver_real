@@ -8,6 +8,7 @@ import Image from "next/image"
 import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, RefreshCw, TicketX } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { Footer } from "@/components/Footer"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -360,7 +361,7 @@ export default function TicketCancellationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen">
       <header className="w-full bg-white shadow-sm">
         <div className="container mx-auto px-4 overflow-x-auto">
           <div className="flex h-16 items-center justify-between min-w-[768px]">
@@ -738,6 +739,8 @@ export default function TicketCancellationPage() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   )
 }
