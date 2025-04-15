@@ -14,16 +14,22 @@ export type Sale = {
   isActive?: boolean;
   sortPriority?: number;
   orderNumber?: string;
+  ticket_price?: string | number;
 };
 
 interface SaleItemProps {
   sale: Sale;
   onDelete: (postId: number) => Promise<void>;
+  router: any;
 }
 
-export default function SaleItem({ sale, onDelete }: SaleItemProps) {
-  const router = useRouter();
+export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   const [isLoading, setIsLoading] = useState(false);
+
+  // 디버깅용 콘솔 로그 추가
+  console.log("💬 sale 객체:", sale);
+  console.log("💰 sale.price:", sale.price);
+  console.log("🏷️ sale.ticket_price:", sale.ticket_price);
 
   // 거래 페이지 또는 메시지 페이지로 이동
   const handleTransactionClick = async (isSeller: boolean = false) => {
@@ -76,7 +82,11 @@ export default function SaleItem({ sale, onDelete }: SaleItemProps) {
       </div>
       <p className="text-sm text-gray-600">{sale.date}</p>
       <p className="text-sm font-semibold">
-        {sale.price}
+        {/* 가격 표시 로직 강화 */}
+        {typeof sale.price === 'string' ? sale.price : 
+         typeof sale.price === 'number' ? `${sale.price.toLocaleString()}원` : 
+         sale.ticket_price ? `${Number(sale.ticket_price).toLocaleString()}원` : 
+         '가격 정보 없음'}
       </p>
       
       <div className="flex mt-2 justify-between items-center">

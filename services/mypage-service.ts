@@ -48,6 +48,18 @@ export const fetchOngoingSales = async (
       return;
     }
     
+    // 첫 번째 게시물의 필드 구조 확인
+    if (data.posts.length > 0) {
+      console.log("🧪 첫 번째 게시물 구조 확인:", {
+        id: data.posts[0].id,
+        title: data.posts[0].title,
+        ticket_price: data.posts[0].ticket_price,
+        ticketPrice: data.posts[0].ticketPrice,
+        price: data.posts[0].price,
+        allFields: Object.keys(data.posts[0])
+      });
+    }
+    
     // 상태 카운트 초기화
     const newSaleStatus = {
       취켓팅진행중: 0,
@@ -108,6 +120,21 @@ export const fetchOngoingSales = async (
       
     // API 응답을 화면에 표시할 형식으로 변환
     const salesData = data.posts.map((post: any) => {
+      // content 필드에서 가격 정보 추출 (JSON 파싱)
+      let parsedContent: any = {};
+      try {
+        if (post.content && typeof post.content === 'string') {
+          parsedContent = JSON.parse(post.content);
+          console.log("✅ content JSON 파싱 성공:", { 
+            postId: post.id, 
+            title: post.title,
+            extractedPrice: parsedContent.price 
+          });
+        }
+      } catch (e) {
+        console.warn('❗ content 파싱 오류:', post.id, e);
+      }
+      
       // 판매 데이터 변환
       const status = post.status || 'ACTIVE';
       const isActive = status === 'ACTIVE';
@@ -138,16 +165,35 @@ export const fetchOngoingSales = async (
       const date = new Date(dateStr);
       const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
       
+      // 가격 처리 - 다양한 필드명 고려 + content에서 추출한 가격
+      const contentPrice = parsedContent?.price; // content에서 추출한 가격
+      console.log("🔍 post 객체 가격 필드 확인:", { 
+        ticket_price: post.ticket_price, 
+        ticketPrice: post.ticketPrice,
+        price: post.price,
+        contentPrice: contentPrice
+      });
+      
+      // 가격 값 가져오기 (여러 가능한 필드 + content에서 추출한 가격)
+      const priceValue = contentPrice || post.ticket_price || post.ticketPrice || post.price || 0;
+      const formattedPrice = priceValue 
+        ? `${Number(priceValue).toLocaleString()}원` 
+        : '가격 정보 없음';
+      
+      // 최종 반환
       return {
+        ...post, // 기존 필드 유지
         id: post.id,
         title: post.title || post.eventName || '제목 없음',
         date: formattedDate,
-        price: post.ticketPrice 
-          ? `${Number(post.ticketPrice).toLocaleString()}원` 
-          : '가격 정보 없음',
+        price: formattedPrice, // 가격 정보 (중요: ...post 뒤에 위치하여 덮어쓰기)
+        ticket_price: priceValue, // 원본 가격 값도 보존
         status: isActive ? '판매중' : post.status,
         isActive,
-        sortPriority
+        sortPriority,
+        // content에서 추출한 추가 정보
+        parsedContent: parsedContent, // 파싱된 전체 content
+        rawPrice: contentPrice // 파싱된 원시 가격 값
       };
     });
     
