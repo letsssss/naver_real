@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode, useCall
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
 import supabase from "@/lib/supabase"
+import { createBrowserClient } from "@/lib/supabase"
 
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
@@ -146,8 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 인증 상태 확인 함수
   const checkAuthStatus = useCallback(async (): Promise<boolean> => {
     try {
+      // 새로운 브라우저 클라이언트 생성 (쿠키 자동 처리)
+      const browserClient = createBrowserClient();
+      
       // Supabase에서 현재 세션 가져오기
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session }, error } = await browserClient.auth.getSession();
       
       if (error) {
         console.error('Supabase 세션 조회 오류:', error);
@@ -169,13 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         safeLocalStorageSet("user", JSON.stringify(userData));
         setUser(userData);
         
-        // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
-        if (typeof document !== 'undefined') {
-          const projectRef = 'jdubrjczdyqqtsppojgu';
-          document.cookie = `sb-${projectRef}-access-token=${session.access_token}; path=/; max-age=86400; SameSite=Lax`;
-          document.cookie = `sb-${projectRef}-refresh-token=${session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
-          console.log('✅ 세션 쿠키를 명시적으로 설정했습니다:', session.access_token.substring(0, 10) + '...');
-        }
+        // ✅ 자동 쿠키 설정이 이루어졌다는 로그 추가
+        console.log('✅ 인증 세션 확인 완료 - 쿠키는 미들웨어와 브라우저 클라이언트에 의해 자동으로 관리됩니다');
         
         setLoading(false);
         return true;
@@ -213,8 +212,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
+      // 쿠키 관리를 위해 브라우저 클라이언트 사용
+      const browserClient = createBrowserClient();
+      
       // Supabase 세션 로그아웃
-      const { error } = await supabase.auth.signOut();
+      const { error } = await browserClient.auth.signOut();
       
       if (error) {
         console.error('Supabase 로그아웃 오류:', error);
@@ -224,12 +226,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       safeLocalStorageRemove('token');
       safeLocalStorageRemove('user');
       
-      // 쿠키 삭제 (클라이언트 측)
-      if (typeof document !== 'undefined') {
-        document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        document.cookie = 'auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      }
+      // 쿠키 삭제는 자동으로 처리됨 (signOut 메서드에 의해)
+      console.log('✅ 로그아웃 완료 - 쿠키는 auth-helpers에 의해 자동으로 삭제됩니다');
       
       // 사용자 상태 초기화
       setUser(null);
@@ -309,8 +307,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Supabase 인증 시작:', email);
       
+      // 브라우저 클라이언트 사용 (쿠키 자동 관리)
+      const browserClient = createBrowserClient();
+      
       // Supabase 클라이언트를 이용한 직접 로그인
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await browserClient.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,
       });
@@ -336,12 +337,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Supabase 로그인 성공:', data.user.id);
       
       // ✅ 로그인 성공 후 세션 수동 동기화
-      const sessionResult = await supabase.auth.getSession();
+      const sessionResult = await browserClient.auth.getSession();
       console.log("✅ 로그인 직후 세션 확인:", sessionResult);
       
       // 세션 연장 및 새로고침 시도
       try {
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        const { data: refreshData, error: refreshError } = await browserClient.auth.refreshSession();
         if (refreshError) {
           console.error('세션 갱신 오류:', refreshError);
         } else {
@@ -364,65 +365,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log(' -', cookie);
         });
         
-        // Supabase 관련 쿠키 확인
-        const supabaseCookie = allCookies.find(c => c.startsWith('sb-'));
-        
-        if (supabaseCookie) {
-          console.log('Supabase 세션 쿠키 발견:', supabaseCookie);
-          
-          // 명시적으로 세션 데이터 저장 (백업용)
-          try {
-            localStorage.setItem('supabase-session-cookie', supabaseCookie);
-            console.log('Supabase 세션 쿠키를 localStorage에 백업했습니다.');
-            
-            // 세션 쿠키 이름 확인
-            const cookieName = supabaseCookie.split('=')[0];
-            console.log('Supabase 세션 쿠키 이름:', cookieName);
-          } catch (storageError) {
-            console.error('로컬 스토리지 저장 오류:', storageError);
-          }
-        } else {
-          console.warn('⚠️ Supabase 세션 쿠키가 없습니다! 인증에 문제가 발생할 수 있습니다.');
-          
-          // 세션 데이터 직접 저장 시도
-          try {
-            if (data.session) {
-              // 세션 이름 확인 (Supabase 프로젝트 참조)
-              const projectRef = 'jdubrjczdyqqtsppojgu';
-              const cookieName = `sb-${projectRef}-auth-token`;
-              
-              console.log(`세션 쿠키를 수동으로 생성합니다. 이름: ${cookieName}`);
-              
-              const sessionStr = JSON.stringify({
-                access_token: data.session.access_token,
-                refresh_token: data.session.refresh_token,
-                expires_at: Math.floor(Date.now() / 1000) + 3600, // 1시간 후 만료
-                user: data.user
-              });
-              
-              // 쿠키에 직접 저장 시도 - 모든 경로에서 접근 가능하도록
-              document.cookie = `${cookieName}=${encodeURIComponent(sessionStr)}; path=/; max-age=86400; SameSite=Lax`;
-              
-              // localStorage에도 저장
-              localStorage.setItem(cookieName, sessionStr);
-              
-              // access_token도 별도로 저장
-              localStorage.setItem('access_token', data.session.access_token);
-              document.cookie = `access_token=${data.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
-              
-              console.log('수동으로 Supabase 세션 쿠키를 생성했습니다.');
-              
-              // 저장 후 다시 쿠키 확인
-              console.log('쿠키 생성 후 확인:', document.cookie);
-            }
-          } catch (cookieError) {
-            console.error('쿠키 설정 오류:', cookieError);
-          }
-        }
+        // Supabase 관련 쿠키는 자동으로 설정됨 (auth-helpers에 의해)
+        console.log('✅ Supabase 쿠키는 auth-helpers에 의해 자동으로 설정됩니다');
       }
       
       // 세션 정보 다시 확인
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await browserClient.auth.getSession();
       console.log('현재 세션 정보:', sessionData.session ? '세션 있음' : '세션 없음');
       
       if (sessionData.session) {
@@ -432,22 +380,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 액세스 토큰도 따로 저장 (API 요청에 사용 가능)
         safeLocalStorageSet("access_token", sessionData.session.access_token);
         
-        // Supabase 세션 객체도 저장
-        try {
-          const sessionStr = JSON.stringify(sessionData.session);
-          safeLocalStorageSet("supabase_session", sessionStr);
-          console.log('Supabase 세션 객체를 localStorage에 저장했습니다.');
-          
-          // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
-          if (typeof document !== 'undefined' && sessionData.session) {
-            const projectRef = 'jdubrjczdyqqtsppojgu';
-            document.cookie = `sb-${projectRef}-access-token=${sessionData.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
-            document.cookie = `sb-${projectRef}-refresh-token=${sessionData.session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
-            console.log('✅ 로그인 성공 후 세션 쿠키를 명시적으로 설정했습니다');
-          }
-        } catch (sessionStoreError) {
-          console.error('세션 객체 저장 오류:', sessionStoreError);
-        }
+        // ✅ Supabase 세션 객체 저장 - 미들웨어와 함께 쿠키 자동 갱신됨
+        console.log('✅ 세션 객체 확인 완료 - 쿠키는 미들웨어에 의해 관리됩니다');
       }
       
       // 사용자 정보 구성

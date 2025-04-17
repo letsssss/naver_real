@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { toast, Toaster } from "sonner"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
+import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -149,6 +150,11 @@ export default function Login() {
               <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Apple</span>
             </button>
           </div>
+        </div>
+
+        <div className="mt-6 border-t pt-4">
+          <p className="text-sm text-gray-500 mb-4">JWT 토큰이 만료되었나요?</p>
+          <SessionAuthButton />
         </div>
       </div>
     </div>

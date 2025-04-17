@@ -31,6 +31,22 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   try {
+    // ✅ Edge 함수에서 환경변수 수동 삽입 (env가 안 먹힘)
+    const supabaseUrl = 'https://jdubrjczdyqqtsppojgu.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // 실제 키 그대로
+    
+    // 모든 요청에 대해 Supabase 클라이언트 생성 (중요: 모든 요청에서 인증 쿠키 갱신)
+    const supabase = createMiddlewareClient<Database>({
+      req: request,
+      res: response,
+      supabaseUrl,
+      supabaseKey: supabaseAnonKey,
+    });
+    
+    // 세션 가져오기 - 이 호출로 인해 쿠키가 자동으로 갱신됨
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('[미들웨어] 세션 확인 및 쿠키 갱신 완료:', session ? '✅ 세션 있음' : '❌ 세션 없음');
+
     // 1. API 라우트 처리 (Chat API 전용 보호)
     if (PROTECTED_API_ROUTES.some(route => pathname.startsWith(route))) {
       console.log('[미들웨어] 보호된 API 경로 요청:', pathname);
@@ -73,12 +89,6 @@ export async function middleware(request: NextRequest) {
         }
       }
       
-      // Supabase 세션 확인 시도
-      const supabase = createMiddlewareClient<Database>({ req: request, res: response });
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      console.log('[미들웨어] Supabase 세션:', session ? '✅ 존재' : '❌ 없음');
-      
       // 세션이 없고 인증 수단이 없으면 401 반환
       if (!session && !authHeader && !cookies.access && !cookies.auth && !cookies.status) {
         console.warn('[미들웨어] ❌ API 인증 실패 (세션/토큰 없음)');
@@ -92,10 +102,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // 2. 일반 페이지 라우트 처리
-    const supabase = createMiddlewareClient<Database>({ req: request, res: response });
-    const { data: { session } } = await supabase.auth.getSession();
-
-    console.log('[미들웨어] 세션 있음:', !!session);
+    // 세션은 이미 위에서 확인했으므로 중복 호출 제거
 
     // 일반 페이지 보호 경로
     const isProtectedPage = PROTECTED_ROUTES.some(route =>

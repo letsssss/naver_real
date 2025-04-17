@@ -1,7 +1,19 @@
 'use client';
 
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/env';
+
+// ✅ 로그 찍어보기
+console.log('✅ SUPABASE_URL from ENV:', SUPABASE_URL);
+console.log('✅ ANON_KEY from ENV:', SUPABASE_ANON_KEY);
+
 import { useState, useEffect } from 'react';
 import ChatRoom from './ChatRoom';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import supabase, { initSession } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/use-toast';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * 주문번호로 채팅방을 초기화한 후 채팅 컴포넌트를 렌더링하는 컴포넌트
@@ -11,88 +23,94 @@ interface ChatWithOrderInitProps {
   currentUserId: string;
 }
 
-const ChatWithOrderInit = ({ orderNumber, currentUserId }: ChatWithOrderInitProps) => {
-  const [roomId, setRoomId] = useState<string | null>(null);
+export default function ChatWithOrderInit({ orderNumber, currentUserId }: ChatWithOrderInitProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // 채팅방 초기화
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // env.ts에서 가져온 Supabase 정보 사용
+  console.log('✅ env.ts에서 가져온 SUPABASE_URL:', SUPABASE_URL);
+  console.log('✅ env.ts에서 가져온 ANON_KEY:', SUPABASE_ANON_KEY.substring(0, 10) + '...');
+
   useEffect(() => {
-    async function initChatRoom() {
-      if (!orderNumber || !currentUserId) {
-        setError('주문 번호 또는 사용자 정보가 없습니다.');
-        setLoading(false);
-        return;
-      }
-      
+    async function initialize() {
+      setLoading(true);
       try {
-        setLoading(true);
-        console.log(`[채팅 초기화] 주문번호: ${orderNumber} 채팅방 초기화 시도`);
-        
+        // 세션 초기화
+        const session = await initSession();
+        if (!session) {
+          setError('로그인이 필요합니다');
+          setLoading(false);
+          return;
+        }
+
+        console.log('[ChatWithOrderInit] 사용자 인증 완료:', session.user.id);
+        console.log('[ChatWithOrderInit] 주문번호:', orderNumber);
+        console.log('[ChatWithOrderInit] 현재 사용자:', currentUserId);
+
+        // 채팅방 초기화 API 호출
         const response = await fetch('/api/chat/init-room', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ order_number: orderNumber }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ orderNumber }),
+          credentials: 'include' // 쿠키 전송을 위한 설정 추가
         });
-        
-        const data = await response.json();
-        
+
+        // API 응답 처리
         if (!response.ok) {
-          throw new Error(data.error || '채팅방 초기화에 실패했습니다.');
+          const errorData = await response.json();
+          throw new Error(errorData.message || '채팅방 초기화 중 오류가 발생했습니다');
         }
-        
-        console.log(`[채팅 초기화] 채팅방 준비 완료: ${data.room_name} (ID: ${data.room_id})`);
-        setRoomId(data.room_id);
-      } catch (err) {
-        console.error('[채팅 초기화] 오류:', err);
-        setError(err instanceof Error ? err.message : '채팅방을 초기화하는데 문제가 발생했습니다.');
+
+        const data = await response.json();
+        console.log('[ChatWithOrderInit] 채팅방 초기화 성공:', data);
+
+        // 채팅방으로 이동
+        router.push(`/chat/${data.roomId}`);
+      } catch (error: any) {
+        console.error('[ChatWithOrderInit] 초기화 오류:', error);
+        setError(error.message || '채팅방 초기화 중 알 수 없는 오류가 발생했습니다');
+        toast({
+          variant: 'destructive',
+          title: '오류',
+          description: error.message || '채팅방 초기화 중 알 수 없는 오류가 발생했습니다',
+        });
       } finally {
         setLoading(false);
       }
     }
-    
-    initChatRoom();
-  }, [orderNumber, currentUserId]);
-  
+
+    initialize();
+  }, [orderNumber, currentUserId, router, toast]);
+
+  // 로딩 중 UI
   if (loading) {
     return (
-      <div className="p-6 text-center">
-        <div className="animate-pulse space-y-3">
-          <div className="h-6 bg-gray-200 rounded w-48 mx-auto"></div>
-          <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
-          <div className="h-4 bg-gray-200 rounded w-40 mx-auto"></div>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[300px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">채팅방을 준비하고 있습니다...</p>
       </div>
     );
   }
-  
+
+  // 오류 UI
   if (error) {
     return (
-      <div className="p-6 border rounded-lg shadow-sm bg-white">
-        <div className="text-center">
-          <div className="text-red-500 text-lg mb-2">채팅 초기화 오류</div>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            다시 시도
-          </button>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[300px]">
+        <p className="text-destructive mb-4">{error}</p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          다시 시도
+        </Button>
       </div>
     );
   }
-  
-  if (!roomId) {
-    return (
-      <div className="p-6 text-center border rounded-lg shadow-sm bg-white">
-        <p className="text-gray-600">채팅방을 불러올 수 없습니다.</p>
-      </div>
-    );
-  }
-  
-  return <ChatRoom roomId={roomId} orderNumber={orderNumber} currentUserId={currentUserId} />;
-};
 
-export default ChatWithOrderInit; 
+  return (
+    <div className="flex items-center justify-center min-h-[300px]">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+} 

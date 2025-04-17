@@ -236,3 +236,8 @@ pnpm-lock.yaml
 [32m+[m[32m  )[m
 [32m+[m[32m}[m[41m [m
 \ No newline at end of file[m
+[33mcommit 5c24429674e020e6e0e8d5b59a38f4fc97d369b2[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: letsssss <wlstjd1590@naver.com>
+Date:   Thu Apr 17 18:50:25 2025 +0900
+
+    Fix: Multiple GoTrueClient instances warning by adding browser environment checks to createAdminClient and conditional initialization of adminSupabase
