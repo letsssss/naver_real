@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import supabase from '@/lib/supabase-browser';
 // 타입 임포트 문제 수정
 // import { Database } from '@/types/supabase.types';
 import { v4 as uuidv4 } from 'uuid';
@@ -61,7 +61,6 @@ interface UseChatReturn {
  * @returns 채팅 관련 상태와 함수들
  */
 export function useChatWithRoomInit(roomId: string, userId: string): UseChatReturn {
-  const supabase = createClientComponentClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
   const [newMessage, setNewMessage] = useState('');

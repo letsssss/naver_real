@@ -1,18 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase.types';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 // 직접 import하지 않고 필요할 때 동적으로 가져오도록 수정
 // import { cookies } from 'next/headers';
 
-// ✅ 환경 변수 설정 - 하드코딩된 값으로 변경하여 환경 변수 로딩 문제 해결
-const SUPABASE_URL = 'https://jdubrjczdyqqtsppojgu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww';
-const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
-
-// 환경 변수가 설정되어 있는지 검증하는 대신 상수 사용
-// if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-//   throw new Error("❌ Supabase 환경 변수가 누락되었습니다.");
-// }
+// env.ts에서 환경변수 가져오기
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/env';
 
 // ✅ Supabase 클라이언트 옵션
 const options = {
@@ -26,7 +20,58 @@ const options = {
 // ✅ 싱글톤 인스턴스 관리용 변수들
 let supabaseInstance: SupabaseClient<Database> | null = null;
 let adminSupabaseInstance: SupabaseClient<Database> | null = null;
+let browserClientInstance: SupabaseClient<Database> | null = null;
 let initAttempted = false;
+
+/**
+ * 브라우저에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
+ * 이 클라이언트는 auth-helpers-nextjs를 사용하여 쿠키 기반 인증을 자동으로 처리합니다.
+ * 브라우저 환경에서만 사용할 수 있습니다.
+ */
+export function createBrowserClient(): SupabaseClient<Database> {
+  // 브라우저 환경이 아니면 일반 클라이언트 반환
+  if (typeof window === 'undefined') {
+    console.warn('브라우저 환경이 아닙니다. 일반 클라이언트를 반환합니다.');
+    return getSupabaseClient();
+  }
+  
+  // 이미 생성된 인스턴스가 있으면 재사용
+  if (browserClientInstance) {
+    return browserClientInstance;
+  }
+  
+  try {
+    console.log('✅ 브라우저 클라이언트 생성 (@supabase/auth-helpers-nextjs)');
+    
+    // Pages Router용 클라이언트 생성
+    const client = createPagesBrowserClient<Database>({
+      supabaseUrl: SUPABASE_URL,
+      supabaseKey: SUPABASE_ANON_KEY,
+    });
+    
+    browserClientInstance = client;
+    console.log('✅ 브라우저 클라이언트 생성 성공');
+    
+    // 세션 확인 테스트
+    browserClientInstance.auth.getSession().then(({ data }) => {
+      console.log("✅ 브라우저 클라이언트 세션 확인:", data.session ? "세션 있음" : "세션 없음");
+      
+      // 세션이 있으면 세션 정보 출력
+      if (data.session) {
+        const expiresAt = data.session.expires_at;
+        const expiresDate = expiresAt ? new Date(expiresAt * 1000).toLocaleString() : '알 수 없음';
+        console.log(`✅ 세션 만료: ${expiresDate} (${data.session.user.email})`);
+      }
+    });
+    
+    return browserClientInstance;
+  } catch (error) {
+    console.error('브라우저 클라이언트 생성 오류:', error);
+    // 오류 발생 시 일반 클라이언트로 폴백
+    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, options);
+    return supabaseInstance;
+  }
+}
 
 // ✅ 싱글톤 Supabase 인스턴스 생성
 const createSupabaseInstance = (): SupabaseClient<Database> => {
@@ -41,6 +86,11 @@ const createSupabaseInstance = (): SupabaseClient<Database> => {
   initAttempted = true;
   
   try {
+    // 브라우저 환경에서는 createBrowserClient 사용
+    if (typeof window !== 'undefined') {
+      return createBrowserClient();
+    }
+    
     supabaseInstance = createClient<Database>(
       SUPABASE_URL,
       SUPABASE_ANON_KEY,
@@ -120,6 +170,12 @@ export function createAuthClient(): SupabaseClient<Database> {
  * @param cookieStore 선택적으로 쿠키 스토어를 전달하여 인증된 세션을 유지할 수 있습니다.
  */
 export function createAdminClient(cookieStore?: any): SupabaseClient<Database> {
+  // ❗ 클라이언트 환경에서 호출되면 중단
+  if (typeof window !== 'undefined') {
+    console.error('[createAdminClient] 이 함수는 클라이언트에서 호출되면 안 됩니다. 대신 createBrowserClient() 사용하세요.');
+    return getSupabaseClient(); // 에러 대신 일반 클라이언트 반환 (기존 코드 깨지지 않도록)
+  }
+  
   // 쿠키가 제공된 경우 서버 컴포넌트 클라이언트 생성 시도
   if (cookieStore && typeof cookieStore === 'object') {
     try {
@@ -157,7 +213,9 @@ export function createAdminClient(cookieStore?: any): SupabaseClient<Database> {
  * 관리자 권한의 Supabase 클라이언트 인스턴스 (서버에서만 사용)
  * 싱글톤 패턴으로 생성
  */
-export const adminSupabase = createAdminClient();
+export const adminSupabase = typeof window === 'undefined' 
+  ? createAdminClient() 
+  : null; // 브라우저 환경에서는 null로 설정
 
 /**
  * 현재 클라이언트나 서버 환경에 맞는 Supabase 클라이언트를 반환합니다.
@@ -198,8 +256,8 @@ export function createAuthedClient(token: string) {
         },
       },
       auth: {
-        autoRefreshToken: true,
-        persistSession: true,
+        autoRefreshToken: false,
+        persistSession: false,
       }
     }
   );
