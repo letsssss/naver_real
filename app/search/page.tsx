@@ -18,7 +18,8 @@ interface Post {
   eventVenue: string;
   ticketPrice: number | string;
   createdAt: string;
-  author: {
+  authorId?: string;
+  author?: {
     id: string;
     name: string;
     email: string;
@@ -34,7 +35,6 @@ const getPriceNumber = (price: string | number) => {
 export default function SearchResults() {
   const searchParams = useSearchParams()
   const query = searchParams?.get("query") || ""
-  const category = searchParams?.get("category") || null
   const [sortOrder, setSortOrder] = useState<"asc" | "desc" | null>(null)
   const [results, setResults] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,15 +46,10 @@ export default function SearchResults() {
         setLoading(true)
         setError("")
         
-        // 카테고리 파라미터가 있는 경우 API 요청에 포함
         let apiUrl = `/api/available-posts?search=${encodeURIComponent(query)}`
-        if (category) {
-          apiUrl += `&category=${encodeURIComponent(category)}`
-        }
         
         console.log(`검색 API 호출 (구매 가능 게시물): ${apiUrl}`)
         
-        // 캐시 방지를 위한 타임스탬프 추가
         apiUrl += `&t=${Date.now()}`
         
         const response = await fetch(apiUrl, {
@@ -73,13 +68,11 @@ export default function SearchResults() {
         
         const data = await response.json()
         
-        // 디버깅을 위한 전체 응답 로깅
         console.log("검색 API 응답:", data)
         
         if (data.success) {
           console.log("검색 결과:", data.posts)
           if (data.posts && data.posts.length > 0) {
-            // 첫 번째 항목 정보 확인
             console.log("첫 번째 검색 결과 항목:", data.posts[0])
           }
           setResults(data.posts || [])
@@ -101,9 +94,8 @@ export default function SearchResults() {
     }
 
     fetchSearchResults()
-  }, [query, category])
+  }, [query])
 
-  // 정렬 함수
   const sortedResults = [...results].sort((a, b) => {
     if (sortOrder === "asc") {
       return getPriceNumber(a.ticketPrice || 0) - getPriceNumber(b.ticketPrice || 0)
@@ -113,20 +105,15 @@ export default function SearchResults() {
     return 0
   })
 
-  // 재시도 처리 함수
   const handleRetry = () => {
     setResults([])
     setError("")
     
-    // fetchSearchResults 함수를 새로 실행
     const fetchSearchResults = async () => {
       try {
         setLoading(true)
         
         let apiUrl = `/api/available-posts?search=${encodeURIComponent(query)}`
-        if (category) {
-          apiUrl += `&category=${encodeURIComponent(category)}`
-        }
         
         apiUrl += `&t=${Date.now()}`
         
@@ -162,7 +149,6 @@ export default function SearchResults() {
     fetchSearchResults()
   }
 
-  // 로딩 상태 표시
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100">
@@ -198,27 +184,8 @@ export default function SearchResults() {
               <h1 className="text-3xl font-bold mt-4">검색 결과</h1>
               <p className="text-gray-600 mt-2">
                 &quot;{query}&quot;에 대한 검색 결과
-                {category && <span className="ml-2 text-blue-500">({getCategoryName(category)})</span>}
               </p>
             </div>
-            
-            {/* 카테고리 필터 표시 */}
-            {category && (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800">
-                <span>{getCategoryName(category)}</span>
-                <button 
-                  onClick={() => {
-                    // 카테고리 필터 제거하고 재검색
-                    const params = new URLSearchParams(window.location.search);
-                    params.delete('category');
-                    window.location.href = `/search?${params.toString()}`;
-                  }}
-                  className="ml-2 text-blue-500 hover:text-blue-700"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </header>
@@ -303,32 +270,36 @@ export default function SearchResults() {
                     </div>
                     <div className="flex items-center text-sm text-gray-500 mb-2">
                       <span>판매자:</span>
-                      <span
-                        onClick={(e) => {
-                          e.preventDefault();
-                          window.location.href = `/seller/${item.author.id}`;
-                        }}
-                        className="ml-1 text-blue-600 hover:underline flex items-center cursor-pointer"
-                      >
-                        {item.author.name}
-                        <div className="flex items-center ml-2 text-yellow-500">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="mr-1"
-                          >
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                          </svg>
-                          <span className="text-xs">4.5</span>
-                        </div>
-                      </span>
+                      {item.author ? (
+                        <span
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.location.href = `/seller/${item.author?.id}`;
+                          }}
+                          className="ml-1 text-blue-600 hover:underline flex items-center cursor-pointer"
+                        >
+                          {item.author.name}
+                          <div className="flex items-center ml-2 text-yellow-500">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="mr-1"
+                            >
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                            <span className="text-xs">4.5</span>
+                          </div>
+                        </span>
+                      ) : (
+                        <span className="ml-1 text-gray-500">정보 없음</span>
+                      )}
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-black">{Number(item.ticketPrice || 0).toLocaleString()}원</span>
@@ -352,10 +323,8 @@ export default function SearchResults() {
   )
 }
 
-// 카테고리 이름 표시 함수
 function getCategoryName(category: string): string {
   const categoryMap: Record<string, string> = {
-    'ticket-cancellation': '취소표 예매',
     'concert': '콘서트',
     'musical': '뮤지컬/연극',
     'sports': '스포츠',

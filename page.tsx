@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from "next/link"
 import { Search } from "lucide-react"
 
@@ -7,6 +11,20 @@ import { CategorySection } from "@/components/category-section"
 import { PopularTickets } from "@/components/popular-tickets"
 
 export default function Page() {
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const router = useRouter();
+
+  const handleSearch = () => {
+    if (!searchKeyword.trim()) return;
+    router.push(`/search?query=${encodeURIComponent(searchKeyword.trim())}`);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <div className="bg-[#0061FF]">
@@ -45,9 +63,15 @@ export default function Page() {
             <Input
               type="search"
               placeholder="이벤트, 아티스트, 팀 검색"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="flex-1 h-12 rounded-l-lg rounded-r-none border-0 bg-white text-black placeholder:text-gray-500"
             />
-            <Button className="h-12 px-8 rounded-l-none rounded-r-lg bg-[#FFD600] hover:bg-[#FFE600] text-black font-medium">
+            <Button
+              onClick={handleSearch}
+              className="h-12 px-8 rounded-l-none rounded-r-lg bg-[#FFD600] hover:bg-[#FFE600] text-black font-medium"
+            >
               <Search className="w-5 h-5 mr-2" />
               검색
             </Button>
@@ -58,6 +82,6 @@ export default function Page() {
       <CategorySection />
       <PopularTickets />
     </div>
-  )
+  );
 }
 

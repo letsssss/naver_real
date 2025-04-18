@@ -46,10 +46,11 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '10');
-    const category = url.searchParams.get('category');
+    // 카테고리 파라미터 비활성화
+    // const category = url.searchParams.get('category');
     const search = url.searchParams.get('search');
     
-    console.log(`[사용 가능한 게시물 API] 요청 파라미터: page=${page}, limit=${limit}, category=${category}, search=${search}`);
+    console.log(`[사용 가능한 게시물 API] 요청 파라미터: page=${page}, limit=${limit}, search=${search}`);
     
     // 페이지네이션 계산
     const offset = (page - 1) * limit;
@@ -76,11 +77,14 @@ export async function GET(req: NextRequest) {
     // 함수에서 반환된 게시물에 필터 적용
     let filteredPosts = availablePosts || [];
     
+    // 카테고리 필터링 비활성화
+    /*
     // 카테고리 필터링 추가
     if (category) {
       console.log(`[사용 가능한 게시물 API] 카테고리 필터링: ${category}`);
       filteredPosts = filteredPosts.filter((post: any) => post.category === category);
     }
+    */
     
     // 검색어 필터링 추가
     if (search) {
@@ -131,7 +135,6 @@ export async function GET(req: NextRequest) {
         hasMore: offset + (posts?.length || 0) < totalCount
       },
       filters: {
-        category: category || null,
         search: search || null
       },
       source: 'get_available_posts_function' // 데이터 소스 표시 업데이트
