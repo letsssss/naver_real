@@ -10,7 +10,10 @@ import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
-import ChatWithOrderInit from "@/components/ChatWithOrderInit"
+import ChatModal from "@/components/chat/ChatModal"
+import { useToast } from "@/components/ui/use-toast"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import type { Database } from "@/types/supabase.types"
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -104,11 +107,27 @@ export default function TransactionDetail() {
   const router = useRouter()
   const orderNumber = params?.order_number as string
   const { user: currentUser } = useAuth() // 로그인한 사용자 정보
+  const { toast } = useToast()
   
   const [transaction, setTransaction] = useState(defaultTransaction)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const [isInitializingChat, setIsInitializingChat] = useState(false)
+
+  // sessionStorage에서 채팅방 ID 가져오기
+  useEffect(() => {
+    // 클라이언트 사이드에서만 실행
+    if (typeof window !== 'undefined') {
+      const storedRoomId = sessionStorage.getItem("openChatRoomId");
+      if (storedRoomId) {
+        setRoomId(storedRoomId);
+        setIsChatOpen(true);
+        sessionStorage.removeItem("openChatRoomId");
+      }
+    }
+  }, []);
 
   // API에서 거래 정보 불러오기
   useEffect(() => {
@@ -186,7 +205,57 @@ export default function TransactionDetail() {
     loadData()
   }, [orderNumber, currentUser])
 
-  const openChat = () => setIsChatOpen(true)
+  const openChat = async () => {
+    if (!currentUser?.id) {
+      toast({
+        variant: "destructive",
+        title: "로그인 필요",
+        description: "채팅을 시작하려면 로그인이 필요합니다."
+      })
+      return
+    }
+    
+    if (roomId) {
+      setIsChatOpen(true)
+      return
+    }
+    
+    try {
+      setIsInitializingChat(true)
+      
+      // 채팅방 초기화 API 호출
+      const response = await fetch('/api/chat/init-room', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order_number: orderNumber }),
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '채팅방 초기화 중 오류가 발생했습니다')
+      }
+
+      const data = await response.json()
+      console.log('[TransactionDetail] 채팅방 초기화 성공:', data)
+      
+      // 채팅방 ID 설정
+      setRoomId(data.roomId)
+      setIsChatOpen(true)
+    } catch (error: any) {
+      console.error('[TransactionDetail] 채팅방 초기화 오류:', error)
+      toast({
+        variant: "destructive",
+        title: "채팅방 초기화 오류",
+        description: error.message || "채팅방을 준비하는 중 오류가 발생했습니다."
+      })
+    } finally {
+      setIsInitializingChat(false)
+    }
+  }
+  
   const closeChat = () => setIsChatOpen(false)
 
   const handleAction = async () => {
@@ -536,42 +605,15 @@ export default function TransactionDetail() {
       </main>
 
       {/* 1:1 채팅 인터페이스 */}
-      {isChatOpen && (
+      {isChatOpen && roomId && (
+        <ChatModal roomId={roomId} onClose={closeChat} />
+      )}
+      
+      {isInitializingChat && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden">
-            {/* 채팅 헤더 */}
-            <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="relative w-10 h-10 rounded-full overflow-hidden">
-                  <Image
-                    src={transaction.seller.profileImage || "/placeholder.svg"}
-                    alt={transaction.seller.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div>
-                  <h3 className="font-medium">{transaction.seller.name}</h3>
-                  <p className="text-xs text-gray-500">판매자</p>
-                </div>
-              </div>
-              <button
-                onClick={closeChat}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* 실제 채팅 컴포넌트 */}
-            <div className="flex-1 overflow-hidden">
-              {currentUser?.id && (
-                <ChatWithOrderInit 
-                  orderNumber={String(orderNumber)} 
-                  currentUserId={String(currentUser.id)} 
-                />
-              )}
-            </div>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col items-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500 mb-4"></div>
+            <p className="text-gray-700">채팅방을 준비하고 있습니다...</p>
           </div>
         </div>
       )}
