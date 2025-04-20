@@ -55,7 +55,7 @@ export default function ChatWithOrderInit({ orderNumber, currentUserId }: ChatWi
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ orderNumber }),
+          body: JSON.stringify({ order_number: orderNumber }),
           credentials: 'include' // 쿠키 전송을 위한 설정 추가
         });
 

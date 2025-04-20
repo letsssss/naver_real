@@ -1,8 +1,10 @@
 // 목적: 거래(orderNumber) 기반으로 채팅방을 자동 생성하거나 반환합니다.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
-import supabaseAdmin from '@/lib/supabase-admin';
+// import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import type { Database } from '@/types/supabase.types';
 
 // Node.js 런타임 사용 (Edge에서는 환경변수 로딩 문제 발생)
 export const runtime = 'nodejs';
@@ -16,58 +18,31 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
-    // 쿠키에서 Supabase 세션 토큰 가져오기
-    const authToken = request.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token')?.value;
-    const accessToken = request.cookies.get('sb-jdubrjczdyqqtsppojgu-access-token')?.value;
+    // 쿠키 기반 Supabase 클라이언트 생성
+    const supabase = createServerComponentClient<Database>({ cookies });
     
-    logDebug('인증 쿠키 확인:', {
-      authToken: authToken ? '✅' : '❌',
-      accessToken: accessToken ? '✅' : '❌'
-    });
-    
-    // 현재 인증된 사용자 가져오기
-    let user;
-    
-    // 1. 먼저 쿠키로 시도
-    if (accessToken) {
-      const { data, error } = await supabaseAdmin.auth.getUser(accessToken);
-      if (!error && data.user) {
-        user = data.user;
-        logDebug('✅ 쿠키에서 인증 성공:', user.id);
-      } else if (error) {
-        logDebug('❌ 쿠키 인증 오류:', error.message);
-      }
-    }
-    
-    // 2. 쿠키가 없거나 실패한 경우 헤더 확인
-    if (!user) {
-      const authHeader = request.headers.get('Authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.replace('Bearer ', '');
-        const { data, error } = await supabaseAdmin.auth.getUser(token);
-        if (!error && data.user) {
-          user = data.user;
-          logDebug('✅ 헤더에서 인증 성공:', user.id);
-        } else if (error) {
-          logDebug('❌ 헤더 인증 오류:', error.message);
-        }
-      }
-    }
+    // 세션 확인 (쿠키에서 자동으로 세션 읽음)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     // 인증 실패 처리
-    if (!user) {
-      logDebug('❌ 인증 실패: 사용자를 찾을 수 없음');
+    if (authError || !user) {
+      logDebug('❌ 인증 실패:', authError?.message);
       return NextResponse.json(
         { error: '인증에 실패했습니다. 다시 로그인해주세요.' },
         { status: 401 }
       );
     }
+    
+    logDebug('✅ 인증 성공: 사용자 ID', user.id);
 
     // 요청 본문에서 주문 번호 가져오기
     const body = await request.json();
-    const { orderNumber } = body;
+    const { orderNumber, order_number } = body;
+    
+    // orderNumber나 order_number 중 하나 사용
+    const finalOrderNumber = orderNumber || order_number;
 
-    if (!orderNumber) {
+    if (!finalOrderNumber) {
       logDebug('❌ 주문 번호 누락');
       return NextResponse.json(
         { error: '주문 번호가 필요합니다.' },
@@ -75,13 +50,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logDebug('주문 번호:', orderNumber);
+    logDebug('주문 번호:', finalOrderNumber);
 
     // 구매 내역 확인
-    const { data: purchase, error: purchaseError } = await supabaseAdmin
+    const { data: purchase, error: purchaseError } = await supabase
       .from('purchases')
       .select('id, buyer_id, seller_id, order_number')
-      .eq('order_number', orderNumber)
+      .eq('order_number', finalOrderNumber)
       .single();
 
     if (purchaseError || !purchase) {
@@ -104,10 +79,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 이미 존재하는 채팅방 확인
-    const { data: existingRoom, error: roomError } = await supabaseAdmin
+    const { data: existingRoom, error: roomError } = await supabase
       .from('rooms')
       .select('id')
-      .eq('order_number', orderNumber)
+      .eq('order_number', finalOrderNumber)
       .single();
 
     if (roomError && roomError.code !== 'PGRST116') {
@@ -128,12 +103,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 새 채팅방 생성
-    const roomId = nanoid();
-    const { error: createError } = await supabaseAdmin
+    const roomId = crypto.randomUUID(); // nanoid() 대신 표준 UUID 생성
+    const { error: createError } = await supabase
       .from('rooms')
       .insert({
         id: roomId,
-        order_number: orderNumber,
+        order_number: finalOrderNumber,
         buyer_id: purchase.buyer_id,
         seller_id: purchase.seller_id,
       });
