@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
+import ChatModal from "@/components/chat/ChatModal"
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -136,6 +137,7 @@ export default function SellerTransactionDetail() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [newMessage, setNewMessage] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -158,7 +160,8 @@ export default function SellerTransactionDetail() {
         const response = await fetch(`/api/purchase/${orderId}`, {
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          credentials: 'include'
         })
         
         if (!response.ok) {
@@ -214,15 +217,43 @@ export default function SellerTransactionDetail() {
         
         setTransaction(formattedData)
         
-        // 메시지 데이터 불러오기
+        // 채팅방 정보 조회
         try {
-          const messageResponse = await fetch(`/api/messages/${orderId}`, {
+          const chatResponse = await fetch(`/api/chat/init-room`, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              orderNumber: orderId
+            }),
+            credentials: 'include'
+          });
+          
+          if (chatResponse.ok) {
+            const chatData = await chatResponse.json();
+            if (chatData.roomId) {
+              setChatRoomId(chatData.roomId);
+              console.log("채팅방 ID:", chatData.roomId);
             }
+          } else {
+            console.error("채팅방 정보 로딩 에러");
+          }
+        } catch (chatError) {
+          console.error("채팅방 정보 로딩 에러:", chatError);
+          // 채팅방 로딩 실패는 전체 페이지 에러로 처리하지 않음
+        }
+        
+        // 메시지 데이터 불러오기
+        try {
+          const messagesResponse = await fetch(`/api/messages/${orderId}`, {
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
           })
-          if (messageResponse.ok) {
-            const messageData = await messageResponse.json()
+          if (messagesResponse.ok) {
+            const messageData = await messagesResponse.json()
             setMessages(messageData)
           }
         } catch (messageError) {
@@ -307,83 +338,41 @@ export default function SellerTransactionDetail() {
     },
   ]
 
-  // 판매자용 액션 핸들러로 변경
   const handleAction = async () => {
+    if (!transaction.id) {
+      console.error("거래 ID가 없습니다.")
+      return
+    }
+
     if (transaction.currentStep === "ticketing_started") {
-      // 취켓팅 완료 처리 로직
-      try {
-        // API 경로 수정 - /api/purchase 엔드포인트 사용
-        const response = await fetch(`/api/purchase/${params?.id}/complete-ticketing`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            stepDates: {
-              ...transaction.stepDates,
-              ticketing_completed: new Date().toISOString()
-            }
-          })
-        });
+      // 취켓팅 완료 상태로 변경
+      const response = await fetch(`/api/purchase/status/${transaction.id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          status: "COMPLETED"
+        }),
+        credentials: 'include'
+      })
 
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error("API 응답 에러:", errorText)
-          throw new Error("취켓팅 완료 처리에 실패했습니다.")
-        }
-
-        // 성공 시 상태 업데이트
-        setTransaction({
-          ...transaction,
-          currentStep: "ticketing_completed",
-          status: "취켓팅 완료",
-          stepDates: {
-            ...transaction.stepDates,
-            ticketing_completed: new Date().toISOString(),
-          },
-        })
-
-        alert("취켓팅 완료 처리되었습니다. 구매자의 구매 확정을 기다립니다.")
-      } catch (error) {
-        console.error("Error updating transaction:", error)
-        alert("처리 중 오류가 발생했습니다. 다시 시도해주세요.")
+      if (response.ok) {
+        // 상태 업데이트 성공 시 페이지 새로고침
+        window.location.reload()
+      } else {
+        const errorText = await response.text()
+        console.error("API 오류:", errorText)
+        alert("상태 변경에 실패했습니다.")
       }
     } else if (transaction.currentStep === "confirmed") {
-      // 거래 완료 후 리뷰 작성 페이지로 이동
+      // 구매자에 대한 리뷰 작성 페이지로 이동
       router.push(`/review/${transaction.id}?role=seller`)
     }
   }
 
   const openChat = () => setIsChatOpen(true)
   const closeChat = () => setIsChatOpen(false)
-
-  const handleSendMessage = () => {
-    if (newMessage.trim() === "") return
-
-    const newMsg = {
-      id: messages.length + 1,
-      senderId: "seller123", // 판매자 ID로 변경
-      text: newMessage,
-      timestamp: new Date().toISOString(),
-    }
-
-    setMessages([...messages, newMsg])
-    setNewMessage("")
-    
-    // API 호출
-    fetch(`/api/messages/${params?.id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: newMessage,
-        recipientId: transaction.buyer.id
-      }),
-    }).catch(error => {
-      console.error("메시지 전송 에러:", error)
-    })
-  }
 
   const formatMessageTime = (timestamp: string) => {
     const date = new Date(timestamp)
@@ -447,11 +436,20 @@ export default function SellerTransactionDetail() {
       <main className="container mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6 transition-all duration-300 hover:shadow-md">
           <div className="p-6 md:p-8">
-            <div className="mb-8">
+            <div className="flex justify-between items-center mb-8">
               <div>
                 <span className="text-sm text-gray-500 mb-1 block">티켓 정보</span>
                 <h2 className="text-2xl font-bold text-gray-900">{transaction.ticket.title}</h2>
               </div>
+              <button
+                onClick={openChat}
+                className="bg-teal-50 text-teal-600 px-4 py-2 rounded-full flex items-center hover:bg-teal-100 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                구매자와 채팅하기
+              </button>
             </div>
 
             {/* 거래 진행 상태 스텝퍼 */}
@@ -626,86 +624,29 @@ export default function SellerTransactionDetail() {
             </div>
           </div>
         </div>
-      </main>
 
-      {/* 1:1 채팅 인터페이스 */}
-      {isChatOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden">
-            {/* 채팅 헤더 */}
-            <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="relative w-10 h-10 rounded-full overflow-hidden">
-                  <Image
-                    src={transaction.buyer.profileImage || "/placeholder.svg"}
-                    alt={transaction.buyer.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div>
-                  <h3 className="font-medium">{transaction.buyer.name}</h3>
-                  <p className="text-xs text-gray-500">구매자</p>
-                </div>
-              </div>
-              <button
-                onClick={closeChat}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* 채팅 메시지 영역 */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderId === "seller123" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
-                        message.senderId === "seller123"
-                          ? "bg-teal-500 text-white rounded-tr-none"
-                          : "bg-gray-200 text-gray-800 rounded-tl-none"
-                      }`}
-                    >
-                      <p className="text-sm">{message.text}</p>
-                      <p
-                        className={`text-xs mt-1 ${message.senderId === "seller123" ? "text-teal-100" : "text-gray-500"}`}
-                      >
-                        {formatMessageTime(message.timestamp)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            {/* 메시지 입력 영역 */}
-            <div className="p-4 border-t bg-white">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleSendMessage()}
-                  placeholder="메시지를 입력하세요..."
-                  className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  className="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600 transition-colors"
-                >
-                  <Send className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
+        {/* 하단 고정 액션 버튼 영역 */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-md p-4">
+          <div className="container mx-auto flex justify-end">
+            <button
+              onClick={handleAction}
+              disabled={transaction.currentStep === "ticketing_completed"}
+              className={`px-6 py-3 rounded-lg font-medium ${
+                transaction.currentStep === "ticketing_completed"
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-teal-500 text-white hover:bg-teal-600 transition-colors"
+              }`}
+            >
+              {getActionButtonText()}
+            </button>
           </div>
         </div>
+      </main>
+
+      {/* 채팅 모달 */}
+      {isChatOpen && chatRoomId && (
+        <ChatModal roomId={chatRoomId} onClose={closeChat} />
       )}
     </div>
-  )
+  );
 } 

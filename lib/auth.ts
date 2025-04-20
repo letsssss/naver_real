@@ -46,6 +46,11 @@ console.log('JWT_SECRET 길이:', JWT_SECRET.length);
 console.log('JWT_SECRET 출처:', process.env.JWT_SECRET ? '환경 변수' : '하드코딩된 값');
 console.log('=========================');
 
+// Supabase 프로젝트 ID 정의 (환경변수에서 가져오거나 하드코딩)
+const SUPABASE_PROJECT_ID = process.env.SUPABASE_PROJECT_ID || 'jdubrjczdyqqtsppojgu';
+// Supabase의 기본 issuer 설정
+const DEFAULT_SUPABASE_ISSUER = `https://${SUPABASE_PROJECT_ID}.supabase.co/auth/v1`;
+
 // 개발 환경에서도 실제 토큰 검증 시도
 // const DEFAULT_TEST_USER_ID = '123e4567-e89b-12d3-a456-426614174000'; // UUID 형식으로 변경 - 주석 처리
 
@@ -177,8 +182,9 @@ export async function verifyToken(token: string): Promise<any> {
       // 원격 JWKS 사용
       const JWKS = createRemoteJWKSet(new URL(jwksUrl));
       const { payload } = await jwtVerify(token, JWKS, {
-        issuer: process.env.JWT_ISSUER || 'netxway',
-        audience: process.env.JWT_AUDIENCE || 'user'
+        issuer: process.env.JWT_ISSUER || DEFAULT_SUPABASE_ISSUER,
+        // audience는 필요한 경우에만 설정
+        ...(process.env.JWT_AUDIENCE ? { audience: process.env.JWT_AUDIENCE } : {})
       });
       
       return payload;
@@ -188,8 +194,9 @@ export async function verifyToken(token: string): Promise<any> {
       const secretBuffer = textEncoder.encode(secret);
       
       const { payload } = await jwtVerify(token, secretBuffer, {
-        issuer: process.env.JWT_ISSUER || 'netxway',
-        audience: process.env.JWT_AUDIENCE || 'user'
+        issuer: process.env.JWT_ISSUER || DEFAULT_SUPABASE_ISSUER,
+        // audience는 필요한 경우에만 설정
+        ...(process.env.JWT_AUDIENCE ? { audience: process.env.JWT_AUDIENCE } : {})
       });
       
       return payload;
@@ -410,5 +417,5 @@ function setCookie(name: string, value: string, days: number) {
   if (typeof document === 'undefined') return;
   
   const maxAge = days * 24 * 60 * 60;
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax;`;
 } 
