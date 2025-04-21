@@ -6,7 +6,8 @@ import supabase from '@/lib/supabase-browser';
 export function useRealtimeMessages(
   roomId: string, 
   onNewMessage: (msg: any) => void, 
-  userId?: string
+  userId?: string,
+  setMessages?: React.Dispatch<React.SetStateAction<any[]>>
 ) {
   // 채널 참조를 저장하기 위한 ref 생성
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -75,6 +76,41 @@ export function useRealtimeMessages(
           onNewMessageRef.current(message);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `room_id=eq.${roomId}`
+        },
+        (payload) => {
+          const updatedMessage = payload.new;
+          
+          // 현재 유저가 수신자 또는 발신자인 경우만 처리
+          if (updatedMessage.sender_id !== userId && updatedMessage.receiver_id !== userId) {
+            console.log(`[📩 메시지 업데이트 무시] 현재 유저(${userId})와 관련 없는 메시지입니다.`, 
+              `sender: ${updatedMessage.sender_id}, receiver: ${updatedMessage.receiver_id}`);
+            return; // 무시
+          }
+          
+          console.log(`[📩 메시지 업데이트 수신] id: ${updatedMessage.id}, is_read: ${updatedMessage.is_read}`);
+          
+          // 읽음 상태 업데이트를 UI에 바로 반영
+          if (setMessages && updatedMessage.is_read) {
+            setMessages(prev =>
+              prev.map(msg =>
+                msg.id === updatedMessage.id
+                  ? { ...msg, isRead: updatedMessage.is_read }
+                  : msg
+              )
+            );
+          }
+          
+          // ref를 통해 최신 콜백 사용
+          onNewMessageRef.current(updatedMessage);
+        }
+      )
       .subscribe((status) => {
         console.log('[📡 실시간 채널 상태]', status);
         if (status === 'SUBSCRIBED') {
@@ -107,5 +143,5 @@ export function useRealtimeMessages(
         subscribedRef.current = false;
       }
     };
-  }, [roomId, userId]); // userId를 의존성 배열에 포함
+  }, [roomId, userId, setMessages]); // setMessages 의존성 추가
 } 
