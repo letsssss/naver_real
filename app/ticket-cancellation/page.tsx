@@ -57,7 +57,6 @@ export default function TicketCancellationPage() {
   const [tickets, setTickets] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [creatingTestPost, setCreatingTestPost] = useState(false)
   const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
 
   useEffect(() => {
@@ -223,104 +222,6 @@ export default function TicketCancellationPage() {
         로그인
       </button>
     );
-  };
-
-  // 개발 환경에서 테스트 게시물 생성
-  const createTestPost = async () => {
-    if (process.env.NODE_ENV !== 'development') {
-      return;
-    }
-    
-    try {
-      setCreatingTestPost(true);
-      
-      // 순차적으로 시도할 카테고리 목록
-      const categories = [
-        'TICKET_CANCELLATION',  // 원래 시도한 값
-        'TICKET',               // 대안 값 
-        'ticket_cancellation',  // 소문자 버전
-        'ticket-cancellation',  // 하이픈 버전
-        'CANCELLATION'          // 간단한 버전
-      ];
-      
-      let successfulPost = null;
-      
-      // 테스트 가격 설정 (명확한 숫자 값으로)
-      const testPrice = 120000;
-      console.log(`테스트 가격 설정: ${testPrice}원`);
-      
-      // 각 카테고리를 순차적으로 시도
-      for (const category of categories) {
-        if (successfulPost) break;
-        
-        console.log(`카테고리 시도: ${category}`);
-        
-        const testPost = {
-          title: `테스트 취켓팅 게시물 ${new Date().toLocaleTimeString()} - ${category}`,
-          content: JSON.stringify({
-            description: '테스트 설명입니다.',
-            date: '2024-04-15',
-            time: '19:00',
-            venue: '잠실종합운동장',
-            price: testPrice,
-            sections: [
-              { id: 'A', label: 'A석', price: testPrice, available: true },
-              { id: 'B', label: 'B석', price: 100000, available: true },
-              { id: 'C', label: 'C석', price: 80000, available: true }
-            ]
-          }),
-          category: category,
-          eventName: '테스트 콘서트',
-          eventDate: '2024-04-15',
-          eventVenue: '잠실종합운동장',
-          status: 'ACTIVE',
-          ticket_price: testPrice,    // 테스트 가격을 명시적으로 추가 (DB 스키마 필드명과 일치) 
-          ticketPrice: testPrice      // 프론트엔드 필드명도 추가
-        };
-        
-        console.log(`[${category}] 테스트 게시물 생성 중:`, testPost);
-        
-        try {
-          const response = await fetch('/api/posts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(testPost),
-          });
-          
-          const data = await response.json();
-          console.log(`[${category}] 테스트 게시물 생성 결과:`, data);
-          
-          if (data.post) {
-            successfulPost = {
-              category,
-              id: data.post.id
-            };
-            toast.success(`테스트 게시물이 생성되었습니다! (카테고리: ${category}, ID: ${data.post.id})`);
-            break;
-          } else {
-            console.error(`[${category}] 게시물 생성 실패:`, data.error || '알 수 없는 오류');
-          }
-        } catch (err) {
-          console.error(`[${category}] 게시물 생성 중 오류:`, err);
-        }
-      }
-      
-      if (successfulPost) {
-        console.log(`성공한 게시물: 카테고리=${successfulPost.category}, ID=${successfulPost.id}`);
-        toast.success(`최종 성공: ${successfulPost.category} (ID: ${successfulPost.id})`);
-        // 생성 후 목록 다시 불러오기
-        fetchCancellationTickets();
-      } else {
-        toast.error('모든 카테고리에서 게시물 생성 실패');
-      }
-    } catch (error) {
-      console.error('테스트 게시물 생성 오류:', error);
-      toast.error('테스트 게시물 생성 중 오류가 발생했습니다');
-    } finally {
-      setCreatingTestPost(false);
-    }
   };
 
   // 티켓 가격 추출 helper 함수
@@ -699,36 +600,6 @@ export default function TicketCancellationPage() {
           </div>
         </div>
       </section>
-
-      {/* 개발 환경에서만 보이는 테스트 버튼 */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="container mx-auto px-4 py-4">
-          <div className="p-4 bg-yellow-50 rounded-lg">
-            <h3 className="text-yellow-800 font-medium mb-2">개발 모드</h3>
-            <p className="text-yellow-700 text-sm mb-3">
-              취켓팅 테스트 게시물이 보이지 않나요? 테스트 게시물을 생성해보세요.
-            </p>
-            <div className="flex flex-col gap-2">
-              <Button 
-                onClick={createTestPost} 
-                disabled={creatingTestPost}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white"
-              >
-                {creatingTestPost ? '생성 중...' : '테스트 게시물 생성'}
-              </Button>
-              <Button
-                onClick={fetchCancellationTickets}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                모든 게시물 새로고침
-              </Button>
-              <div className="text-xs text-gray-500 mt-2">
-                개발 모드에서는 모든 게시물이 표시됩니다. 카테고리가 일치하지 않아도 됩니다.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

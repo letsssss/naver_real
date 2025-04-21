@@ -98,7 +98,7 @@ const socketHandler = (req, res) => {
         const roomName = `purchase_${purchaseId}`;
         
         // 기존 채팅방 확인
-        const { data: room, error: roomError } = await supabase
+        let { data: room, error: roomError } = await supabase
           .from('rooms')
           .select(`
             id,

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
 import { getTokenFromHeaders, getTokenFromCookies, verifyToken, isDevelopment } from '@/lib/auth';
+import { PrismaClient } from '@prisma/client';
+
+// Prisma 클라이언트 초기화
+const prisma = new PrismaClient();
 
 // OPTIONS 요청 처리
 export async function OPTIONS(request: Request) {
@@ -50,10 +53,28 @@ export async function POST(req: Request) {
     if (token) {
       // 개발 환경이 아닌 경우에만 토큰 검증
       if (!isDevelopment) {
-        const decoded = verifyToken(token);
-        if (!decoded || !decoded.userId) {
+        try {
+          const decoded = verifyToken(token);
+          if (!decoded || typeof decoded !== 'object' || !('userId' in decoded)) {
+            return new NextResponse(
+              JSON.stringify({ error: '유효하지 않은 인증 토큰입니다.' }),
+              { 
+                status: 401,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                }
+              }
+            );
+          }
+          // userId를 숫자로 변환
+          userId = typeof decoded.userId === 'number' ? decoded.userId : Number(decoded.userId);
+        } catch (tokenError) {
+          console.error('토큰 검증 오류:', tokenError);
           return new NextResponse(
-            JSON.stringify({ error: '유효하지 않은 인증 토큰입니다.' }),
+            JSON.stringify({ error: '인증 토큰을 검증할 수 없습니다.' }),
             { 
               status: 401,
               headers: {
@@ -65,7 +86,6 @@ export async function POST(req: Request) {
             }
           );
         }
-        userId = decoded.userId;
       } else {
         userId = 3; // 개발 환경에서 기본 사용자 ID
       }
