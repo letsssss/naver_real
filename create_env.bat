@@ -1,0 +1,23 @@
+@echo off
+echo 프로젝트 루트 폴더에 .env.local 파일을 생성합니다...
+
+echo # 클라이언트용> .env.local
+echo NEXT_PUBLIC_SUPABASE_URL=https://jdubrjczdyqqtsppojgu.supabase.co>> .env.local
+echo NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww>> .env.local
+echo.>> .env.local
+echo # 서버용 (API, 미들웨어 등에서 필요)>> .env.local
+echo SUPABASE_URL=https://jdubrjczdyqqtsppojgu.supabase.co>> .env.local
+echo SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwNTE5NzcsImV4cCI6MjA1ODYyNzk3N30.rnmejhT40bzQ2sFl-XbBrme_eSLnxNBGe2SSt-R_3Ww>> .env.local
+echo.>> .env.local
+echo # 관리자 권한 또는 백엔드 작업용 (주의해서 사용!)>> .env.local
+echo SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU>> .env.local
+echo.>> .env.local
+echo # JWT 인증>> .env.local
+echo JWT_SECRET=VQdBIUpYWVl6tLzN9RTUZrDGLkJ70HbaTgy5x12qeDRW95tAKrN5lT7jnOj9borDCSVKHQi2e/ERbAQA5uoK3w==>> .env.local
+echo.>> .env.local
+echo # DB 연결>> .env.local
+echo DATABASE_URL=postgresql://postgres:alndfdsffndslfnks;dfm;@db.jdubrjczdyqqtsppojgu.supabase.co:5432/postgres>> .env.local
+
+echo .env.local 파일이 생성되었습니다.
+echo 서버를 재시작하세요: npm run dev
+pause

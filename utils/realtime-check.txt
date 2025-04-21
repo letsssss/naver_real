@@ -1,0 +1,68 @@
+# Supabase Realtime 설정 확인하기
+
+## 1. 프로젝트 설정에서 Realtime 활성화 확인
+
+1. Supabase 프로젝트 대시보드로 이동
+2. 왼쪽 사이드바에서 "Database" 선택
+3. "Realtime" 탭 클릭
+4. "Realtime is enabled" 확인 (토글이 켜져 있어야 함)
+
+## 2. messages 테이블의 Realtime 설정 확인
+
+1. 왼쪽 사이드바에서 "Table Editor" 선택
+2. "messages" 테이블 선택
+3. 오른쪽 상단의 "Realtime" 탭 클릭
+4. 다음을 확인:
+   - "Realtime enabled" 체크박스 활성화
+   - "INSERT", "UPDATE", "DELETE" 이벤트 모두 체크됨
+
+## 3. 브라우저에서 Realtime 연결 상태 확인
+
+브라우저 콘솔에서:
+```js
+// Supabase Realtime 디버깅 활성화
+localStorage.setItem('supabase.realtime.debug', 'true');
+
+// 페이지 새로고침 후 콘솔에 Realtime 로그가 표시됨
+```
+
+## 4. 실시간 이벤트 확인하기
+
+아래 코드를 브라우저 콘솔에서 실행하여 모든 테이블의 이벤트 수신 확인:
+```js
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+const supabase = createClientComponentClient();
+const channel = supabase
+  .channel('global-changes')
+  .on('postgres_changes', 
+    { event: '*', schema: 'public' }, 
+    (payload) => console.log('모든 변경사항:', payload)
+  )
+  .subscribe();
+
+// 테스트 후 정리
+// supabase.removeChannel(channel);
+```
+
+## 5. 특정 채팅방 메시지만 구독하기
+
+특정 채팅방에 대한 이벤트만 테스트:
+```js
+const roomId = '여기에_채팅방_ID_입력'; // 실제 테스트할 채팅방 ID
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+const supabase = createClientComponentClient();
+const channel = supabase
+  .channel(`room_messages:${roomId}`)
+  .on('postgres_changes', 
+    { 
+      event: 'INSERT', 
+      schema: 'public', 
+      table: 'messages', 
+      filter: `room_id=eq.${roomId}` 
+    }, 
+    (payload) => console.log('새 메시지:', payload)
+  )
+  .subscribe(status => console.log('구독 상태:', status));
+``` 

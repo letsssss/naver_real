@@ -30,21 +30,15 @@ export async function GET(
       );
     }
 
-    // 데이터베이스에서 사용자 정보 조회
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        profileImage: true,
-        role: true,
-        createdAt: true,
-        // 비밀번호 등 민감한 정보는 제외
-      },
-    });
+    // 데이터베이스에서 사용자 정보 조회 (Supabase 사용)
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, name, email, profileImage, role, createdAt')
+      .eq('id', userId)
+      .single();
 
-    if (!user) {
+    if (error || !user) {
+      console.error("사용자 조회 실패:", error);
       return addCorsHeaders(
         NextResponse.json(
           { success: false, message: "해당 사용자를 찾을 수 없습니다." },

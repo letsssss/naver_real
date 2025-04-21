@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
     }
     
     // 현재 인증된 사용자 정보 가져오기
-    let authUser = await getAuthenticatedUser(request) as AuthUser | null;
+    let authUser = await getAuthenticatedUser(request) as unknown as AuthUser | null;
     
     // 개발 환경에서 userId 쿼리 파라미터를 사용한 인증 처리
     if (!authUser && process.env.NODE_ENV === 'development') {

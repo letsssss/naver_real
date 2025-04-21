@@ -135,7 +135,7 @@ export function ChatInterface({
       inputTimerRef.current = null;
     }
     
-    // 타이핑 중 이벤트 발생
+    // 타이핑 중 이벤트 발송
     dispatchTypingEvent(true, value);
     
     // 타이핑 종료 지연 타이머 설정 (5초로 확장)
@@ -349,7 +349,7 @@ export function ChatInterface({
                 <div className="space-y-4 flex flex-col mt-auto">
                   {messages.map((message) => (
                     <div
-                      key={message.clientId || message.id}
+                      key={message.id}
                       className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}
                     >
                       <div

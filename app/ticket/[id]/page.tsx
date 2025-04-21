@@ -105,7 +105,7 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
                   <p className="text-sm text-gray-500">거래 성사 124건 | 응답률 98%</p>
                 </div>
                 <Link href="/seller/seller123">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" className="text-xs px-3 h-8">
                     프로필 보기
                   </Button>
                 </Link>

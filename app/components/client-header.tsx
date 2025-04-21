@@ -5,7 +5,7 @@ import { Suspense } from 'react';
 
 // 클라이언트 사이드에서만 렌더링되는 헤더 컴포넌트
 const DynamicHeader = dynamic(
-  () => import('./header').then((mod) => mod.Header),
+  () => import('../../components/MyPageHeader').then((mod) => mod.default),
   { 
     ssr: false,
     loading: () => (

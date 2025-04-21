@@ -40,9 +40,19 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      const message = await prisma.message.findUnique({
-        where: { id: messageIdInt }
-      });
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageIdInt)
+        .maybeSingle();
+      
+      if (messageError) {
+        console.error('메시지 조회 오류:', messageError);
+        return NextResponse.json(
+          { error: '메시지 조회 중 오류가 발생했습니다.' },
+          { status: 500 }
+        );
+      }
       
       if (!message) {
         return NextResponse.json(
@@ -52,7 +62,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 메시지의 발신자만 읽음 상태를 확인할 수 있음
-      if (message.senderId !== userId) {
+      if (message.sender_id !== userId) {
         return NextResponse.json(
           { error: '이 메시지의 읽음 상태를 확인할 권한이 없습니다.' },
           { status: 403 }
@@ -62,19 +72,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         messageId: message.id,
-        isRead: message.isRead,
-        senderId: message.senderId,
-        receiverId: message.receiverId,
-        timestamp: message.createdAt
+        isRead: message.is_read,
+        senderId: message.sender_id,
+        receiverId: message.receiver_id,
+        timestamp: message.created_at
       });
     }
     
     // 채팅방 ID가 제공된 경우
     if (roomId) {
       // roomId를 방 이름으로 사용하는 경우
-      const room = await prisma.room.findFirst({
-        where: { name: roomId }
-      });
+      const { data: room, error: roomError } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('order_number', roomId)
+        .maybeSingle();
+      
+      if (roomError) {
+        console.error('채팅방 조회 오류:', roomError);
+        return NextResponse.json(
+          { error: '채팅방 조회 중 오류가 발생했습니다.' },
+          { status: 500 }
+        );
+      }
       
       if (!room) {
         return NextResponse.json(
@@ -84,14 +104,22 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 채팅방의 참여자인지 확인
-      const isParticipant = await prisma.roomParticipant.findFirst({
-        where: {
-          roomId: room.id,
-          userId
-        }
-      });
+      const { data: participant, error: participantError } = await supabase
+        .from('room_participants')
+        .select('id')
+        .eq('room_id', room.id)
+        .eq('user_id', userId)
+        .maybeSingle();
       
-      if (!isParticipant) {
+      if (participantError) {
+        console.error('참여자 확인 오류:', participantError);
+        return NextResponse.json(
+          { error: '채팅방 참여자 확인 중 오류가 발생했습니다.' },
+          { status: 500 }
+        );
+      }
+      
+      if (!participant) {
         return NextResponse.json(
           { error: '이 채팅방에 접근할 권한이 없습니다.' },
           { status: 403 }
@@ -99,31 +127,37 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 보낸 메시지 중 읽음 상태 확인
-      const messages = await prisma.message.findMany({
-        where: {
-          roomId: room.id,
-          senderId: userId
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+      const { data: messages, error: messagesError } = await supabase
+        .from('messages')
+        .select('id, content, is_read, created_at')
+        .eq('room_id', room.id)
+        .eq('sender_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (messagesError) {
+        console.error('메시지 조회 오류:', messagesError);
+        return NextResponse.json(
+          { error: '메시지 조회 중 오류가 발생했습니다.' },
+          { status: 500 }
+        );
+      }
       
       // 읽지 않은 메시지 개수
-      const unreadCount = messages.filter(msg => !msg.isRead).length;
+      const unreadCount = messages ? messages.filter(msg => !msg.is_read).length : 0;
+      const totalMessages = messages ? messages.length : 0;
       
       return NextResponse.json({
         success: true,
         roomId: roomId,
-        totalMessages: messages.length,
+        totalMessages: totalMessages,
         unreadCount,
-        readCount: messages.length - unreadCount,
-        messages: messages.map(msg => ({
+        readCount: totalMessages - unreadCount,
+        messages: messages ? messages.map(msg => ({
           id: msg.id,
           content: msg.content.substring(0, 30) + (msg.content.length > 30 ? '...' : ''),
-          isRead: msg.isRead,
-          timestamp: msg.createdAt
-        }))
+          isRead: msg.is_read,
+          timestamp: msg.created_at
+        })) : []
       });
     }
     

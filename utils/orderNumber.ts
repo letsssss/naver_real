@@ -1,4 +1,6 @@
-export async function createUniqueOrderNumber(prisma: any): Promise<string> {
+import { supabase } from '@/lib/supabase';
+
+export async function createUniqueOrderNumber(): Promise<string> {
   const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     let result = ''
@@ -10,9 +12,17 @@ export async function createUniqueOrderNumber(prisma: any): Promise<string> {
 
   while (true) {
     const newCode = generateCode()
-    const existing = await prisma.purchase.findUnique({
-      where: { orderNumber: newCode }
-    })
+    
+    const { data: existing, error } = await supabase
+      .from('purchases')
+      .select('id')
+      .eq('order_number', newCode)
+      .maybeSingle()
+      
+    if (error) {
+      console.error('주문 번호 조회 오류:', error)
+    }
+    
     if (!existing) {
       return newCode
     }

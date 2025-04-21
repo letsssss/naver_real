@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, Minus, Plus } from "lucide-react"
@@ -11,12 +11,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 
-// 더미 티켓 데이터 (실제로는 API에서 가져와야 함)
-const dummyTickets = {
-  1: {
-    id: 1,
-    title: "세븐틴 'FOLLOW' TO SEOUL",
-    artist: "세븐틴",
+// 티켓 타입 정의
+interface TicketData {
+  id: string;
+  title: string;
+  artist: string;
+  date: string;
+  time: string;
+  venue: string;
+  price: number;
+  image: string;
+}
+
+// 더미 티켓 데이터
+const dummyTickets: Record<string, TicketData> = {
+  "1": {
+    id: "1",
+    title: "아이유 콘서트 'The Golden Hour'",
+    artist: "아이유",
     date: "2024.03.20",
     time: "19:00",
     venue: "잠실종합운동장 주경기장",
@@ -29,8 +41,8 @@ const dummyTickets = {
 export default function OrderPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const ticketId = searchParams.get("ticketId")
-  const [ticketData, setTicketData] = useState(dummyTickets[ticketId as keyof typeof dummyTickets])
+  const ticketId = searchParams.get("ticketId") || "1"
+  const [ticketData, setTicketData] = useState<TicketData | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [name, setName] = useState("")
@@ -40,8 +52,8 @@ export default function OrderPage() {
 
   useEffect(() => {
     // 실제 구현에서는 여기서 API를 호출하여 티켓 정보를 가져와야 합니다.
-    if (ticketId && dummyTickets[ticketId as keyof typeof dummyTickets]) {
-      setTicketData(dummyTickets[ticketId as keyof typeof dummyTickets])
+    if (ticketId && dummyTickets[ticketId]) {
+      setTicketData(dummyTickets[ticketId])
     }
   }, [ticketId])
 
@@ -136,11 +148,11 @@ export default function OrderPage() {
             </div>
             <div className="flex items-center justify-between border-t pt-4">
               <div className="flex items-center">
-                <Button variant="outline" size="icon" onClick={() => handleQuantityChange(-1)}>
+                <Button variant="outline" className="h-8 w-8 p-0" onClick={() => handleQuantityChange(-1)}>
                   <Minus className="h-4 w-4" />
                 </Button>
                 <span className="mx-4">{quantity}</span>
-                <Button variant="outline" size="icon" onClick={() => handleQuantityChange(1)}>
+                <Button variant="outline" className="h-8 w-8 p-0" onClick={() => handleQuantityChange(1)}>
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>

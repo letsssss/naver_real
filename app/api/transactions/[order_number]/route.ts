@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { supabase, createAdminClient } from '@/lib/supabase';
 import { cors } from '@/lib/cors';
-import { PostgrestFilterBuilder } from '@supabase/supabase-js';
 
 // OPTIONS 요청 처리 (CORS 지원)
 export async function OPTIONS() {
@@ -52,7 +51,7 @@ export async function GET(
     const adminSupabase = createAdminClient();
     
     // 거래 정보 조회 (purchases 테이블에서)
-    let query: PostgrestFilterBuilder<any> = adminSupabase
+    let query = adminSupabase
       .from('purchases')
       .select(`
         *,
@@ -91,7 +90,7 @@ export async function GET(
       query = query.eq('id', Number(transactionId));
     }
     
-    const { data: purchase, error } = await query.single();
+    const { data: purchase, error } = await (query as any).single();
     
     if (error || !purchase) {
       console.error('거래 조회 중 Supabase 오류:', error);
@@ -248,16 +247,16 @@ export async function PUT(
     const adminSupabase = createAdminClient();
     
     // 거래 정보 조회
-    let query: PostgrestFilterBuilder<any> = adminSupabase.from('purchases');
+    let query = adminSupabase.from('purchases');
     
     // ID가 숫자인지 오더번호(ORDER-*)인지 확인하여 적절한 쿼리 실행
     if (/^ORDER-/.test(order_number)) {
-      query = query.select('*').eq('order_number', order_number);
+      query = query.select('*').eq('order_number', order_number) as any;
     } else {
-      query = query.select('*').eq('id', Number(order_number));
+      query = query.select('*').eq('id', Number(order_number)) as any;
     }
     
-    const { data: purchase, error: queryError } = await query.single();
+    const { data: purchase, error: queryError } = await (query as any).single();
     
     if (queryError || !purchase) {
       console.error('거래 조회 중 Supabase 오류:', queryError);
@@ -326,15 +325,15 @@ export async function PUT(
     }
     
     // 거래 정보 업데이트
-    let updateQuery: PostgrestFilterBuilder<any> = adminSupabase.from('purchases');
+    let updateQuery = adminSupabase.from('purchases');
     
     if (/^ORDER-/.test(order_number)) {
-      updateQuery = updateQuery.update(updateData).eq('order_number', order_number);
+      updateQuery = updateQuery.update(updateData).eq('order_number', order_number) as any;
     } else {
-      updateQuery = updateQuery.update(updateData).eq('id', Number(order_number));
+      updateQuery = updateQuery.update(updateData).eq('id', Number(order_number)) as any;
     }
     
-    const { data: updatedPurchase, error: updateError } = await updateQuery.select().single();
+    const { data: updatedPurchase, error: updateError } = await (updateQuery as any).select().single();
     
     if (updateError) {
       console.error('거래 업데이트 중 Supabase 오류:', updateError);

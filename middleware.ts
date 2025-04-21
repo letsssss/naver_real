@@ -39,8 +39,6 @@ export async function middleware(request: NextRequest) {
     const supabase = createMiddlewareClient<Database>({
       req: request,
       res: response,
-      supabaseUrl,
-      supabaseKey: supabaseAnonKey,
     });
     
     // 세션 가져오기 - 이 호출로 인해 쿠키가 자동으로 갱신됨

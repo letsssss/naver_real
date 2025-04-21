@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { initializeRealtimeSubscriptions, unsubscribeRealtimeChannel } from '@/lib/supabase';
 
 // 개발 환경인지 확인
 const isDevelopment = process.env.NODE_ENV === 'development';

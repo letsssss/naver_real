@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 
-// Prisma 클라이언트 제거됨, Supabase 사용;
+// verifyToken 반환 타입 정의
+interface DecodedToken {
+  userId: string | number;
+  name?: string;
+  email?: string;
+}
 
 // CORS 헤더 추가 함수
 const addCorsHeaders = (response: NextResponse) => {
@@ -19,86 +25,79 @@ export async function OPTIONS() {
   );
 }
 
-// 현재 로그인한 사용자 정보 가져오기
-export async function GET(request: NextRequest) {
-  console.log('현재 사용자 정보 요청 처리');
-  
+/**
+ * 현재 로그인한 사용자 정보를 조회하는 API
+ */
+export async function GET(req: NextRequest) {
   try {
-    // 요청 헤더에서 인증 토큰 추출
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return addCorsHeaders(
-        NextResponse.json(
-          { success: false, message: '인증 토큰이 제공되지 않았습니다.' },
-          { status: 401 }
-        )
+    // 요청 헤더에서 토큰 추출
+    const authHeader = req.headers.get('authorization');
+    let token;
+
+    // 헤더로부터 토큰 확인
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } 
+    // 쿠키에서 토큰 확인
+    else {
+      const cookieStore = cookies();
+      token = cookieStore.get('token')?.value;
+    }
+
+    // 토큰이 없으면 401 에러
+    if (!token) {
+      return NextResponse.json(
+        { error: '인증 토큰이 필요합니다.' },
+        { status: 401 }
       );
     }
+
+    // 토큰 검증
+    const decoded = await verifyToken(token) as DecodedToken;
     
-    const token = authHeader.split(' ')[1];
-    console.log('JWT 토큰 검증 시도', token.substring(0, 10) + '...');
-    
-    // JWT 토큰 검증
-    const decoded = verifyToken(token);
+    // 토큰이 유효하지 않으면 401 에러
     if (!decoded || !decoded.userId) {
-      return addCorsHeaders(
-        NextResponse.json(
-          { success: false, message: '유효하지 않은 인증 토큰입니다.' },
-          { status: 401 }
-        )
+      return NextResponse.json(
+        { error: '유효하지 않은 토큰입니다.' },
+        { status: 401 }
       );
     }
-    
-    console.log('JWT 토큰 검증 성공', decoded);
-    
-    // 인증된 사용자 ID로 사용자 정보 조회
+
+    // 사용자 정보 조회
     const userId = decoded.userId;
-    console.log('인증된 사용자 ID:', userId);
     
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        profileImage: true,
-        createdAt: true,
-        // 필요한 추가 정보
-      },
-    });
-    
-    if (!user) {
-      return addCorsHeaders(
-        NextResponse.json(
-          { success: false, message: '사용자를 찾을 수 없습니다.' },
-          { status: 404 }
-        )
+    // Supabase에서 사용자 정보 조회
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, name, role, profileImage, phoneNumber, createdAt')
+      .eq('id', Number(userId))
+      .single();
+
+    // 오류가 있거나 사용자 정보가 없으면 404 에러
+    if (error || !user) {
+      console.error('사용자 조회 실패:', error);
+      return NextResponse.json(
+        { error: '사용자를 찾을 수 없습니다.' },
+        { status: 404 }
       );
     }
-    
+
     // 사용자 정보 반환
-    return addCorsHeaders(
-      NextResponse.json(
-        { 
-          success: true, 
-          user
-        },
-        { status: 200 }
-      )
-    );
-    
+    return NextResponse.json({
+      user: {
+        ...user,
+        // createdAt이 이미 문자열일 수 있으므로 타입 체크
+        createdAt: typeof user.createdAt === 'string' 
+          ? user.createdAt 
+          : new Date(user.createdAt).toISOString()
+      }
+    });
   } catch (error: any) {
+    // 서버 에러 처리
     console.error('사용자 정보 조회 오류:', error);
-    
-    return addCorsHeaders(
-      NextResponse.json(
-        { 
-          success: false, 
-          message: '사용자 정보를 가져오는 중 오류가 발생했습니다.',
-          error: error.message
-        },
-        { status: 500 }
-      )
+    return NextResponse.json(
+      { error: '사용자 정보를 조회하는 중 오류가 발생했습니다.' },
+      { status: 500 }
     );
   }
 } 

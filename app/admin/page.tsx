@@ -92,7 +92,7 @@ export default function AdminPage() {
             <p>{ticket.artist}</p>
             <p>{ticket.date}</p>
             <p>{ticket.price.toLocaleString()}원</p>
-            <Button onClick={() => handleDelete(ticket.id)} variant="destructive" className="mt-2">
+            <Button onClick={() => handleDelete(ticket.id)} variant="withdraw" className="mt-2">
               삭제
             </Button>
           </div>

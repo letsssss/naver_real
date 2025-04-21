@@ -51,35 +51,70 @@ export async function POST(request: NextRequest) {
     const roomIdInt = parseInt(roomId);
     
     // 방 존재 여부 확인 및 사용자가 해당 방의 참여자인지 확인
-    const isParticipant = await prisma.roomParticipant.findFirst({
-      where: {
-        roomId: roomIdInt,
-        userId: requestUserId
-      }
-    });
+    const { data: participant, error: participantError } = await supabase
+      .from('room_participants')
+      .select('id')
+      .eq('room_id', roomIdInt)
+      .eq('user_id', requestUserId)
+      .maybeSingle();
     
-    if (!isParticipant) {
+    if (participantError) {
+      console.error('참여자 확인 오류:', participantError);
+      return NextResponse.json(
+        { error: '채팅방 참여자 확인 중 오류가 발생했습니다.' },
+        { status: 500 }
+      );
+    }
+    
+    if (!participant) {
       return NextResponse.json(
         { error: '해당 채팅방에 접근할 권한이 없습니다.' },
         { status: 403 }
       );
     }
     
+    // 읽지 않은 메시지 조회
+    const { data: unreadMessages, error: selectError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('room_id', roomIdInt)
+      .eq('receiver_id', requestUserId)
+      .eq('is_read', false);
+    
+    if (selectError) {
+      console.error('읽지 않은 메시지 조회 오류:', selectError);
+      return NextResponse.json(
+        { error: '읽지 않은 메시지 조회 중 오류가 발생했습니다.' },
+        { status: 500 }
+      );
+    }
+    
+    if (!unreadMessages || unreadMessages.length === 0) {
+      return NextResponse.json({
+        success: true,
+        updatedCount: 0,
+        message: '읽지 않은 메시지가 없습니다.'
+      });
+    }
+    
     // 읽지 않은 메시지 업데이트
-    const unreadMessages = await prisma.message.updateMany({
-      where: {
-        roomId: roomIdInt,
-        receiverId: requestUserId,
-        isRead: false
-      },
-      data: {
-        isRead: true
-      }
-    });
+    const messageIds = unreadMessages.map(msg => msg.id);
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({ is_read: true })
+      .in('id', messageIds);
+    
+    if (updateError) {
+      console.error('메시지 읽음 상태 업데이트 오류:', updateError);
+      return NextResponse.json(
+        { error: '메시지 읽음 상태 업데이트 중 오류가 발생했습니다.' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json({
       success: true,
-      updatedCount: unreadMessages.count,
+      updatedCount: messageIds.length,
       message: '메시지 읽음 상태가 업데이트되었습니다.'
     });
     

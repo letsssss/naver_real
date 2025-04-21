@@ -179,13 +179,14 @@ export function PostList({ category = '전체' }: PostListProps) {
           <PaginationContent>
             {currentPage > 1 && (
               <PaginationItem>
-                <PaginationPrevious onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
+                <PaginationPrevious href="#" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} />
               </PaginationItem>
             )}
             
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <PaginationItem key={page}>
                 <PaginationLink 
+                  href="#"
                   isActive={page === currentPage}
                   onClick={() => setCurrentPage(page)}
                 >
@@ -196,7 +197,7 @@ export function PostList({ category = '전체' }: PostListProps) {
             
             {currentPage < totalPages && (
               <PaginationItem>
-                <PaginationNext onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
+                <PaginationNext href="#" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} />
               </PaginationItem>
             )}
           </PaginationContent>

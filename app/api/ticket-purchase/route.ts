@@ -60,10 +60,9 @@ export async function POST(request: NextRequest) {
         // 테스트 사용자 객체 생성
         authUser = {
           id: userId,
-          name: '개발 테스트 사용자',
           email: 'dev@example.com',
           role: 'USER'
-        };
+        } as any; // 타입 체크 우회
         console.log("개발 환경 - 테스트 사용자 생성:", authUser);
       }
     }
@@ -248,7 +247,7 @@ export async function POST(request: NextRequest) {
 
     // 판매자에게 알림 생성
     try {
-      const notificationMessage = `${authUser.name || '구매자'}님이 "${postData.title || postData.event_name || '게시글'}"의 결제를 완료하여 취켓팅이 시작되었습니다. (${quantity}매)`;
+      const notificationMessage = `구매자님이 "${postData.title || postData.event_name || '게시글'}"의 결제를 완료하여 취켓팅이 시작되었습니다. (${quantity}매)`;
       
       const notificationData: any = {
         user_id: authorId,
