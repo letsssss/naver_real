@@ -1,28 +1,13 @@
 /**
- * DEPRECATED: Prisma에서 Supabase로 마이그레이션 진행 중
+ * DEPRECATED: Prisma에서 Supabase로 마이그레이션 완료
  * 이 파일은 레거시 코드와의 호환성을 위해 유지됩니다.
  * 새로운 코드는 lib/supabase.ts를 직접 사용해야 합니다.
  */
 
 import { supabase } from './supabase';
-import { PrismaClient } from '@prisma/client';
 
-// PrismaClient의 전역 인스턴스 선언
-declare global {
-  var prisma: PrismaClient | undefined;
-}
-
-// 개발 환경에서 핫 리로딩 시 여러 인스턴스 생성 방지
-export const prisma = global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
-
-// 개발 환경에서만 전역 변수에 할당
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
-}
-
-export default prisma;
+// PrismaClient 코드 제거 - 패키지가 더 이상 존재하지 않음
+// 래퍼 클래스를 통해 동일한 인터페이스 제공
 
 // Prisma API를 에뮬레이션하는 래퍼 클래스
 class SupabaseWrapper {
@@ -589,13 +574,14 @@ class SupabaseWrapper {
   _formatSelect(select: any): string {
     if (!select) return '*';
     
-    return Object.keys(select)
-      .filter(key => select[key] === true)
-      .join(', ');
+    const fields = Object.keys(select).filter(key => select[key]);
+    if (fields.length === 0) return '*';
+    
+    return fields.join(',');
   }
 }
 
-// 싱글톤 패턴으로 인스턴스 생성
-const prismaWrapper = new SupabaseWrapper();
-
-export { prismaWrapper as default, prismaWrapper }; 
+// 더미 prisma 객체 - 기존 코드의 타입 호환성을 위한 래퍼
+// @ts-ignore - 타입 체크 무시
+const prisma = new SupabaseWrapper();
+export default prisma; 

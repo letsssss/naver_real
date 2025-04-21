@@ -1,213 +1,148 @@
-import { NextResponse } from "next/server";
-import { supabase } from '@/lib/supabase';
-import { getTokenFromHeaders, getTokenFromCookies, verifyAccessToken } from "@/lib/auth";
-import jwt from "jsonwebtoken";
+import { NextResponse } from 'next/server';
+import * as jose from 'jose';
+import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase.types';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/env';
 
-// 타입스크립트 인터페이스 정의
+// DB 메모리 캐시 타입 정의
 interface MemoryUser {
   id: number;
   email: string;
-  password: string;
-  name: string;
+  name: string | null;
   role: string;
+  profileImage: string | null;
   createdAt: Date;
-  updatedAt: Date;
 }
 
-// JWT 시크릿 키 정의 (login 라우트와 동일한 키 사용)
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// 서버 메모리 내 사용자 캐시
+const userCache: Record<string, { user: MemoryUser; timestamp: number }> = {};
 
-// 개발 환경 확인 함수
-const isDevelopment = () => !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+// 인메모리 캐시 TTL (5분)
+const CACHE_TTL = 5 * 60 * 1000;
 
-// Edge 브라우저 포함한 모든 브라우저에서 쿠키를 올바르게 설정하는 헬퍼 함수
-function setAuthCookie(response: NextResponse, name: string, value: string, httpOnly: boolean = true) {
-  response.cookies.set(name, value, {
-    httpOnly,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7일 (초)
-    path: '/',
-  });
+/**
+ * 쿠키에서 JWT 토큰을 추출하는 함수
+ */
+function getTokenFromCookies() {
+  const cookieStore = cookies();
+  return cookieStore.get('token')?.value;
 }
 
-// 메모리 기반 사용자 저장소 (독립적으로 유지)
-export const memoryUsers: MemoryUser[] = [];
+/**
+ * JWT 토큰을 확인하고 페이로드를 반환하는 함수
+ */
+async function verifyJwtToken(token: string) {
+  if (!token) return null;
 
-// 개발 환경에서 메모리 사용자 추가 함수
-export function addMemoryUser(user: Omit<MemoryUser, 'id' | 'createdAt' | 'updatedAt'>) {
-  const newUser: MemoryUser = {
-    ...user,
-    id: memoryUsers.length + 1,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
-  
-  memoryUsers.push(newUser);
-  console.log(`메모리 사용자 추가됨: ${newUser.email}, ID: ${newUser.id}`);
-  return newUser;
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key');
+    const { payload } = await jose.jwtVerify(token, secret);
+    return payload;
+  } catch (error) {
+    console.error('JWT 검증 오류:', error);
+    return null;
+  }
 }
 
 // OPTIONS 메서드 처리 (CORS)
 export async function OPTIONS() {
   return new NextResponse(null, {
-    status: 200,
+    status: 204,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
 }
 
-export async function GET(request: Request) {
+/**
+ * 현재 로그인한 사용자 정보를 반환하는 API 엔드포인트
+ */
+export async function GET() {
   try {
-    // 인증 헤더에서 토큰 확인
-    const authHeader = request.headers.get('authorization');
-    let token: string | undefined;
+    // 토큰 가져오기
+    const token = getTokenFromCookies();
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    } else {
-      // 쿠키에서 토큰 확인
-      const cookies = request.headers.get('cookie');
-      if (cookies) {
-        const cookiePairs = cookies.split('; ');
-        const authTokenCookie = cookiePairs.find(c => c.startsWith('auth-token='));
-        if (authTokenCookie) {
-          token = authTokenCookie.split('=')[1];
-        }
-      }
-    }
-    
-    // 토큰이 없는 경우
     if (!token) {
-      console.log("토큰 없음: 인증되지 않음");
-      return NextResponse.json({ error: "인증되지 않음" }, { status: 401 });
+      return NextResponse.json(
+        { error: '로그인이 필요합니다.' },
+        { status: 401 }
+      );
     }
+
+    // 토큰 검증
+    const payload = await verifyJwtToken(token);
     
-    try {
-      // 토큰 검증
-      const decoded: any = jwt.verify(token, JWT_SECRET);
-      const userId = decoded.userId;
-      
-      // 개발 환경에서 테스트 사용자 허용
-      if (isDevelopment() && memoryUsers.some(u => u.id === userId)) {
-        const user = memoryUsers.find(u => u.id === userId);
-        
-        // 응답 생성
-        const response = NextResponse.json({
-          success: true,
-          user,
-          token // 클라이언트가 새로운 토큰을 저장할 수 있도록 다시 전달
-        });
-        
-        // 쿠키 설정 - Edge 호환성을 위해 헬퍼 함수 사용
-        setAuthCookie(response, 'auth-token', token);
-        setAuthCookie(response, 'auth-status', 'authenticated', false);
-        
-        // 캐시 방지 헤더 추가
-        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-        response.headers.set('Pragma', 'no-cache');
-        response.headers.set('Expires', '0');
-        
-        return response;
-      }
-      
-      // 데이터베이스에서 사용자 조회
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true
-        }
-      });
-      
-      if (!user) {
-        console.log("사용자를 찾을 수 없음:", userId);
-        return NextResponse.json({ error: "사용자를 찾을 수 없음" }, { status: 404 });
-      }
-      
-      console.log("사용자 인증 성공:", user.email);
-      
-      // 응답 생성
-      const response = NextResponse.json({
-        success: true,
-        user,
-        token // 클라이언트가 새로운 토큰을 저장할 수 있도록 다시 전달
-      });
-      
-      // 쿠키 설정 - Edge 호환성을 위해 헬퍼 함수 사용
-      setAuthCookie(response, 'auth-token', token);
-      setAuthCookie(response, 'auth-status', 'authenticated', false);
-      
-      // 캐시 방지 헤더 추가
-      response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      response.headers.set('Pragma', 'no-cache');
-      response.headers.set('Expires', '0');
-      
-      return response;
-      
-    } catch (e) {
-      console.error("토큰 검증 오류:", e);
-      
-      // 개발 환경에서는 기본 사용자를 반환
-      if (isDevelopment()) {
-        console.log("개발 환경에서 기본 사용자(ID: 3)로 인증 진행");
-        
-        // 데이터베이스에서 기본 사용자 조회
-        try {
-          const devUser = await prisma.user.findUnique({
-            where: { id: 3 }, // 기본 개발 사용자 ID
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              role: true
-            }
-          });
-          
-          if (devUser) {
-            console.log("개발 환경 자동 인증 성공:", devUser.email);
-            
-            // 새로운 개발용 토큰 생성
-            const devToken = jwt.sign(
-              { userId: devUser.id, email: devUser.email },
-              JWT_SECRET,
-              { expiresIn: '24h' }
-            );
-            
-            // 응답 생성
-            const response = NextResponse.json({
-              success: true,
-              user: devUser,
-              token: devToken,
-              devMode: true
-            });
-            
-            // 쿠키 설정
-            setAuthCookie(response, 'auth-token', devToken);
-            setAuthCookie(response, 'auth-status', 'authenticated', false);
-            
-            // 캐시 방지 헤더 추가
-            response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-            response.headers.set('Pragma', 'no-cache');
-            response.headers.set('Expires', '0');
-            
-            return response;
-          }
-        } catch (dbError) {
-          console.error("개발 환경에서 사용자 조회 실패:", dbError);
+    if (!payload || !payload.sub) {
+      return NextResponse.json(
+        { error: '유효하지 않은 토큰입니다.' },
+        { status: 401 }
+      );
+    }
+
+    const userId = payload.sub;
+
+    // 캐시에서 사용자 정보 확인
+    const cachedData = userCache[userId];
+    const now = Date.now();
+
+    if (cachedData && now - cachedData.timestamp < CACHE_TTL) {
+      console.log('캐시에서 사용자 정보 반환:', userId);
+      return NextResponse.json({ user: cachedData.user });
+    }
+
+    // Supabase 클라이언트 생성 - 직접 createClient 사용
+    const supabase = createClient<Database>(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
         }
       }
-      
-      return NextResponse.json({ error: "유효하지 않은 토큰" }, { status: 401 });
-    }
+    );
     
-  } catch (e) {
-    console.error("인증 확인 오류:", e);
-    return NextResponse.json({ error: "서버 오류" }, { status: 500 });
+    // 사용자 정보 조회
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('id, email, name, role, profile_image, created_at')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !userData) {
+      console.error('사용자 정보 조회 오류:', error);
+      return NextResponse.json(
+        { error: '사용자 정보를 찾을 수 없습니다.' },
+        { status: 404 }
+      );
+    }
+
+    // 응답 형식에 맞게 형변환
+    const formattedUser: MemoryUser = {
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      profileImage: userData.profile_image,
+      createdAt: new Date(userData.created_at)
+    };
+
+    // 캐시에 사용자 정보 저장
+    userCache[userId] = {
+      user: formattedUser,
+      timestamp: now
+    };
+
+    return NextResponse.json({ user: formattedUser });
+  } catch (error) {
+    console.error('사용자 정보 조회 중 오류:', error);
+    
+    return NextResponse.json(
+      { error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 } 
