@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
 import { SyncUser } from "@/app/components/sync-user"
 import TokenRefresher from '@/app/components/auth/TokenRefresher'
+import { Footer } from "@/components/Footer"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -33,11 +34,14 @@ export default function RootLayout({
       <head>
         <meta name="naver-site-verification" content="877909cff89a029e033c97399331d77f7ca29013" />
       </head>
-      <body className={`${inter.className} bg-gray-50 min-h-screen`} suppressHydrationWarning={true}>
+      <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <TokenRefresher />
         <AuthProvider>
           <SyncUser />
-          {children}
+          <div className="flex-grow">
+            {children}
+          </div>
+          <Footer />
           <FeedbackForm />
           <Toaster position="top-center" />
           <GoogleAnalytics gaId="G-XXXXXXXXXX" />
