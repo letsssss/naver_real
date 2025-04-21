@@ -8,7 +8,6 @@ import Image from "next/image"
 import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, RefreshCw, TicketX } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Footer } from "@/components/Footer"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -730,17 +729,6 @@ export default function TicketCancellationPage() {
           </div>
         </div>
       )}
-
-      {/* 티켓 목록 섹션 (기존) */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="md:w-3/4">
-            {/* ... existing grid and ticket display code ... */}
-          </div>
-        </div>
-      </div>
-
-      <Footer />
     </div>
   )
 }
