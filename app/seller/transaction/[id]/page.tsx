@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -43,28 +43,6 @@ const defaultTransaction = {
     profileImage: "/placeholder.svg?height=50&width=50",
   },
 }
-
-// 샘플 메시지 데이터
-const initialMessages = [
-  {
-    id: 1,
-    senderId: "seller123", // 판매자 ID
-    text: "안녕하세요! 세븐틴 콘서트 티켓 구매해주셔서 감사합니다. 취켓팅 진행 중이니 조금만 기다려주세요.",
-    timestamp: "2024-03-16T10:30:00",
-  },
-  {
-    id: 2,
-    senderId: "buyer123", // 구매자 ID
-    text: "네, 감사합니다. 혹시 취켓팅 완료 예상 시간이 언제인가요?",
-    timestamp: "2024-03-16T10:35:00",
-  },
-  {
-    id: 3,
-    senderId: "seller123", // 판매자 ID
-    text: "보통 공연 1-2일 전에 완료되지만, 취소표가 빨리 나오면 더 일찍 완료될 수도 있어요. 상황에 따라 다를 수 있으니 메시지로 안내해 드릴게요.",
-    timestamp: "2024-03-16T10:40:00",
-  },
-]
 
 // 상태 변환 함수들
 const getStatusText = (status: string) => {
@@ -121,13 +99,6 @@ const getTicketingStatusText = (status: string) => {
   }
 }
 
-interface Message {
-  id: number;
-  senderId: string;
-  text: string;
-  timestamp: string;
-}
-
 export default function SellerTransactionDetail() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
@@ -138,9 +109,6 @@ export default function SellerTransactionDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [chatRoomId, setChatRoomId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [newMessage, setNewMessage] = useState("")
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 실제 구현에서는 이 부분에서 API를 호출하여 거래 정보를 가져와야 합니다
   useEffect(() => {
@@ -243,23 +211,6 @@ export default function SellerTransactionDetail() {
           console.error("채팅방 정보 로딩 에러:", chatError);
           // 채팅방 로딩 실패는 전체 페이지 에러로 처리하지 않음
         }
-        
-        // 메시지 데이터 불러오기
-        try {
-          const messagesResponse = await fetch(`/api/messages/${orderId}`, {
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          })
-          if (messagesResponse.ok) {
-            const messageData = await messagesResponse.json()
-            setMessages(messageData)
-          }
-        } catch (messageError) {
-          console.error("메시지 데이터 로딩 에러:", messageError)
-          // 메시지 로딩 실패는 전체 페이지 에러로 처리하지 않음
-        }
       } catch (error) {
         console.error("거래 정보 로딩 에러:", error)
         setError(error instanceof Error ? error.message : "거래 정보를 불러오는데 실패했습니다.")
@@ -270,17 +221,6 @@ export default function SellerTransactionDetail() {
     
     fetchTransaction()
   }, [params])
-
-  // 채팅창이 열릴 때 스크롤을 맨 아래로 이동
-  useEffect(() => {
-    if (isChatOpen) {
-      scrollToBottom()
-    }
-  }, [isChatOpen, messages])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
 
   // 거래 단계 정의 - 4단계로 수정
   const transactionSteps = [
@@ -373,11 +313,6 @@ export default function SellerTransactionDetail() {
 
   const openChat = () => setIsChatOpen(true)
   const closeChat = () => setIsChatOpen(false)
-
-  const formatMessageTime = (timestamp: string) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
-  }
 
   // 현재 단계에 따른 버튼 텍스트 결정 (판매자용)
   const getActionButtonText = () => {

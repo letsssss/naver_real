@@ -4,6 +4,7 @@ import supabase from '@/lib/supabase-browser';
 // import { Database } from '@/types/supabase.types';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
+import { useRealtimeMessages } from './useRealtimeMessages';
 
 /**
  * 채팅 메시지 타입 정의
@@ -69,7 +70,6 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
   const [error, setError] = useState<string | null>(null);
   const [roomName, setRoomName] = useState('');
   
-  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -183,67 +183,46 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
   }, [roomId, fetchMessages]);
 
   /**
-   * 실시간 메시지 구독
+   * 실시간 메시지 구독 (useRealtimeMessages 훅 사용)
    */
-  useEffect(() => {
-    if (!roomId) return;
+  useRealtimeMessages(roomId, async (newMessage) => {
+    // userId가 없으면 처리하지 않음 (불필요한 작업 방지)
+    if (!userId) {
+      console.warn('[채팅] userId가 없어 메시지 처리를 건너뜁니다:', newMessage.id);
+      return;
+    }
     
-    console.log(`[채팅] 실시간 구독 시작 - 방ID: ${roomId}`);
+    console.log('[채팅] 새 메시지 수신:', newMessage);
     
-    // Supabase 채널 생성 및 구독
-    const channel = supabase
-      .channel(`room-${roomId}`)
-      .on(
-        'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'messages', 
-          filter: `room_id=eq.${roomId}` 
-        },
-        async (payload) => {
-          console.log('[채팅] 새 메시지 수신:', payload);
-          
-          // 보낸 사람 정보 조회
-          const newMessage = payload.new as ChatMessage;
-          
-          if (newMessage.sender_id !== userId) {
-            // 내가 보낸 메시지가 아닐 경우 읽음 표시
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', newMessage.id);
-              
-            // 다른 사람의 메시지인 경우 발신자 정보 조회
-            const { data: sender } = await supabase
-              .from('users')
-              .select('id, name, profile_image')
-              .eq('id', newMessage.sender_id)
-              .single();
-              
-            if (sender) {
-              newMessage.sender = sender;
-            }
-          }
-          
-          setMessages((prev) => [...prev, newMessage]);
-        }
-      )
-      .subscribe((status) => {
-        console.log(`[채팅] 구독 상태: ${status}`);
-      });
+    const chatMessage = newMessage as unknown as ChatMessage;
     
-    // 참조 저장 (정리 함수에서 사용)
-    subscriptionRef.current = channel;
-    
-    // 컴포넌트 언마운트 시 구독 해제
-    return () => {
-      console.log('[채팅] 실시간 구독 정리');
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current);
+    if (userId && chatMessage.sender_id !== userId) {
+      // 내가 보낸 메시지가 아닐 경우 읽음 표시
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('id', chatMessage.id);
+        
+      // 다른 사람의 메시지인 경우 발신자 정보 조회
+      const { data: sender } = await supabase
+        .from('users')
+        .select('id, name, profile_image')
+        .eq('id', chatMessage.sender_id)
+        .single();
+        
+      if (sender) {
+        chatMessage.sender = sender;
       }
-    };
-  }, [roomId, userId, supabase]);
+    }
+    
+    // 중복 메시지 방지를 위한 검사 추가
+    setMessages((prev) => {
+      // 이미 동일한 ID의 메시지가 있는지 확인
+      const exists = prev.some((msg) => msg.id === chatMessage.id);
+      // 중복이면 기존 상태 유지, 새 메시지면 추가
+      return exists ? prev : [...prev, chatMessage];
+    });
+  });
 
   /**
    * 메시지 전송 함수

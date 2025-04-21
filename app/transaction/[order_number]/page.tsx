@@ -120,11 +120,23 @@ export default function TransactionDetail() {
   useEffect(() => {
     // 클라이언트 사이드에서만 실행
     if (typeof window !== 'undefined') {
-      const storedRoomId = sessionStorage.getItem("openChatRoomId");
-      if (storedRoomId) {
-        setRoomId(storedRoomId);
-        setIsChatOpen(true);
-        sessionStorage.removeItem("openChatRoomId");
+      console.log('[TransactionDetail] sessionStorage 확인 시작');
+      try {
+        const storedRoomId = sessionStorage.getItem("openChatRoomId");
+        console.log('[TransactionDetail] sessionStorage에서 가져온 roomId:', storedRoomId);
+        
+        if (storedRoomId) {
+          console.log('[TransactionDetail] 채팅방 ID를 찾았습니다. 채팅 모달을 엽니다.');
+          setRoomId(storedRoomId);
+          setIsChatOpen(true);
+          // 사용 후 제거
+          sessionStorage.removeItem("openChatRoomId");
+          console.log('[TransactionDetail] sessionStorage에서 roomId 제거 완료');
+        } else {
+          console.log('[TransactionDetail] 저장된 채팅방 ID가 없습니다.');
+        }
+      } catch (error) {
+        console.error('[TransactionDetail] sessionStorage 접근 오류:', error);
       }
     }
   }, []);

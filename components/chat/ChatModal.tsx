@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase.types';
 import { Button } from '@/components/ui/button';
 import { X, Send } from 'lucide-react';
+import { useRealtimeMessages } from '@/hooks/useRealtimeMessages';
+import supabase from '@/lib/supabase-browser';
 
 interface Message {
   id: string;
@@ -23,7 +24,6 @@ interface ChatModalProps {
 }
 
 export default function ChatModal({ roomId, onClose }: ChatModalProps) {
-  const supabase = createClientComponentClient<Database>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
@@ -33,8 +33,76 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 메시지 수신 핸들러
+  const handleNewMessage = (newMessage: any) => {
+    if (!currentUser) {
+      console.log('[ChatModal] 사용자 정보가 없어 메시지를 처리할 수 없습니다:', newMessage);
+      return;
+    }
+    
+    // 새 메시지를 상태에 추가 (중복 검사 추가)
+    setMessages(prev => {
+      // 중복 메시지 확인 (같은 ID가 이미 있는지 검사)
+      const exists = prev.some(msg => msg.id === newMessage.id);
+      // 이미 존재하면 상태 변경하지 않고, 새 메시지면 추가
+      if (exists) return prev;
+      
+      return [
+        ...prev, 
+        {
+          id: newMessage.id,
+          text: newMessage.content,
+          timestamp: newMessage.created_at,
+          sender_id: newMessage.sender_id,
+          isMine: newMessage.sender_id === currentUser.id,
+          isRead: newMessage.is_read,
+        }
+      ];
+    });
+    
+    // 내가 받은 메시지라면 읽음 처리
+    if (newMessage.sender_id !== currentUser.id) {
+      supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('id', newMessage.id)
+        .then(({ error }) => {
+          if (error) console.error('메시지 읽음 처리 오류:', error);
+        });
+    }
+    
+    // 새 메시지가 오면 스크롤 아래로
+    scrollToBottom();
+  };
+
+  // currentUser?.id가 있을 때만 실시간 구독 실행
+  // 조건부 실행으로 userId가 없을 때 구독하지 않도록 함
+  const hasUserId = !!currentUser?.id;
+  
+  // 조건에 따른 로그 출력
+  useEffect(() => {
+    if (hasUserId) {
+      console.log(`[📡 구독 조건 충족] userId: ${currentUser.id}, roomId: ${roomId}`);
+    } else if (roomId) {
+      console.log('[📡 구독 대기 중] userId가 아직 로드되지 않았습니다.');
+    }
+  }, [hasUserId, roomId, currentUser?.id]);
+  
+  // userId가 있을 때만 구독 훅 실행 (조건부 실행)
+  useRealtimeMessages(
+    hasUserId ? roomId : '', // roomId가 빈 문자열이면 useRealtimeMessages 내부에서 구독하지 않음
+    handleNewMessage,
+    currentUser?.id
+  );
+
   // 현재 사용자 정보 및 채팅방 데이터 로드
   useEffect(() => {
+    // 현재 로그인된 사용자 ID 확인을 위한 디버깅 코드
+    supabase.auth.getUser().then(res => 
+      console.log('👤 현재 로그인된 유저:', res.data.user?.id, 
+        res.data.user ? '✅ 인증됨' : '❌ 인증되지 않음')
+    );
+    
     const fetchChatData = async () => {
       try {
         setIsLoading(true);
@@ -48,6 +116,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
           return;
         }
         
+        console.log('✅ 사용자 ID 설정됨:', user.id);
         setCurrentUser(user);
         
         // 채팅방 정보 가져오기
@@ -118,55 +187,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
       }
     }, 100);
     
-  }, [roomId, supabase]);
-  
-  // 실시간 메시지 구독
-  useEffect(() => {
-    const channel = supabase
-      .channel(`room:${roomId}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'messages',
-        filter: `room_id=eq.${roomId}`
-      }, payload => {
-        const newMessage = payload.new as any;
-        
-        if (currentUser && newMessage) {
-          // 새 메시지를 상태에 추가
-          setMessages(prev => [
-            ...prev, 
-            {
-              id: newMessage.id,
-              text: newMessage.content,
-              timestamp: newMessage.created_at,
-              sender_id: newMessage.sender_id,
-              isMine: newMessage.sender_id === currentUser.id,
-              isRead: newMessage.is_read,
-            }
-          ]);
-          
-          // 내가 받은 메시지라면 읽음 처리
-          if (newMessage.sender_id !== currentUser.id) {
-            supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', newMessage.id)
-              .then(({ error }) => {
-                if (error) console.error('메시지 읽음 처리 오류:', error);
-              });
-          }
-          
-          // 새 메시지가 오면 스크롤 아래로
-          scrollToBottom();
-        }
-      })
-      .subscribe();
-      
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomId, supabase, currentUser]);
+  }, [roomId]);
   
   // 메시지 스크롤 맨 아래로
   useEffect(() => {
