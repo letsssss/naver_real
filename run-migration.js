@@ -41,8 +41,7 @@ function log(message) {
 
 // 마이그레이션 스크립트 생성
 const migrateDataContent = `
-// Prisma에서 Supabase로 데이터 마이그레이션 스크립트
-import { PrismaClient } from '@prisma/client';
+// Supabase 데이터 마이그레이션 스크립트
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
@@ -78,14 +77,22 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
-// 클라이언트 초기화
-const prisma = new PrismaClient();
+// Supabase 클라이언트 초기화
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function migrateUsers() {
   log('Starting user migration...');
   try {
-    const users = await prisma.user.findMany();
+    // Supabase에서 사용자 데이터 가져오기
+    const { data: users, error: fetchError } = await supabase
+      .from('users')
+      .select('*');
+
+    if (fetchError) {
+      log(\`Error fetching users: \${fetchError.message}\`);
+      return;
+    }
+
     log(\`Found \${users.length} users to migrate\`);
 
     for (const user of users) {
@@ -99,11 +106,11 @@ async function migrateUsers() {
           email: user.email,
           name: user.name,
           role: user.role || 'USER',
-          profile_image: user.profileImage,
-          phone_number: user.phoneNumber,
-          bank_info: user.bankInfo,
-          created_at: user.createdAt,
-          updated_at: user.updatedAt
+          profile_image: user.profile_image,
+          phone_number: user.phone_number,
+          bank_info: user.bank_info,
+          created_at: user.created_at,
+          updated_at: user.updated_at
         })
         .select();
 
@@ -122,7 +129,16 @@ async function migrateUsers() {
 async function migratePosts() {
   log('Starting post migration...');
   try {
-    const posts = await prisma.post.findMany();
+    // Supabase에서 게시물 데이터 가져오기
+    const { data: posts, error: fetchError } = await supabase
+      .from('posts')
+      .select('*');
+
+    if (fetchError) {
+      log(\`Error fetching posts: \${fetchError.message}\`);
+      return;
+    }
+
     log(\`Found \${posts.length} posts to migrate\`);
 
     for (const post of posts) {
@@ -137,9 +153,9 @@ async function migratePosts() {
           content: post.content,
           price: post.price,
           status: post.status || 'ACTIVE',
-          user_id: post.userId,
-          created_at: post.createdAt,
-          updated_at: post.updatedAt
+          user_id: post.user_id,
+          created_at: post.created_at,
+          updated_at: post.updated_at
         })
         .select();
 
@@ -158,7 +174,16 @@ async function migratePosts() {
 async function migrateNotifications() {
   log('Starting notification migration...');
   try {
-    const notifications = await prisma.notification.findMany();
+    // Supabase에서 알림 데이터 가져오기
+    const { data: notifications, error: fetchError } = await supabase
+      .from('notifications')
+      .select('*');
+
+    if (fetchError) {
+      log(\`Error fetching notifications: \${fetchError.message}\`);
+      return;
+    }
+
     log(\`Found \${notifications.length} notifications to migrate\`);
 
     for (const notification of notifications) {
@@ -169,13 +194,13 @@ async function migrateNotifications() {
         .from('notifications')
         .upsert({
           id: notification.id,
-          user_id: notification.userId,
-          post_id: notification.postId,
+          user_id: notification.user_id,
+          post_id: notification.post_id,
           message: notification.message,
           type: notification.type,
-          is_read: notification.isRead,
-          created_at: notification.createdAt,
-          updated_at: notification.updatedAt
+          is_read: notification.is_read,
+          created_at: notification.created_at,
+          updated_at: notification.updated_at
         })
         .select();
 
@@ -203,7 +228,6 @@ async function main() {
   } catch (error) {
     log(\`=== Migration Failed: \${error.message} ===\`);
   } finally {
-    await prisma.\$disconnect();
     logger.end();
   }
 }
