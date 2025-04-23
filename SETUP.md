@@ -21,8 +21,7 @@
 
 2. 필요한 패키지 설치:
    ```
-   npm install @prisma/client bcrypt jsonwebtoken --legacy-peer-deps
-   npm install -D @types/bcrypt @types/jsonwebtoken --legacy-peer-deps
+   npm install bcrypt jsonwebtoken @supabase/supabase-js --legacy-peer-deps
    ```
 
 ## 데이터베이스 설정
@@ -92,4 +91,7 @@
 ### 이점
 - 데이터 일관성 향상: 게시글 삭제 후에도 거래 정보 유지
 - 쿼리 성능 향상: 중첩된 조인 감소
-- 의존성 감소: Post 모델에 의존하지 않고 독립적으로 작동 
+- 의존성 감소: Post 모델에 의존하지 않고 독립적으로 작동
+
+# 개발 서버 실행
+npm run dev 

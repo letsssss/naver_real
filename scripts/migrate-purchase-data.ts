@@ -1,6 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
 
-const prisma = new PrismaClient();
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 /**
  * 이 스크립트는 기존 Purchase 레코드에 관련 Post 데이터를 복사합니다.
@@ -12,15 +15,11 @@ async function migratePurchaseData() {
   
   try {
     // 모든 Purchase 레코드 조회
-    const purchases = await prisma.purchase.findMany({
-      where: {
-        postId: { not: null }, // postId가 있는 레코드만 조회
-        ticketTitle: null, // ticketTitle이 없는 레코드만 조회
-      },
-      include: {
-        post: true, // Post 정보도 함께 가져오기
-      },
-    });
+    const purchases = await supabase
+      .from('purchase')
+      .select('*')
+      .eq('postId', null)
+      .eq('ticketTitle', null);
     
     console.log(`마이그레이션이 필요한 Purchase 레코드 수: ${purchases.length}`);
     
@@ -28,16 +27,16 @@ async function migratePurchaseData() {
     for (const purchase of purchases) {
       if (purchase.post) {
         // Post 정보가 있는 경우에만 업데이트
-        await prisma.purchase.update({
-          where: { id: purchase.id },
-          data: {
+        await supabase
+          .from('purchase')
+          .update({
             ticketTitle: purchase.post.title,
             eventDate: purchase.post.eventDate,
             eventVenue: purchase.post.eventVenue,
             ticketPrice: purchase.post.ticketPrice,
             // 추가 필드도 필요에 따라 업데이트
-          },
-        });
+          })
+          .eq('id', purchase.id);
         
         console.log(`Purchase ID ${purchase.id} 업데이트 완료: ${purchase.post.title}`);
       } else {
@@ -48,8 +47,6 @@ async function migratePurchaseData() {
     console.log('Purchase 데이터 마이그레이션 완료!');
   } catch (error) {
     console.error('마이그레이션 중 오류 발생:', error);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

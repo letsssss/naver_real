@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -28,7 +27,6 @@ function log(message: string) {
 }
 
 // 클라이언트 초기화
-const prisma = new PrismaClient();
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 

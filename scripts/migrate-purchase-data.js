@@ -1,4 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+// Supabase 클라이언트 사용
+import { createClient } from '@supabase/supabase-js';
 
 const prisma = new PrismaClient();
 
