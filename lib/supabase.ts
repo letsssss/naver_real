@@ -47,6 +47,13 @@ export function createBrowserClient(): SupabaseClient<Database> {
     const client = createPagesBrowserClient<Database>({
       supabaseUrl: SUPABASE_URL,
       supabaseKey: SUPABASE_ANON_KEY,
+      cookieOptions: {
+        name: 'sb-auth-token',
+        secure: true,      // ✅ HTTPS 환경에서만 쿠키 전송
+        sameSite: 'Lax',   // ✅ 기본 보안 설정
+        path: '/',
+        domain: undefined  // 현재 도메인 사용
+      },
     });
     
     browserClientInstance = client;
