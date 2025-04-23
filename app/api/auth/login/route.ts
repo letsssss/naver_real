@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { comparePassword, generateAccessToken, generateRefreshToken } from "@/lib/auth"
+import { comparePassword, generateAccessToken, generateRefreshToken, setSecureCookie } from "@/lib/auth"
 import jwt from "jsonwebtoken"
 import { supabase } from "@/lib/supabase"
 
@@ -11,13 +11,7 @@ const isDevelopment = () => !process.env.NODE_ENV || process.env.NODE_ENV === 'd
 
 // Edge 브라우저를 포함한 모든 브라우저에서 쿠키를 올바르게 설정하는 헬퍼 함수
 function setAuthCookie(response: NextResponse, name: string, value: string, httpOnly: boolean = true) {
-  response.cookies.set(name, value, {
-    httpOnly,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7일 (초)
-    path: '/',
-  });
+  setSecureCookie(response, name, value, { httpOnly });
 }
 
 // OPTIONS 메서드 처리

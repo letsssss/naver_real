@@ -299,7 +299,18 @@ export async function getAuthenticatedUser(request: NextRequest) {
     }
     
     // 2. 기존 Supabase 클라이언트에 토큰 직접 전달
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }
+    );
+    const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error) {
       console.error("❌ 사용자 인증 실패:", error.message);
@@ -418,4 +429,74 @@ function setCookie(name: string, value: string, days: number) {
   
   const maxAge = days * 24 * 60 * 60;
   document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax;`;
+}
+
+const { data: { session } } = await supabase.auth.getSession();
+const token = session?.access_token;
+
+if (token) {
+  const res = await fetch('/api/purchase', {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    // 다른 필요한 옵션들...
+  });
+}
+
+export async function POST(request: NextRequest) {
+  const user = await getAuthenticatedUser(request);
+  console.log('인증된 사용자:', user?.id, user?.email);
+  
+  if (!user) {
+    return Response.json({ error: '인증되지 않은 요청' }, { status: 401 });
+  }
+  
+  // 인증된 사용자로 처리할 로직...
+  return Response.json({ success: true });
+}
+
+const { data, error } = await supabase
+  .from('your_table')
+  .select('*')
+  .limit(1);
+
+console.log('데이터:', data, '오류:', error);
+
+/**
+ * 보안 쿠키를 설정하는 유틸리티 함수
+ * @param response NextResponse 객체
+ * @param name 쿠키 이름
+ * @param value 쿠키 값
+ * @param options 추가 옵션
+ */
+export function setSecureCookie(
+  response: NextResponse,
+  name: string,
+  value: string,
+  options: {
+    httpOnly?: boolean;
+    maxAge?: number;
+    domain?: string;
+  } = {}
+) {
+  const {
+    httpOnly = true,
+    maxAge = 60 * 60 * 24 * 7, // 7일 (초 단위)
+    domain = process.env.NODE_ENV === 'production' ? '.easyticket82.com' : undefined
+  } = options;
+
+  // 환경에 따른 쿠키 설정
+  const isLocal = process.env.NODE_ENV === 'development' || 
+                 process.env.NODE_ENV === 'test' ||
+                 process.env.VERCEL_ENV === 'preview';
+
+  response.cookies.set(name, value, {
+    httpOnly,
+    secure: !isLocal, // 로컬 환경에서는 secure 비활성화
+    sameSite: isLocal ? 'lax' : 'none', // 로컬에서는 lax, 프로덕션에서는 none
+    domain: isLocal ? undefined : domain, // 로컬에서는 도메인 설정하지 않음
+    path: '/',
+    maxAge,
+  });
 } 

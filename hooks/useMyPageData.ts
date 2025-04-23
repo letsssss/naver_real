@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { fetchData, postData } from '@/utils/api'; // 새로운 API 유틸리티 가져오기
 
 // 타입 정의
 interface TransactionStatus {
@@ -123,7 +124,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       
       // API 요청
       const salesTimestamp = Date.now();
-      const response = await fetch(`${apiBaseUrl}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
+      const response = await fetchData(`${apiBaseUrl}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : '',
@@ -156,14 +157,10 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       const timestamp = Date.now();
       const userId = user?.id || '';
       
-      const purchaseResponse = await fetch(`${apiBaseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
-        method: 'GET',
+      const purchaseResponse = await fetchData(`${apiBaseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
           'Cache-Control': 'no-cache'
-        },
-        credentials: 'include'
+        }
       });
       
       let purchasesByPostId: Record<number, any> = {};
@@ -270,40 +267,12 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
     
     setIsLoadingPurchases(true);
     try {
-      // 토큰 가져오기
-      let authToken = '';
-      
-      if (typeof window !== 'undefined') {
-        const supabaseKey = Object.keys(localStorage).find(key => 
-          key.startsWith('sb-') && key.endsWith('-auth-token')
-        );
-        
-        if (supabaseKey) {
-          try {
-            const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-            authToken = supabaseData.access_token || '';
-          } catch (e) {
-            console.error("토큰 파싱 실패:", e);
-          }
-        }
-        
-        if (!authToken) {
-          authToken = localStorage.getItem('token') || 
-                    localStorage.getItem('access_token') || 
-                    localStorage.getItem('supabase_token') || '';
-        }
-      }
-      
       // API 호출
       const timestamp = Date.now();
-      const response = await fetch(`${apiBaseUrl}/api/purchase?userId=${user.id}&t=${timestamp}`, {
-        method: 'GET',
+      const response = await fetchData(`${apiBaseUrl}/api/purchase?userId=${user.id}&t=${timestamp}`, {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
           'Cache-Control': 'no-cache'
-        },
-        credentials: 'include'
+        }
       });
       
       if (!response.ok) {
@@ -424,7 +393,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
         : '';
       
-      const response = await fetch(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
+      const response = await fetchData(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : ''
@@ -482,7 +451,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
         : '';
       
-      const response = await fetch(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
+      const response = await fetchData(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

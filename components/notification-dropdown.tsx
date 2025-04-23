@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 // API에서 받는 알림 데이터 타입 
 interface Notification {
@@ -110,14 +111,10 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
-      // Supabase 토큰을 우선적으로 사용
-      let authToken = localStorage.getItem('supabase_token');
+      // Supabase 세션에서 access_token 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
       
-      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
-      if (!authToken) {
-        authToken = localStorage.getItem('token');
-      }
-
       // 개발 환경에서 사용할 userId 추가
       const isDev = process.env.NODE_ENV === 'development';
       const userId = user?.id;
@@ -132,7 +129,7 @@ export function NotificationDropdown() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
         },
         credentials: 'include', // 쿠키 포함
       });
@@ -195,13 +192,9 @@ export function NotificationDropdown() {
 
   const handleNotificationClick = async (id: number) => {
     try {
-      // Supabase 토큰을 우선적으로 사용
-      let authToken = localStorage.getItem('supabase_token');
-      
-      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
-      if (!authToken) {
-        authToken = localStorage.getItem('token');
-      }
+      // Supabase 세션에서 access_token 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
       
       // 개발 환경에서 사용할 userId 추가
       const isDev = process.env.NODE_ENV === 'development';
@@ -214,7 +207,7 @@ export function NotificationDropdown() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
         },
         body: JSON.stringify({ notificationId: id }),
       })
@@ -235,13 +228,9 @@ export function NotificationDropdown() {
 
   const markAllAsRead = async () => {
     try {
-      // Supabase 토큰을 우선적으로 사용
-      let authToken = localStorage.getItem('supabase_token');
-      
-      // Supabase 토큰이 없으면 기존 JWT 토큰 사용
-      if (!authToken) {
-        authToken = localStorage.getItem('token');
-      }
+      // Supabase 세션에서 access_token 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
       
       // 개발 환경에서 사용할 userId 추가
       const isDev = process.env.NODE_ENV === 'development';
@@ -254,7 +243,7 @@ export function NotificationDropdown() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
         },
       })
 

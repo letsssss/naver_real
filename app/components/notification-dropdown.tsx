@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { fetchData, postData } from '@/utils/api'
 
 // API에서 받는 알림 데이터 타입
 interface ApiNotification {
@@ -128,7 +129,7 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
-      const response = await fetch('/api/notifications');
+      const response = await fetchData('/api/notifications');
       
       if (!response.ok) {
         let errorData;
@@ -238,13 +239,9 @@ export function NotificationDropdown() {
 
   const handleNotificationClick = async (id: number) => {
     try {
-      const response = await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ notificationId: id }),
-      })
+      const response = await postData('/api/notifications', { notificationId: id }, {
+        method: 'PATCH'
+      });
 
       if (!response.ok) {
         throw new Error('알림 상태 업데이트에 실패했습니다.')
@@ -265,12 +262,8 @@ export function NotificationDropdown() {
       const unreadNotifications = notifications.filter(n => !n.isRead)
       await Promise.all(
         unreadNotifications.map(notification =>
-          fetch('/api/notifications', {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ notificationId: notification.id }),
+          postData('/api/notifications', { notificationId: notification.id }, {
+            method: 'PATCH'
           })
         )
       )

@@ -58,6 +58,9 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
   // 토큰 가져오기
   const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
   
+  // 토큰 디버깅 로그 추가
+  console.log('[토큰 디버깅] token:', token ? '토큰 존재함' : '토큰 없음');
+  
   try {
     if (token) {
       // 1. Supabase 인증 시도

@@ -1,6 +1,7 @@
 import { Sale, Notification, TransactionStatus, Purchase } from "@/types/mypage";
 import { API_BASE_URL, getAuthToken } from "@/utils/mypage-utils";
 import { toast } from "sonner";
+import { fetchData } from '@/utils/api' // 새로운 API 유틸리티 가져오기
 
 // 판매 중인 상품 목록 가져오기
 export const fetchOngoingSales = async (
@@ -75,15 +76,11 @@ export const fetchOngoingSales = async (
     const userId = user?.id || '';
     console.log(`판매자 구매 내역 요청: ${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
     
-    const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
-      method: 'GET',
+    const purchaseResponse = await fetchData(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : '',
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
-      },
-      credentials: 'include' // 쿠키 포함
+      }
     });
     
     console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);

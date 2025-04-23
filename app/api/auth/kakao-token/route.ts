@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { generateAccessToken, hashPassword } from '@/lib/auth';
+import { generateAccessToken, hashPassword, setSecureCookie } from '@/lib/auth';
 import crypto from 'crypto';
 
 export async function POST(req: Request) {

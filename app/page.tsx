@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
 import { NotificationDropdown } from "@/components/notification-dropdown"
+import { fetchData } from '@/utils/api'  // 새로운 API 유틸리티 가져오기
 
 const popularTickets = [
   {
