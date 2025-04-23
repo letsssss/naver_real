@@ -70,6 +70,7 @@ export default function SessionAuthButton() {
         onClick={refreshSession} 
         disabled={isLoading}
         className="w-full"
+        variant="default"
       >
         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
         JWT 토큰 갱신하기

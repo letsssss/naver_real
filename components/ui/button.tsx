@@ -27,8 +27,8 @@ export const buttonVariants = ({
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
 } = {}) => {
-  // 기본 클래스
-  let baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+  // 기본 클래스 - 일부 속성 제거
+  let baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium disabled:pointer-events-none disabled:opacity-50";
   
   // 크기 클래스 추가
   let sizeClasses = "";
@@ -51,7 +51,7 @@ export const buttonVariants = ({
   let variantClasses = "";
   switch (variant) {
     case "outline":
-      variantClasses = "border border-input bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground";
+      variantClasses = "border border-input bg-background text-foreground shadow-sm";
       break;
     case "ghost":
       variantClasses = "hover:bg-accent hover:text-accent-foreground";

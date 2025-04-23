@@ -1,52 +1,13 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { useAuth } from "@/contexts/auth-context"
-import { toast, Toaster } from "sonner"
+import { Toaster } from "sonner"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 
 export default function Login() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [rememberMe, setRememberMe] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-  const { login } = useAuth()
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const result = await login(email, password)
-
-      if (result.success) {
-        toast.success("로그인 성공! 홈페이지로 이동합니다.")
-        // 로그인 성공 시 홈페이지로 리다이렉트 (토스트를 볼 수 있도록 약간 지연)
-        setTimeout(() => {
-          router.push("/")
-        }, 800)
-      } else {
-        // 에러 처리
-        toast.error(result.message || "로그인에 실패했습니다.")
-      }
-    } catch (error) {
-      console.error("Login error:", error)
-      toast.error("로그인 중 오류가 발생했습니다.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-white">
       <Toaster position="top-center" />
@@ -64,67 +25,18 @@ export default function Login() {
           </Link>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 block">아이디(이메일)</label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@example.com"
-              className="w-full border-gray-300"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 block">비밀번호</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full border-gray-300"
-              required
-            />
-          </div>
-
-          <div className="flex items-center">
-            <Checkbox
-              id="remember"
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-              className="border-gray-300"
-            />
-            <label htmlFor="remember" className="ml-2 text-sm text-gray-600">
-              아이디 저장
-            </label>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full bg-black hover:bg-gray-800 text-white py-2 transition-colors"
-            disabled={isLoading}
-          >
-            {isLoading ? "로그인 중..." : "로그인"}
-          </Button>
-
+        {/* Login Options */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">간편하게 로그인하기</h2>
+          
           <KakaoLoginButton mode="login" />
 
           <Link href="/signup" className="block">
-            <Button variant="outline" className="w-full border-gray-300 text-gray-700 py-2 transition-colors">
-              이메일로 회원가입
-            </Button>
+            <button className="w-full py-3 border border-gray-300 rounded-md text-center text-gray-700">
+              회원가입
+            </button>
           </Link>
-          
-          {/* 인증 초기화 버튼 추가 */}
-          <Link href="/auth/reset" className="block">
-            <Button variant="outline" className="w-full border-red-200 text-red-600 py-2 transition-colors hover:bg-red-50">
-              인증 데이터 초기화 (문제 해결용)
-            </Button>
-          </Link>
-        </form>
+        </div>
 
         {/* Social Login */}
         <div className="pt-8">
