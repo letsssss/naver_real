@@ -12,7 +12,7 @@ const userCache = new Map<string, { user: any, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createRouteHandlerClient();
 
   const {
     data: { session },

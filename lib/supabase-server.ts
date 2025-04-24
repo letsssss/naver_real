@@ -24,7 +24,8 @@ export async function createServerSupabaseClient() {
 }
 
 // ✅ API 라우트에서 사용할 수 있는 createRouteHandlerClient
-export function createRouteHandlerClient({ cookies: cookieStore }: { cookies: any }) {
+export function createRouteHandlerClient() {
+  const cookieStore = cookies();
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
