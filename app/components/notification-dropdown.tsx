@@ -129,19 +129,11 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
-      // Supabase 세션에서 토큰 가져오기
-      const supabase = createBrowserSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      
-      // 토큰을 Authorization 헤더에 포함하여 요청
       const response = await fetch('/api/notifications', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        credentials: 'include'
+        method: 'GET',
+        credentials: 'include',
       });
-      
+
       if (!response.ok) {
         let errorData;
         let errorMessage = '알림을 불러오는데 실패했습니다.';
@@ -216,28 +208,19 @@ export function NotificationDropdown() {
         return;
       }
       
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error('알림 데이터 파싱 오류:', parseError);
-        toast.error('알림 데이터를 처리하는 중 오류가 발생했습니다.');
-        setNotifications([]);
-        return;
-      }
-      
+      const data = await response.json();
+
       if (!data.notifications || !Array.isArray(data.notifications)) {
         console.error('유효하지 않은 알림 데이터:', data);
         setNotifications([]);
         return;
       }
-      
-      // API 응답 데이터를 가공하여 날짜 포맷팅을 미리 처리
+
       const processedNotifications = data.notifications.map((item: ApiNotification) => ({
         ...item,
         formattedDate: formatDateToRelative(item.createdAt)
       }));
-      
+
       setNotifications(processedNotifications);
     } catch (error) {
       console.error('알림 목록 로딩 오류:', error);
