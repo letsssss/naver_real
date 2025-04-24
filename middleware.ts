@@ -22,6 +22,7 @@ const PROTECTED_ROUTES = [
 // ✅ 보호된 API 경로
 const PROTECTED_API_ROUTES = [
   '/api/chat/init-room',
+  '/api/notifications',
 ];
 
 export async function middleware(request: NextRequest) {

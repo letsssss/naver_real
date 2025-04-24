@@ -138,7 +138,8 @@ export function NotificationDropdown() {
       const response = await fetch('/api/notifications', {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        credentials: 'include'
       });
       
       if (!response.ok) {
@@ -255,6 +256,7 @@ export function NotificationDropdown() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ notificationId: id }),
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -282,6 +284,7 @@ export function NotificationDropdown() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ notificationId: notification.id }),
+            credentials: 'include'
           })
         )
       )
