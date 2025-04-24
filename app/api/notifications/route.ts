@@ -4,6 +4,7 @@ console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
 console.log("🔧 route.ts 파일 실행됨 - API 서버에 정상적으로 배포됨");
 
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { 
   supabase, 
   createServerSupabaseClient, 
@@ -13,6 +14,7 @@ import {
   getSupabaseClient
 } from '@/lib/supabase';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth/getAuthUser';
 
 // 표준 응답 헤더 정의
 const CORS_HEADERS = {
@@ -56,58 +58,29 @@ export async function OPTIONS() {
 }
 
 // 알림 목록 조회
-export async function GET(req: Request) {
-  console.log("🟢 [NOTIFICATION] API GET 진입 완료");
-
-  const { userId, authenticated } = await validateRequestToken(req);
-
-  if (!authenticated) {
-    console.warn("❌ 인증되지 않은 사용자 접근");
-    return createErrorResponse("로그인이 필요합니다.", "AUTH_ERROR", 401);
-  }
-
-  const client = getSupabaseClient();
-
-  const { data: notifications, error } = await client
-    .from("notifications")
-    .select(`
-      *,
-      post:posts(id, title)
-    `)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[❌ 알림 조회 오류]", error);
-    return createErrorResponse("알림을 불러오는 중 오류가 발생했습니다.", "DB_ERROR", 500, error);
-  }
-
-  const page = 1;
-  const pageSize = 10;
-  const totalCount = notifications.length;
-  const paginated = notifications.slice(0, pageSize);
-
-  const formatted = paginated.map(n => ({
-    id: n.id,
-    title: n.title || "알림",
-    message: n.message,
-    link: n.post_id ? `/posts/${n.post_id}` : "/mypage",
-    isRead: n.is_read,
-    createdAt: n.created_at,
-    type: n.type || "SYSTEM",
-    formattedDate: transformers.formatRelativeTime(n.created_at)
-  }));
-
-  return createApiResponse({
-    success: true,
-    notifications: formatted,
-    pagination: {
-      totalCount,
-      totalPages: Math.ceil(totalCount / pageSize),
-      currentPage: page,
-      hasMore: totalCount > pageSize
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-  });
+
+    const { data: notifications, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
+    }
+
+    return NextResponse.json(notifications);
+  } catch (error) {
+    console.error('Error in notifications API:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 // 알림 생성
