@@ -1,0 +1,5 @@
+[33mcommit fe6c4e079b22554f3e062ea3fa5b71927a054bb1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m
+Author: letsssss <wlstjd1590@naver.com>
+Date:   Thu Apr 24 14:58:39 2025 +0900
+
+    수정: getAuthToken 함수 개선 - localStorage와 쿠키 지원 추가
