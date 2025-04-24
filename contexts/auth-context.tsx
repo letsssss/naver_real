@@ -153,6 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Supabase에서 현재 세션 가져오기
       const { data: { session }, error } = await browserClient.auth.getSession();
       
+      console.log("🧪 getSession 결과:", session, error);
+      
       if (error) {
         console.error('Supabase 세션 조회 오류:', error);
         setUser(null);

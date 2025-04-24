@@ -14,7 +14,7 @@ export default function TokenRefresher() {
     const { data: listener } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 인증 상태 변경:', event, session ? '세션 있음' : '세션 없음');
       
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         if (session) {
           console.log("✅ 세션 갱신됨 또는 로그인 완료", {
             userId: session.user.id,
@@ -33,6 +33,8 @@ export default function TokenRefresher() {
           const maxAge = 30 * 24 * 60 * 60; // 30일
           document.cookie = `auth-token=${session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
           document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax`;
+        } else {
+          console.warn("❗ TokenRefresher에서 INITIAL_SESSION 발생했지만 session은 없음");
         }
       }
 
