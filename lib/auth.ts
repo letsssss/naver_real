@@ -258,34 +258,31 @@ export function getTokenFromHeaders(headers: Headers): string | null {
  * @returns 추출된 토큰 또는 null
  */
 export function getTokenFromCookies(req: Request | NextRequest): string | null {
-  // NextRequest 객체 처리
+  // NextRequest 객체인 경우
   if ('cookies' in req && typeof req.cookies === 'object' && req.cookies.get) {
-    const tokenCookie = req.cookies.get('accessToken');
-    if (tokenCookie) return tokenCookie.value;
-    
-    const sbTokenCookie = req.cookies.get('sb-access-token');
-    if (sbTokenCookie) return sbTokenCookie.value;
-    
-    // Supabase 쿠키 명시적 처리
-    const supabaseTokenCookie = req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token');
-    if (supabaseTokenCookie) return supabaseTokenCookie.value;
+    const tokenCookie = req.cookies.get('access_token')?.value ||
+                        req.cookies.get('sb-access-token')?.value ||
+                        req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token')?.value || // ✅ 추가
+                        req.cookies.get(`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`)?.value;
+
+    return tokenCookie || null;
   }
-  
-  // 표준 Request 객체 처리
+
+  // 일반 Request 객체의 경우
   const cookieHeader = req.headers.get('cookie');
   if (!cookieHeader) return null;
-  
-  // 쿠키 문자열 파싱
+
   const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
     const [key, value] = cookie.trim().split('=');
-    acc[key] = decodeURIComponent(value);
+    acc[key] = decodeURIComponent(value || '');
     return acc;
   }, {} as Record<string, string>);
-  
+
   return (
-    cookies['accessToken'] || 
-    cookies['sb-access-token'] || 
-    cookies['sb-jdubrjczdyqqtsppojgu-auth-token'] || // Supabase 쿠키 명시적 처리
+    cookies['access_token'] ||
+    cookies['sb-access-token'] ||
+    cookies['sb-jdubrjczdyqqtsppojgu-auth-token'] || // ✅ 여기도 반드시 포함
+    cookies[`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`] ||
     null
   );
 }
