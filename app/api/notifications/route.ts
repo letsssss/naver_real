@@ -91,6 +91,11 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
 
 // 알림 목록 조회
 export async function GET(req: Request) {
+  console.log("✅ 알림 API 진입 확인 - GET 요청");
+  console.log("✅ 요청 URL:", req.url);
+  console.log("✅ 요청 메서드:", req.method);
+  console.log("✅ 요청 헤더:", Object.fromEntries(req.headers.entries()));
+
   try {
     console.log('[알림 API] GET 요청 시작');
     
