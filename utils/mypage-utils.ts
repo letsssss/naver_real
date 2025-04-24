@@ -37,36 +37,51 @@ export const getStatusText = (status: string) => {
 // Supabase 토큰을 가져오는 함수
 export const getAuthToken = (): string => {
   if (typeof window === 'undefined') return '';
-  
+
   let authToken = '';
-  
-  // 1. Supabase 저장소 키 가져오기
-  const supabaseKey = Object.keys(localStorage).find(key => 
+
+  // 1. Supabase localStorage 토큰 우선 탐색
+  const supabaseKey = Object.keys(localStorage).find(key =>
     key.startsWith('sb-') && key.endsWith('-auth-token')
   );
-  
+
   if (supabaseKey) {
     try {
       const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
       if (supabaseData.access_token) {
         authToken = supabaseData.access_token;
-        console.log("✅ Supabase 저장소에서 토큰 발견");
+        console.log("✅ Supabase localStorage에서 토큰 발견:", authToken);
       }
     } catch (e) {
-      console.error("❌ Supabase 저장소 파싱 실패:", e);
+      console.error("❌ Supabase localStorage 파싱 실패:", e);
     }
   }
-  
-  // 토큰이 없으면 다른 저장소 확인
+
+  // 2. fallback: 일반 토큰 키 확인
   if (!authToken) {
-    authToken = localStorage.getItem('token') || 
-                localStorage.getItem('access_token') || 
-                localStorage.getItem('supabase_token') || '';
-    
+    authToken = localStorage.getItem('token') ||
+                localStorage.getItem('access_token') ||
+                localStorage.getItem('supabase_token') ||
+                '';
     if (authToken) {
-      console.log("✅ 기존 저장소에서 토큰 발견");
+      console.log("✅ 일반 localStorage 키에서 토큰 발견:", authToken);
     }
   }
-  
+
+  // 3. fallback: document.cookie에서 access_token 확인
+  if (!authToken && typeof document !== 'undefined') {
+    const match = document.cookie.match(/access_token=([^;]+)/);
+    if (match && match[1]) {
+      authToken = match[1];
+      console.log("🍪 쿠키에서 access_token 발견:", authToken);
+    } else {
+      console.warn("❌ 쿠키에서 access_token 없음");
+    }
+  }
+
+  if (!authToken) {
+    console.warn("❌ 최종적으로 토큰을 찾을 수 없음");
+  }
+
   return authToken;
 }; 
