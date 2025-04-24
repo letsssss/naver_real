@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { createAdminClient } from '@/lib/supabase';
 import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 
@@ -9,52 +10,35 @@ export const runtime = 'nodejs';
 const userCache = new Map<string, { user: any, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // 쿠키에서 토큰 가져오기
-    const cookieStore = cookies();
-    const token = cookieStore.get('token')?.value;
-    
-    if (!token) {
-      return NextResponse.json({ error: '인증되지 않은 사용자입니다.' }, { status: 401 });
+    const supabase = createRouteHandlerClient();
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('Session check error:', error);
+      return NextResponse.json({ error: 'Failed to get session' }, { status: 500 });
     }
-    
-    // 캐시 확인
-    const cachedUser = userCache.get(token);
-    if (cachedUser && Date.now() - cachedUser.timestamp < CACHE_TTL) {
-      return NextResponse.json({ user: cachedUser.user });
+
+    if (!session) {
+      return NextResponse.json({ error: 'No active session' }, { status: 401 });
     }
-    
-    // JWT 토큰 검증
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
-    
-    if (!payload.sub) {
-      return NextResponse.json({ error: '유효하지 않은 토큰입니다.' }, { status: 401 });
-    }
-    
-    const userId = payload.sub;
-    
-    // Supabase에서 사용자 정보 조회
-    const supabase = createAdminClient();
-    const { data: user, error } = await supabase
+
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('id', userId)
+      .eq('id', session.user.id)
       .single();
-    
-    if (error || !user) {
-      console.error('사용자 조회 오류:', error);
-      return NextResponse.json({ error: '사용자 정보를 찾을 수 없습니다.' }, { status: 404 });
+
+    if (userError) {
+      console.error('User fetch error:', userError);
+      return NextResponse.json({ error: 'Failed to get user data' }, { status: 500 });
     }
-    
-    // 캐시에 저장
-    userCache.set(token, { user, timestamp: Date.now() });
-    
+
     return NextResponse.json({ user });
   } catch (error) {
-    console.error('인증 오류:', error);
-    return NextResponse.json({ error: '인증 처리 중 오류가 발생했습니다.' }, { status: 500 });
+    console.error('Unexpected error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
