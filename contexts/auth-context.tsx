@@ -248,10 +248,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async (): Promise<boolean> => {
     if (process.env.NODE_ENV === 'development') {
       // 개발 환경에서는 세션 갱신 로직 건너뛰기
+      console.log("개발 환경: 세션 갱신 건너뛰기");
       return true;
     }
     
     try {
+      console.log("세션 갱신 시도...");
       // 토큰 갱신 API 호출
       const response = await fetch('/api/auth/renew', {
         method: 'POST',
@@ -259,20 +261,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       
       if (response.ok) {
+        console.log("세션 갱신 성공");
         // 갱신된 세션 정보 확인
         await checkAuthStatus();
         return true;
       } else {
-        // 갱신 실패 시 로그아웃
-        await logout();
+        // 갱신 실패 시에도 로그아웃하지 않음
+        console.warn("❗ 세션 갱신 실패 - 상태 코드:", response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.warn("❗ 세션 갱신 실패 - 응답 데이터:", errorData);
         return false;
       }
     } catch (error) {
-      console.error('세션 갱신 오류:', error);
-      await logout();
+      console.error('세션 갱신 중 오류 발생:', error);
       return false;
     }
-  }, [checkAuthStatus, logout]);
+  }, [checkAuthStatus]);
 
   // 인증이 필요한 라우트 접근 시 세션 확인
   useEffect(() => {
