@@ -1,7 +1,10 @@
+'use client';
+
 import type React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Star, ShoppingCart, CheckCircle } from "lucide-react"
+import { useRouter } from 'next/navigation';
 
 const seventeenConcertTickets = [
   {
@@ -76,7 +79,13 @@ const seventeenConcertTickets = [
   },
 ]
 
-export const TicketList: React.FC = () => {
+export default function TicketList() {
+  const router = useRouter();
+  
+  const handleSellerClick = (seller: string) => {
+    router.push(`/seller/${seller}`);
+  };
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {seventeenConcertTickets.map((ticket) => (
@@ -111,13 +120,16 @@ export const TicketList: React.FC = () => {
           </p>
           <div className="flex items-center mb-3">
             <p className="text-gray-600">판매자: </p>
-            <Link href={`/seller/${ticket.seller}`} className="ml-1 text-blue-600 hover:underline flex items-center">
+            <button 
+              onClick={() => handleSellerClick(ticket.seller)}
+              className="ml-1 text-blue-600 hover:underline flex items-center"
+            >
               {ticket.seller}
               <div className="flex items-center ml-2 text-yellow-500">
                 <Star className="h-3 w-3 fill-current" />
                 <span className="text-xs ml-0.5">4.8</span>
               </div>
-            </Link>
+            </button>
           </div>
           
           {ticket.status === "판매완료" ? (
@@ -126,12 +138,13 @@ export const TicketList: React.FC = () => {
               판매 완료
             </Button>
           ) : (
-            <Link href={`/ticket/${ticket.id}`}>
-              <Button className="w-full">
-                <ShoppingCart className="w-4 h-4 mr-2" /> 
-                구매하기
-              </Button>
-            </Link>
+            <Button 
+              className="w-full"
+              onClick={() => router.push(`/ticket/${ticket.id}`)}
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" /> 
+              구매하기
+            </Button>
           )}
         </div>
       ))}

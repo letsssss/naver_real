@@ -204,12 +204,12 @@ export default function TicketCancellationPage() {
           >
             로그아웃
           </button>
-          <Link
-            href="/mypage"
+          <button
+            onClick={() => router.push('/mypage')}
             className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap"
           >
             마이페이지
-          </Link>
+          </button>
         </>
       );
     }

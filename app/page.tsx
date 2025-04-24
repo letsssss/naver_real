@@ -73,6 +73,18 @@ export default function Page() {
     router.push("/")
   }
 
+  const handleMyPageClick = () => {
+    router.push("/mypage");
+  };
+
+  const handleCartClick = () => {
+    router.push("/cart");
+  };
+
+  const handleLoginClick = () => {
+    router.push("/login");
+  };
+
   return (
     <div className="min-h-screen">
       <Toaster position="top-center" />
@@ -112,19 +124,19 @@ export default function Page() {
                   <button onClick={handleLogout} className="text-gray-700 hover:text-[#0061FF] transition-colors">
                     로그아웃
                   </button>
-                  <Link href="/mypage" className="text-gray-700 hover:text-[#0061FF] transition-colors">
+                  <button onClick={handleMyPageClick} className="text-gray-700 hover:text-[#0061FF] transition-colors">
                     마이페이지
-                  </Link>
-                  <Link href="/cart" className="text-gray-700 hover:text-[#0061FF] transition-colors">
+                  </button>
+                  <button onClick={handleCartClick} className="text-gray-700 hover:text-[#0061FF] transition-colors">
                     장바구니
-                  </Link>
+                  </button>
                 </>
               ) : (
                 <>
                   <div className="text-gray-700">
-                    <Link href="/login" className="hover:text-[#0061FF] transition-colors">
+                    <button onClick={handleLoginClick} className="hover:text-[#0061FF] transition-colors">
                       로그인
-                    </Link>
+                    </button>
                   </div>
                 </>
               )}
