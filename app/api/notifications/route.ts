@@ -1,3 +1,5 @@
+console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
+
 import { NextResponse } from 'next/server';
 import { 
   supabase, 
