@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import supabase from '@/lib/supabase/client';
+import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 /**
  * 토큰 자동 갱신 컴포넌트
@@ -9,7 +10,11 @@ import supabase from '@/lib/supabase/client';
  */
 export default function TokenRefresher() {
   useEffect(() => {
+    // 기존 supabase 클라이언트
     const supabaseClient = supabase;
+    
+    // 브라우저 전용 Supabase 클라이언트 생성
+    const browserClient = createBrowserClient();
     
     const { data: listener } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 인증 상태 변경:', event, session ? '세션 있음' : '세션 없음');
@@ -33,6 +38,18 @@ export default function TokenRefresher() {
           const maxAge = 30 * 24 * 60 * 60; // 30일
           document.cookie = `auth-token=${session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
           document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax`;
+          
+          // Supabase의 인증 쿠키를 자동으로 설정하게끔 강제로 trigger
+          try {
+            await fetch('/api/auth/callback', {
+              method: 'POST',
+              body: JSON.stringify({ event, session }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+            console.log("✅ Supabase 쿠키 설정 API 호출 완료");
+          } catch (error) {
+            console.error("❌ Supabase 쿠키 설정 API 호출 실패:", error);
+          }
         } else {
           console.warn("❗ TokenRefresher에서 INITIAL_SESSION 발생했지만 session은 없음");
         }
