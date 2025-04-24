@@ -62,7 +62,8 @@ export async function OPTIONS() {
 
 // ✅ 인증된 사용자만 접근 가능한 API 기본 템플릿
 export async function GET() {
-  const supabase = createRouteHandlerClient();
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: cookieStore });
 
   const {
     data: { session },
