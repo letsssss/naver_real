@@ -1,7 +1,8 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from "@supabase/ssr";
 
 // Supabase 정보 (환경변수 우선, 폴백으로 하드코딩 값 사용)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jdubrjczdyqqtsppojgu.supabase.co';
@@ -26,4 +27,43 @@ export const supabaseServer = () => {
       }
     });
   }
-}; 
+};
+
+/**
+ * ✅ 인증된 사용자 정보를 가져오는 함수
+ * App Router 환경 + Supabase 인증 세션 사용 기준
+ */
+export async function getAuthenticatedUser() {
+  const cookieStore = cookies();
+  const headerStore = headers();
+
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
+          cookieStore.set(name, value, options);
+        },
+        remove(name: string, options: { path: string; domain?: string }) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        }
+      }
+    }
+  );
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    console.warn("❌ 인증된 사용자 없음:", error?.message || "No user");
+    return null;
+  }
+
+  return user;
+} 
