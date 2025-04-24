@@ -56,7 +56,14 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
   const isDev = process.env.NODE_ENV === 'development';
   
   // 토큰 가져오기
-  const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
+  const headerToken = getTokenFromHeaders(req.headers);
+  const cookieToken = getTokenFromCookies(req);
+  const token = headerToken || cookieToken;
+  
+  // 토큰 추출 과정 로깅
+  console.log('[알림 API] 헤더에서 추출한 토큰:', headerToken ? '있음' : '없음');
+  console.log('[알림 API] 쿠키에서 추출한 토큰:', cookieToken ? '있음' : '없음');
+  console.log('[알림 API] 최종 사용 토큰:', token ? '있음' : '없음');
   
   try {
     if (token) {

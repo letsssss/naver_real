@@ -265,6 +265,10 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
     
     const sbTokenCookie = req.cookies.get('sb-access-token');
     if (sbTokenCookie) return sbTokenCookie.value;
+    
+    // Supabase 쿠키 명시적 처리
+    const supabaseTokenCookie = req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token');
+    if (supabaseTokenCookie) return supabaseTokenCookie.value;
   }
   
   // 표준 Request 객체 처리
@@ -274,11 +278,16 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
   // 쿠키 문자열 파싱
   const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
     const [key, value] = cookie.trim().split('=');
-    acc[key] = value;
+    acc[key] = decodeURIComponent(value);
     return acc;
   }, {} as Record<string, string>);
   
-  return cookies['accessToken'] || cookies['sb-access-token'] || null;
+  return (
+    cookies['accessToken'] || 
+    cookies['sb-access-token'] || 
+    cookies['sb-jdubrjczdyqqtsppojgu-auth-token'] || // Supabase 쿠키 명시적 처리
+    null
+  );
 }
 
 // 디버그용 로그는 주석 처리
