@@ -1,47 +1,43 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 
-// ✅ 서버용 Supabase 클라이언트 - 최신 방식
+// ✅ Pages Router와 App Router 모두에서 사용 가능한 createServerSupabaseClient
 export async function createServerSupabaseClient() {
-  const cookieStore = cookies();
-  
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          return cookies().get(name)?.value;
         },
-        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
-          cookieStore.set(name, value, options);
+        set(name: string, value: string, options: CookieOptions) {
+          cookies().set(name, value, options);
         },
-        remove(name: string, options: { path: string; domain?: string }) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        remove(name: string, options: CookieOptions) {
+          cookies().set(name, '', { ...options, maxAge: 0 });
         }
       }
     }
   );
 }
 
-// ✅ 서버 액션이나 API 라우트에서 사용할 경우
+// ✅ API 라우트에서 사용할 수 있는 createRouteHandlerClient
 export function createRouteHandlerClient() {
-  const cookieStore = cookies();
-  
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          return cookies().get(name)?.value;
         },
-        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
-          cookieStore.set(name, value, options);
+        set(name: string, value: string, options: CookieOptions) {
+          cookies().set(name, value, options);
         },
-        remove(name: string, options: { path: string; domain?: string }) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        remove(name: string, options: CookieOptions) {
+          cookies().set(name, '', { ...options, maxAge: 0 });
         }
       }
     }

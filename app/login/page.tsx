@@ -1,26 +1,32 @@
 "use client"
 
-import React from "react"
+import React, { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Toaster } from "sonner"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
-import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
 
-export default async function LoginPage({
+export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { redirectTo?: string }
+  searchParams?: { redirectTo?: string }
 }) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
-  // 이미 로그인된 경우 리다이렉트
-  if (session) {
-    redirect(searchParams.redirectTo || '/')
-  }
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push(searchParams?.redirectTo || '/')
+      }
+    }
+    
+    checkSession()
+  }, [router, searchParams, supabase.auth])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-white">
