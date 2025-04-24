@@ -5,22 +5,26 @@ import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase.types';
 
 export async function GET() {
-  const supabase = createRouteHandlerClient();
+  const supabase = createRouteHandlerClient({ cookies });
 
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
+  if (!session) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   // 인증 상태 반환
   return NextResponse.json({
-    authenticated: !!session,
-    user: session ? {
+    authenticated: true,
+    user: {
       id: session.user.id,
       email: session.user.email,
       name: session.user.user_metadata?.name || '사용자',
-    } : null,
-    session: session ? {
+    },
+    session: {
       expires_at: new Date(session.expires_at! * 1000).toLocaleString(),
-    } : null,
+    }
   });
 } 

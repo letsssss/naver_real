@@ -24,20 +24,20 @@ export async function createServerSupabaseClient() {
 }
 
 // ✅ API 라우트에서 사용할 수 있는 createRouteHandlerClient
-export function createRouteHandlerClient() {
+export function createRouteHandlerClient({ cookies: cookieStore }: { cookies: any }) {
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookies().get(name)?.value;
+          return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookies().set(name, value, options);
+          cookieStore.set(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
-          cookies().set(name, '', { ...options, maxAge: 0 });
+          cookieStore.set(name, '', { ...options, maxAge: 0 });
         }
       }
     }
