@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
 console.log("🔧 route.ts 파일 실행됨 - API 서버에 정상적으로 배포됨");
 
