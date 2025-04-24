@@ -380,6 +380,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 액세스 토큰도 따로 저장 (API 요청에 사용 가능)
         safeLocalStorageSet("access_token", sessionData.session.access_token);
         
+        // ✅ 추가: Notification API에서 쓰는 키들로도 저장
+        safeLocalStorageSet("token", sessionData.session.access_token);
+        safeLocalStorageSet("supabase_token", sessionData.session.access_token);
+        
         // ✅ Supabase 세션 객체 저장 - 미들웨어와 함께 쿠키 자동 갱신됨
         console.log('✅ 세션 객체 확인 완료 - 쿠키는 미들웨어에 의해 관리됩니다');
       }
