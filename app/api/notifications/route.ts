@@ -10,7 +10,7 @@ import {
   transformers,
   getSupabaseClient
 } from '@/lib/supabase';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
+import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken, authenticateUser } from '@/lib/auth';
 
 // 표준 응답 헤더 정의
 const CORS_HEADERS = {
@@ -53,74 +53,58 @@ export async function OPTIONS() {
   });
 }
 
-// 사용자 인증 함수
-async function authenticateUser(req: Request): Promise<{ userId: string; authenticated: boolean }> {
-  const isDev = process.env.NODE_ENV === 'development';
-
-  const headerToken = getTokenFromHeaders(req.headers);
-  const cookieToken = getTokenFromCookies(req);
-
-  console.log('[🛡️ 인증 디버그] 헤더 토큰:', headerToken?.substring(0, 20)); // 앞 20자만 표시
-  console.log('[🛡️ 인증 디버그] 쿠키 토큰:', cookieToken?.substring(0, 20));
-
-  const token = headerToken || cookieToken;
-
-  if (!token) {
-    console.log('[🛡️ 인증 실패] 토큰이 없습니다');
-    return { userId: '', authenticated: false };
-  }
-
-  try {
-    console.log('[🛡️ 인증 시도] Supabase로 토큰 검증 시작');
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error) {
-      console.error('[🛡️ 인증 실패] Supabase 검증 오류:', error.message);
-      return { userId: '', authenticated: false };
-    }
-
-    if (!user) {
-      console.log('[🛡️ 인증 실패] 사용자 정보가 없습니다');
-      return { userId: '', authenticated: false };
-    }
-
-    console.log('[🛡️ 인증 성공] 사용자 ID:', user.id);
-    return { userId: user.id, authenticated: true };
-  } catch (error) {
-    console.error('[🛡️ 인증 오류] 예외 발생:', error);
-    return { userId: '', authenticated: false };
-  }
-}
-
 // 알림 목록 조회
 export async function GET(req: Request) {
   console.log("🟢 [NOTIFICATION] API GET 진입 완료");
 
-  const dummyNotifications = [
-    {
-      id: 1,
-      title: "테스트 알림",
-      message: "이것은 모의 알림입니다.",
-      link: "/notifications",
-      isRead: false,
-      createdAt: new Date().toISOString(),
-      type: "SYSTEM",
-      formattedDate: "방금 전"
-    }
-  ];
+  const { userId, authenticated } = await authenticateUser(req);
 
-  return NextResponse.json({
+  if (!authenticated) {
+    console.warn("❌ 인증되지 않은 사용자 접근");
+    return createErrorResponse("로그인이 필요합니다.", "AUTH_ERROR", 401);
+  }
+
+  const client = getSupabaseClient();
+
+  const { data: notifications, error } = await client
+    .from("notifications")
+    .select(`
+      *,
+      post:posts(id, title)
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[❌ 알림 조회 오류]", error);
+    return createErrorResponse("알림을 불러오는 중 오류가 발생했습니다.", "DB_ERROR", 500, error);
+  }
+
+  const page = 1;
+  const pageSize = 10;
+  const totalCount = notifications.length;
+  const paginated = notifications.slice(0, pageSize);
+
+  const formatted = paginated.map(n => ({
+    id: n.id,
+    title: n.title || "알림",
+    message: n.message,
+    link: n.post_id ? `/posts/${n.post_id}` : "/mypage",
+    isRead: n.is_read,
+    createdAt: n.created_at,
+    type: n.type || "SYSTEM",
+    formattedDate: transformers.formatRelativeTime(n.created_at)
+  }));
+
+  return createApiResponse({
     success: true,
-    notifications: dummyNotifications,
+    notifications: formatted,
     pagination: {
-      totalCount: 1,
-      totalPages: 1,
-      currentPage: 1,
-      hasMore: false
+      totalCount,
+      totalPages: Math.ceil(totalCount / pageSize),
+      currentPage: page,
+      hasMore: totalCount > pageSize
     }
-  }, {
-    status: 200,
-    headers: CORS_HEADERS
   });
 }
 
