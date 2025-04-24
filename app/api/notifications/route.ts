@@ -96,12 +96,31 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
 export async function GET(req: Request) {
   console.log("🟢 [NOTIFICATION] API GET 진입 완료");
 
-  // 일단 아무 인증도 하지 않고 응답을 주자
-  return new Response(JSON.stringify({ debug: true, message: "라우트 정상 인식됨" }), {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/json'
+  const dummyNotifications = [
+    {
+      id: 1,
+      title: "테스트 알림",
+      message: "이것은 모의 알림입니다.",
+      link: "/notifications",
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      type: "SYSTEM",
+      formattedDate: "방금 전"
     }
+  ];
+
+  return NextResponse.json({
+    success: true,
+    notifications: dummyNotifications,
+    pagination: {
+      totalCount: 1,
+      totalPages: 1,
+      currentPage: 1,
+      hasMore: false
+    }
+  }, {
+    status: 200,
+    headers: CORS_HEADERS
   });
 }
 
