@@ -6,8 +6,22 @@ import Link from "next/link"
 import { Toaster } from "sonner"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
+import { redirect } from 'next/navigation'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
-export default function Login() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: { redirectTo?: string }
+}) {
+  const supabase = await createServerSupabaseClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  // 이미 로그인된 경우 리다이렉트
+  if (session) {
+    redirect(searchParams.redirectTo || '/')
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-white">
       <Toaster position="top-center" />
