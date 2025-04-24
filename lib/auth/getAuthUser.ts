@@ -1,70 +1,60 @@
-import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase';
+import { createTokenClient, getSupabaseClient } from '@/lib/supabase';
 import { User } from '@/types/supabase.types';
 
 export async function getAuthUser(request: NextRequest): Promise<User | null> {
-  const client = getSupabaseClient();
-  const allCookies = request.cookies.getAll();
-  const cookieMap = Object.fromEntries(allCookies.map(c => [c.name, c.value]));
+  try {
+    // Authorization 헤더 → 쿠키 순으로 토큰 가져오기
+    const bearer = request.headers.get('Authorization')?.replace('Bearer ', '');
+    const cookie = request.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token');
+    let token: string | undefined;
 
-  const bearer = request.headers.get('Authorization')?.replace('Bearer ', '');
-  const cookieToken = cookieMap['access_token'] || cookieMap['sb-jdubrjczdyqqtsppojgu-auth-token'];
+    if (bearer) {
+      token = bearer;
+    } else if (cookie?.value) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(cookie.value));
+        token = parsed?.access_token;
+      } catch (e) {
+        console.warn('쿠키 파싱 실패:', e);
+      }
+    }
 
-  const token = bearer || cookieToken;
-
-  if (token) {
-    try {
-      const { data: { user }, error } = await client.auth.getUser(token);
+    if (token) {
+      const client = createTokenClient(token);
+      const { data: { user }, error } = await client.auth.getUser();
       if (user) {
-        const { data: userData, error: userError } = await client
+        const { data: userData } = await client
           .from('users')
           .select('*')
           .eq('id', user.id)
           .single();
-
-        if (!userError && userData) {
-          return {
-            id: user.id,
-            email: user.email || '',
-            name: userData?.name || user.user_metadata?.name || '',
-            role: userData?.role || user.user_metadata?.role || 'USER'
-          };
-        }
+        return {
+          id: user.id,
+          email: user.email || '',
+          name: userData?.name || user.user_metadata?.name || '',
+          role: userData?.role || user.user_metadata?.role || 'USER',
+        };
       }
-    } catch (e) {
-      console.error('토큰 인증 실패:', e);
     }
-  }
 
-  // ✅ 개발 환경일 경우 쿼리 파라미터 허용
-  if (process.env.NODE_ENV === 'development') {
-    const url = new URL(request.url);
-    const devId = url.searchParams.get('userId');
-    if (devId) {
-      return {
-        id: devId,
-        email: 'dev@example.com',
-        name: '개발자',
-        role: 'USER',
-      };
+    // 개발환경 예외 허용
+    if (process.env.NODE_ENV === 'development') {
+      const url = new URL(request.url);
+      const userId = url.searchParams.get('userId');
+      if (userId) {
+        return {
+          id: userId,
+          email: 'dev@example.com',
+          name: '개발자',
+          role: 'USER',
+        };
+      }
     }
-  }
 
-  // 마지막 fallback: Supabase 세션 확인
-  try {
-    const { data: { session } } = await client.auth.getSession();
-    if (session?.user) {
-      return {
-        id: session.user.id,
-        email: session.user.email || '',
-        name: session.user.user_metadata?.name || '',
-        role: session.user.user_metadata?.role || 'USER'
-      };
-    }
+    return null;
   } catch (e) {
-    console.error('세션 확인 실패:', e);
+    console.error('getAuthUser 오류:', e);
+    return null;
   }
-
-  return null;
 } 

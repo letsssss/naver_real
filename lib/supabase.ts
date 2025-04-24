@@ -348,6 +348,21 @@ export const transformers = {
   }
 };
 
+export function createTokenClient(token: string) {
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    }
+  );
+  return supabase;
+}
+
 // ✅ named + default export 둘 다 제공
 export { supabase };
 export default supabase; 
