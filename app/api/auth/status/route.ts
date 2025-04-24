@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase.types';
 
 export async function GET() {
-  const supabase = createRouteHandlerClient();
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: cookieStore });
 
   const {
     data: { session },
