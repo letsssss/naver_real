@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { createBrowserClient } from '@/lib/supabase/client';
+import supabase from '@/lib/supabase/client';
 
 /**
  * 토큰 자동 갱신 컴포넌트
@@ -9,9 +9,9 @@ import { createBrowserClient } from '@/lib/supabase/client';
  */
 export default function TokenRefresher() {
   useEffect(() => {
-    const supabase = createBrowserClient();
+    const supabaseClient = supabase;
     
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: listener } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 인증 상태 변경:', event, session ? '세션 있음' : '세션 없음');
       
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
