@@ -239,7 +239,6 @@ export const fetchOngoingPurchases = async (
     // Supabase 세션 갱신 먼저 시도
     try {
       console.log("Supabase 세션 갱신 중...");
-      // 동적으로 Supabase 클라이언트 임포트
       const { supabase } = await import("@/lib/supabase");
       
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -321,67 +320,29 @@ export const fetchOngoingPurchases = async (
     console.log("🔍 API 전체 응답 (data):", JSON.stringify(data, null, 2));
     console.log("🔎 data 타입:", typeof data);
     console.log("🔎 data 키들:", Object.keys(data));
+    console.log("🔎 purchases 값:", data.purchases);
+    console.log("🔎 data.data 값:", data.data);
+    console.log("🔎 data.result 값:", data.result);
+    console.log("🔎 data.items 값:", data.items);
     
     // 실제 구매 데이터가 어떤 필드에 있는지 확인
     let purchasesArray = null;
     if (data.purchases && Array.isArray(data.purchases)) {
-      console.log("✅ 구매 데이터는 data.purchases에 있습니다.");
       purchasesArray = data.purchases;
     } else if (data.data && Array.isArray(data.data)) {
-      console.log("✅ 구매 데이터는 data.data에 있습니다.");
       purchasesArray = data.data;
     } else if (data.result && Array.isArray(data.result)) {
-      console.log("✅ 구매 데이터는 data.result에 있습니다.");
       purchasesArray = data.result;
     } else if (data.items && Array.isArray(data.items)) {
-      console.log("✅ 구매 데이터는 data.items에 있습니다.");
       purchasesArray = data.items;
     } else if (Array.isArray(data)) {
-      console.log("✅ 응답 자체가 배열입니다.");
       purchasesArray = data;
     }
     
-    // API 응답에 purchases 배열이 있는지 확인
     if (!purchasesArray) {
       console.error("API 응답에서 구매 데이터 배열을 찾을 수 없습니다:", data);
-      
-      // 어드민 API를 사용하여 구매 내역 가져오기 시도
-      console.log("어드민 API로 구매 내역 검색 시도 중...");
-      try {
-        const adminResponse = await fetch(`${API_BASE_URL}/api/admin-purchases?userId=${user.id}&t=${purchaseTimestamp}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          },
-          credentials: 'include'
-        });
-        
-        console.log("어드민 API 응답 상태:", adminResponse.status, adminResponse.statusText);
-        
-        if (!adminResponse.ok) {
-          console.error("어드민 API 오류:", adminResponse.statusText);
-          setOngoingPurchases([]);
-          return;
-        }
-        
-        const adminData = await adminResponse.json();
-        console.log("어드민 API 응답 데이터:", adminData);
-        
-        if (adminData.success && adminData.purchases && adminData.purchases.length > 0) {
-          console.log(`어드민 API에서 ${adminData.purchases.length}개의 구매 내역 발견`);
-          purchasesArray = adminData.purchases;
-        } else {
-          console.log("어드민 API에서도 구매 내역을 찾지 못함");
-          setOngoingPurchases([]);
-          return;
-        }
-      } catch (adminError) {
-        console.error("어드민 API 호출 오류:", adminError);
-        setOngoingPurchases([]);
-        return;
-      }
+      setOngoingPurchases([]);
+      return;
     }
     
     console.log(`API에서 ${purchasesArray.length}개의 구매 내역 불러옴:`, purchasesArray);
@@ -442,7 +403,8 @@ export const fetchOngoingPurchases = async (
       }
     }
     
-    // 구매 내역 처리
+    // 구매 내역 처리 - 조건 완화
+    setOngoingPurchases(purchasesArray ?? []);
     processPurchaseData(purchasesArray, setPurchaseStatus, setOngoingPurchases);
   } catch (error) {
     console.error("구매 데이터 로딩 오류:", error);

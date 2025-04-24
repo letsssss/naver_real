@@ -325,9 +325,16 @@ export async function getAuthenticatedUser(request: NextRequest) {
  * @returns 인증된 사용자 객체 또는 null
  */
 export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
-  console.log("🧩 [AUTH] validateRequestToken 진입");
+  console.log("🧪 [TOKEN DEBUG] validateRequestToken() 진입");
+  console.log("🧪 [TOKEN DEBUG] Method:", req.method);
 
-  const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
+  const headerToken = getTokenFromHeaders(req.headers);
+  const cookieToken = getTokenFromCookies(req);
+
+  console.log("🧪 [TOKEN DEBUG] Header token:", headerToken?.slice(0, 10));
+  console.log("🧪 [TOKEN DEBUG] Cookie token:", cookieToken?.slice(0, 10));
+
+  const token = headerToken || cookieToken;
   console.log("🧩 [AUTH] 추출된 토큰:", token?.substring?.(0, 40)); // 앞부분만
 
   if (!token) {
