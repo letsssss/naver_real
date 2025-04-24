@@ -27,17 +27,17 @@ const safeLocalStorageSet = (key: string, value: string) => {
       
       // 쿠키에도 저장 (httpOnly 아님)
       const maxAge = 30 * 24 * 60 * 60; // 30일 (초 단위)
-      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
       
       // auth-token과 auth-status 쿠키와 동기화 (미들웨어와 일치)
       if (key === "token") {
         // 최대한 많은 방법으로 토큰 저장
-        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
-        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
+        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=None; Secure`;
         
         // 모든 경로에도 쿠키 설정 시도
-        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
-        document.cookie = `token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
+        document.cookie = `token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
       }
     } catch (e) {
       console.error("로컬 스토리지 저장 오류:", e);

@@ -129,9 +129,13 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/notifications', {
         method: 'GET',
         credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
