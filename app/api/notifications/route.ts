@@ -9,7 +9,7 @@ import {
   transformers,
   getSupabaseClient
 } from '@/lib/supabase';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
+import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
 
 // 표준 응답 헤더 정의
 const CORS_HEADERS = {
@@ -93,119 +93,26 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
 
 // 알림 목록 조회
 export async function GET(req: Request) {
-  console.log("✅ 알림 API 진입 확인 - GET 요청");
-  console.log("✅ 요청 URL:", req.url);
-  console.log("✅ 요청 메서드:", req.method);
-  console.log("✅ 요청 헤더:", Object.fromEntries(req.headers.entries()));
+  console.log("🟢 [NOTIFICATION] API GET 진입 완료");
 
   try {
-    console.log('[알림 API] GET 요청 시작');
-    
-    // 사용자 인증
-    const { userId, authenticated } = await authenticateUser(req);
-    
+    const { userId, authenticated, message } = await validateRequestToken(req);
+    console.log("🟡 [NOTIFICATION] 인증 결과 →", { userId, authenticated, message });
+
     if (!authenticated) {
+      console.warn("🔴 [NOTIFICATION] 인증 실패 - 401 반환 예정");
       return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
     }
-    
-    try {
-      // Supabase 클라이언트 가져오기 - 싱글톤 패턴 적용
-      const client = getSupabaseClient();
-      
-      // 페이지네이션 파라미터 처리
-      const url = new URL(req.url);
-      const page = parseInt(url.searchParams.get('page') || '1', 10);
-      const pageSize = parseInt(url.searchParams.get('limit') || '10', 10);
-      const skip = (page - 1) * pageSize;
-      
-      console.log(`[알림 API] 사용자 ${userId}의 알림 조회 시도, 페이지: ${page}, 항목 수: ${pageSize}`);
-      
-      // Supabase로 알림 데이터 조회
-      console.log('[알림 데이터] Supabase 클라이언트로 조회 시작');
-      const { data: notifications, error } = await client
-        .from('notifications')
-        .select(`
-          *,
-          post:posts(id, title)
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('[알림 API] Supabase 조회 오류:', error);
-        
-        return createErrorResponse(
-          '알림을 불러오는 중 오류가 발생했습니다.',
-          'DB_ERROR',
-          500,
-          error
-        );
-      }
-      
-      // 알림이 없을 경우 빈 배열 반환
-      if (!notifications || notifications.length === 0) {
-        return createApiResponse({
-          success: true,
-          notifications: [],
-          pagination: {
-            totalCount: 0,
-            totalPages: 0,
-            currentPage: page,
-            hasMore: false
-          }
-        });
-      }
-      
-      // 수동 페이지네이션 구현
-      const totalCount = notifications.length;
-      const paginatedNotifications = notifications.slice(skip, skip + pageSize);
-      
-      // 응답 데이터 형식 변환
-      const formattedNotifications = paginatedNotifications.map(notification => {
-        const postData = notification.post || {};
-        
-        return {
-          id: notification.id,
-          title: notification.title || '시스템 알림',
-          message: notification.message,
-          link: notification.post_id ? `/posts/${notification.post_id}` : '/mypage',
-          isRead: notification.is_read,
-          createdAt: notification.created_at,
-          type: notification.type || 'SYSTEM',
-          formattedDate: transformers.formatRelativeTime(notification.created_at)
-        };
-      });
-      
-      return createApiResponse({
-        success: true,
-        notifications: formattedNotifications,
-        pagination: {
-          totalCount,
-          totalPages: Math.ceil(totalCount / pageSize),
-          currentPage: page,
-          hasMore: skip + paginatedNotifications.length < totalCount
-        }
-      });
-      
-    } catch (innerError) {
-      console.error('[알림 API] 내부 처리 오류:', innerError);
-      
-      return createErrorResponse(
-        '알림 데이터를 처리하는 중 오류가 발생했습니다.',
-        'PROCESSING_ERROR',
-        500,
-        innerError
-      );
-    }
+
+    // 이 아래는 기존 처리 로직
+    return createApiResponse({
+      success: true,
+      notifications: [],
+      message: "인증된 사용자입니다. (디버깅 중)"
+    });
   } catch (error) {
-    console.error('[알림 API] 전역 오류:', error);
-    
-    return createErrorResponse(
-      '서버에서 오류가 발생했습니다.',
-      'SERVER_ERROR',
-      500,
-      error
-    );
+    console.error("❌ [NOTIFICATION] 예외 발생:", error);
+    return createErrorResponse('서버 오류', 'INTERNAL_ERROR', 500, error);
   }
 }
 

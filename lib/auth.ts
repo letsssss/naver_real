@@ -325,57 +325,30 @@ export async function getAuthenticatedUser(request: NextRequest) {
  * @returns 인증된 사용자 객체 또는 null
  */
 export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
-  console.log(`[인증] 요청 검증 시작`);
-  
+  console.log("🧩 [AUTH] validateRequestToken 진입");
+
+  const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
+  console.log("🧩 [AUTH] 추출된 토큰:", token?.substring?.(0, 40)); // 앞부분만
+
+  if (!token) {
+    console.log("🧩 [AUTH] 토큰 없음");
+    return { userId: '', authenticated: false, message: '토큰이 없습니다' };
+  }
+
   try {
-    // 토큰 가져오기
-    const token = getTokenFromHeaders(req.headers) || getTokenFromCookies(req);
-    console.log(`[인증] 토큰 추출 결과: ${token ? '토큰 있음' : '토큰 없음'}`);
-    
-    if (token) {
-      try {
-        console.log(`[인증] 토큰 검증 시도...`);
-        const decoded = await verifyToken(token);
-        if (decoded && decoded.userId) {
-          // 사용자 ID가 UUID인지 확인하고 문자열로 변환
-          const userId = String(decoded.userId);
-          console.log(`[인증] 토큰 검증 성공, userId: ${userId.substring(0, 8)}...`);
-          return { userId, authenticated: true, message: '토큰 검증 성공' };
-        } else {
-          console.warn('[인증] 토큰에서 userId를 찾을 수 없음:', decoded);
-        }
-      } catch (e) {
-        console.error('[인증] 토큰 검증 실패:', e instanceof Error ? e.message : e);
-        return { 
-          userId: '', 
-          authenticated: false, 
-          message: e instanceof Error ? e.message : '토큰 검증 실패'
-        };
-      }
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    console.log("🧩 [AUTH] Supabase 응답:", { user: user?.id, error: error?.message });
+
+    if (error || !user) {
+      console.log("🧩 [AUTH] Supabase 인증 실패");
+      return { userId: '', authenticated: false, message: error?.message || '사용자를 찾을 수 없습니다' };
     }
-    
-    // Supabase 세션으로 인증 시도
-    try {
-      // Supabase 세션 확인을 통해 실제 로그인한 사용자 ID 확인
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!error && session && session.user && session.user.id) {
-        const userId = session.user.id;
-        console.log(`[인증] Supabase 세션에서 사용자 ID 확인: ${userId.substring(0, 8)}...`);
-        return { userId, authenticated: true, message: '세션 인증' };
-      } else {
-        console.warn('[인증] Supabase 세션 없음, 사용자가 로그인되지 않음');
-        return { userId: '', authenticated: false, message: '로그인이 필요합니다' };
-      }
-    } catch (sessionError) {
-      console.error('[인증] 세션 조회 오류:', sessionError);
-      return { userId: '', authenticated: false, message: '세션 확인 오류' };
-    }
-  } catch (e) {
-    console.error('[인증] 검증 과정에서 오류 발생:', e);
-    
-    // 개발 환경에서도 인증 실패로 처리
-    const errorMessage = e instanceof Error ? e.message : '인증 검증 중 알 수 없는 오류 발생';
-    return { userId: '', authenticated: false, message: errorMessage };
+
+    console.log("🧩 [AUTH] 인증 성공:", user.id);
+    return { userId: user.id, authenticated: true };
+  } catch (error) {
+    console.error("🧩 [AUTH] 예외 발생:", error);
+    return { userId: '', authenticated: false, message: '인증 처리 중 오류가 발생했습니다' };
   }
 }
 
