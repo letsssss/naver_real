@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { getAuthenticatedUser } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth/getAuthUser';
 
 export const runtime = 'nodejs'; // ✅ Edge 런타임에서 인증 문제 방지
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
   response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // 캐시 방지 헤더
@@ -26,7 +26,7 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     // 1. 인증된 사용자 정보 가져오기
-    const authUser = await getAuthenticatedUser(request);
+    const authUser = await getAuthUser(request);
     if (!authUser) {
       return addCorsHeaders(NextResponse.json({ success: false, message: '인증되지 않은 사용자입니다.' }, { status: 401 }));
     }
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         seller:users!seller_id(id, name, email)
       `)
       .eq('buyer_id', authUser.id)
-      .neq('status', 'CANCELED') // 취소된 거래 제외
+      .neq('status', 'CANCELLED') // 취소된 거래 제외
       .order('created_at', { ascending: false });
 
     if (error) {
