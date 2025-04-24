@@ -1,4 +1,5 @@
 console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
+console.log("🔧 route.ts 파일 실행됨 - API 서버에 정상적으로 배포됨");
 
 import { NextResponse } from 'next/server';
 import { 
@@ -95,25 +96,13 @@ async function authenticateUser(req: Request): Promise<{ userId: string; authent
 export async function GET(req: Request) {
   console.log("🟢 [NOTIFICATION] API GET 진입 완료");
 
-  try {
-    const { userId, authenticated, message } = await validateRequestToken(req);
-    console.log("🟡 [NOTIFICATION] 인증 결과 →", { userId, authenticated, message });
-
-    if (!authenticated) {
-      console.warn("🔴 [NOTIFICATION] 인증 실패 - 401 반환 예정");
-      return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+  // 일단 아무 인증도 하지 않고 응답을 주자
+  return new Response(JSON.stringify({ debug: true, message: "라우트 정상 인식됨" }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json'
     }
-
-    // 이 아래는 기존 처리 로직
-    return createApiResponse({
-      success: true,
-      notifications: [],
-      message: "인증된 사용자입니다. (디버깅 중)"
-    });
-  } catch (error) {
-    console.error("❌ [NOTIFICATION] 예외 발생:", error);
-    return createErrorResponse('서버 오류', 'INTERNAL_ERROR', 500, error);
-  }
+  });
 }
 
 // 알림 생성
