@@ -10,7 +10,7 @@ import {
   transformers,
   getSupabaseClient
 } from '@/lib/supabase';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken, authenticateUser } from '@/lib/auth';
+import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
 
 // 표준 응답 헤더 정의
 const CORS_HEADERS = {
@@ -57,7 +57,7 @@ export async function OPTIONS() {
 export async function GET(req: Request) {
   console.log("🟢 [NOTIFICATION] API GET 진입 완료");
 
-  const { userId, authenticated } = await authenticateUser(req);
+  const { userId, authenticated } = await validateRequestToken(req);
 
   if (!authenticated) {
     console.warn("❌ 인증되지 않은 사용자 접근");
@@ -185,7 +185,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     // 사용자 인증
-    const { userId, authenticated } = await authenticateUser(req);
+    const { userId, authenticated } = await validateRequestToken(req);
     
     if (!authenticated) {
       return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
