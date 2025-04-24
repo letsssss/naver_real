@@ -271,10 +271,28 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
     
     setIsLoadingPurchases(true);
     try {
-      // Supabase 세션에서 토큰 가져오기
-      const supabase = createBrowserSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
+      // ✅ 판매 목록과 동일한 방식으로 토큰 추출
+      let authToken = '';
+      if (typeof window !== 'undefined') {
+        const supabaseKey = Object.keys(localStorage).find(key => 
+          key.startsWith('sb-') && key.endsWith('-auth-token')
+        );
+        if (supabaseKey) {
+          try {
+            const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+            if (supabaseData.access_token) {
+              authToken = supabaseData.access_token;
+            }
+          } catch (e) {
+            console.error("Supabase 저장소 파싱 실패:", e);
+          }
+        }
+        if (!authToken) {
+          authToken = localStorage.getItem('token') || 
+                     localStorage.getItem('access_token') || 
+                     localStorage.getItem('supabase_token') || '';
+        }
+      }
       
       // API 호출
       const timestamp = Date.now();
@@ -282,7 +300,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
           'Cache-Control': 'no-cache'
         },
         credentials: 'include'
@@ -293,7 +311,6 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       }
       
       const data = await response.json();
-      
       if (!data.purchases || !Array.isArray(data.purchases)) {
         setOngoingPurchases([]);
         return;
