@@ -1,0 +1,3 @@
+[33m8ce5d15[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: auth/status API에서 createRouteHandlerClient 호출 시 cookies 객체 전달
+[33m90cff1d[m fix: createRouteHandlerClient 호출 시 cookies 객체 전달
+[33m42172a8[m fix: Supabase 쿠키 인식 문제 해결

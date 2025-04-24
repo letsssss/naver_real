@@ -15,19 +15,16 @@ import {
 } from '@/lib/supabase';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
 import { getAuthUser } from '@/lib/auth/getAuthUser';
-import { createRouteHandlerClient } from '@/lib/supabase-server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 
-// 표준 응답 헤더 정의
+// CORS 기본 헤더
 const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0'
 };
 
 // 표준 응답 생성기
@@ -52,32 +49,42 @@ function createErrorResponse(message: string, code: string, status = 500, detail
   });
 }
 
-// OPTIONS 요청 처리
+// OPTIONS 프리플라이트 처리
 export async function OPTIONS() {
-  return new NextResponse(null, { 
+  return new NextResponse(null, {
     status: 204,
-    headers: CORS_HEADERS
+    headers: CORS_HEADERS,
   });
 }
 
-// ✅ 인증된 사용자만 접근 가능한 API 기본 템플릿
+// 알림 조회 (로그인 필요)
 export async function GET() {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: cookieStore });
+  try {
+    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  if (!session) {
-    return new NextResponse('Unauthorized', { status: 401 });
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('🔴 알림 조회 실패:', error.message);
+      return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, notifications: data }, { status: 200 });
+  } catch (err) {
+    console.error('🔴 알림 조회 전역 에러:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-
-  // 🔽 여기에 실제 처리할 데이터 로직 작성
-  return NextResponse.json({
-    message: '✅ 인증된 사용자입니다',
-    user: session.user,
-  });
 }
 
 // 알림 생성
