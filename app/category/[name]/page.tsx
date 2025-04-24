@@ -3,7 +3,7 @@ import Image from "next/image"
 import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { TicketList } from "@/components/ticket-list"
+import TicketList from "@/components/ticket-list"
 
 const tickets = [
   {
