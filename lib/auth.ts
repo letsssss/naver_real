@@ -287,39 +287,60 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
 // console.log('cookies 타입:', typeof cookies, cookies);
 // console.log('==================================');
 
-// 기존 getAuthenticatedUser 함수를 새로운 버전으로 교체
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
-    // 1. 요청에서 직접 토큰 추출
-    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
-    
+    const authHeader = request.headers.get('Authorization');
+    let token = authHeader?.replace('Bearer ', '');
+
     if (!token) {
-      console.log("❌ 인증 토큰을 찾을 수 없습니다");
-      return null;
-    }
-    
-    // 2. 기존 Supabase 클라이언트에 토큰 직접 전달
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+      const cookie = request.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token');
+      if (cookie?.value) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(cookie.value));
+          token = parsed?.access_token;
+        } catch (e) {
+          console.warn('쿠키 파싱 실패:', e);
+        }
       }
-    );
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    if (error) {
-      console.error("❌ 사용자 인증 실패:", error.message);
+    }
+
+    if (!token) {
+      console.warn('토큰 없음');
       return null;
     }
-    
-    return user;
-  } catch (error) {
-    console.error("❌ 인증 처리 중 오류 발생:", error);
+
+    const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (!user || error) {
+      console.warn('user 인증 실패:', error);
+      return null;
+    }
+
+    const { data: userData } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    return {
+      id: user.id,
+      email: user.email || '',
+      name: userData?.name || user.user_metadata?.name || '',
+      role: userData?.role || user.user_metadata?.role || 'USER',
+    };
+  } catch (e) {
+    console.error('getAuthenticatedUser 예외:', e);
     return null;
   }
 }
