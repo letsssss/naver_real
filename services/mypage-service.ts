@@ -236,34 +236,8 @@ export const fetchOngoingPurchases = async (
   try {
     console.log("📣 fetchOngoingPurchases 호출됨, 사용자 ID:", user.id);
     
-    // Supabase 세션 갱신 먼저 시도
-    try {
-      console.log("Supabase 세션 갱신 중...");
-      const { supabase } = await import("@/lib/supabase");
-      
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("세션 가져오기 오류:", error.message);
-      } else {
-        console.log("Supabase 세션 갱신 성공:", session ? "세션 있음" : "세션 없음");
-      }
-    } catch (sessionError) {
-      console.error("Supabase 세션 갱신 실패:", sessionError);
-    }
-    
-    // 토큰 가져오기
+    // ✅ 토큰 가져오기 (판매 목록과 동일하게 처리)
     const authToken = getAuthToken();
-    const authTokenSources = authToken ? ['authToken_function'] : [];
-    
-    // 캐시 방지를 위한 타임스탬프 추가
-    const purchaseTimestamp = new Date().getTime();
-    
-    // 디버깅을 위한 URL 및 토큰 로깅
-    console.log("📡 구매 목록 API 호출:", `${API_BASE_URL}/api/purchase?userId=${user.id}&t=${purchaseTimestamp}`);
-    console.log("🔑 토큰 소스:", authTokenSources.join(', ') || '없음');
-    console.log("🔑 토큰 형식 검증:", authToken ? `Bearer ${authToken.substring(0, 10)}...` : '없음');
-    
-    // 헤더 설정
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': authToken ? `Bearer ${authToken}` : '',
@@ -271,146 +245,67 @@ export const fetchOngoingPurchases = async (
       'Pragma': 'no-cache',
       'Expires': '0'
     };
-    
-    console.log("📨 요청 헤더:", JSON.stringify(headers, null, 2));
-    
+
+    const purchaseTimestamp = Date.now();
     const response = await fetch(`${API_BASE_URL}/api/purchase?userId=${user.id}&t=${purchaseTimestamp}`, {
       method: 'GET',
       headers,
       credentials: 'include',
-      cache: 'no-store'
     });
-    
+
     console.log("📥 구매 데이터 API 응답 상태:", response.status, response.statusText);
-    
-    // 응답 헤더 확인
-    const responseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
-    });
-    console.log("📥 응답 헤더:", responseHeaders);
-    
+
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error("구매 API 오류 응답:", errorData);
+      const errorText = await response.text();
+      console.error("구매 API 오류 응답:", errorText);
       throw new Error('구매 목록을 불러오는데 실패했습니다.');
     }
-    
-    const responseText = await response.text();
-    console.log("원시 응답 텍스트:", responseText);
-    
-    // 응답이 빈 문자열인 경우 처리
-    if (!responseText || responseText.trim() === '') {
-      console.error("API가 빈 응답을 반환했습니다");
+
+    const data = await response.json();
+
+    if (!data.purchases || !Array.isArray(data.purchases)) {
+      console.error("응답에 purchases 배열이 없습니다:", data);
       setOngoingPurchases([]);
       return;
     }
-    
-    // 텍스트를 JSON으로 파싱
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error("JSON 파싱 오류:", jsonError, "원본 텍스트:", responseText);
-      throw new Error('응답 데이터 형식이 잘못되었습니다.');
-    }
-    
-    console.log("구매 API 응답 데이터:", data);
-    // 추가 디버깅 정보
-    console.log("🔍 API 전체 응답 (data):", JSON.stringify(data, null, 2));
-    console.log("🔎 data 타입:", typeof data);
-    console.log("🔎 data 키들:", Object.keys(data));
-    console.log("🔎 purchases 값:", data.purchases);
-    console.log("🔎 data.data 값:", data.data);
-    console.log("🔎 data.result 값:", data.result);
-    console.log("🔎 data.items 값:", data.items);
-    
-    // 실제 구매 데이터가 어떤 필드에 있는지 확인
-    let purchasesArray = null;
-    if (data.purchases && Array.isArray(data.purchases)) {
-      purchasesArray = data.purchases;
-    } else if (data.data && Array.isArray(data.data)) {
-      purchasesArray = data.data;
-    } else if (data.result && Array.isArray(data.result)) {
-      purchasesArray = data.result;
-    } else if (data.items && Array.isArray(data.items)) {
-      purchasesArray = data.items;
-    } else if (Array.isArray(data)) {
-      purchasesArray = data;
-    }
-    
-    if (!purchasesArray) {
-      console.error("API 응답에서 구매 데이터 배열을 찾을 수 없습니다:", data);
-      setOngoingPurchases([]);
-      return;
-    }
-    
-    console.log(`API에서 ${purchasesArray.length}개의 구매 내역 불러옴:`, purchasesArray);
-    
-    // 누락된 post 정보 가져오기
-    const postIds = purchasesArray
-      .filter((p: any) => p.post_id)
-      .map((p: any) => p.post_id);
-    
-    console.log("게시물 ID 목록:", postIds);
-    
-    if (postIds.length > 0) {
-      try {
-        // 게시물 정보 가져오기
-        const postsMap: Record<string | number, any> = {};
-        
-        // 각 게시물 정보 가져오기
-        for (const postId of postIds) {
-          try {
-            console.log(`게시물 ID ${postId} 정보 가져오기 시도...`);
-            const postResponse = await fetch(`${API_BASE_URL}/api/posts/${postId}?t=${purchaseTimestamp}`, {
-              method: 'GET',
-              headers,
-              credentials: 'include'
-            });
-            
-            if (postResponse.ok) {
-              const postData = await postResponse.json();
-              if (postData && postData.post) {
-                console.log(`✅ 게시물 ID ${postId} 정보 가져오기 성공:`, postData.post);
-                postsMap[postId] = postData.post;
-              }
-            } else {
-              console.error(`❌ 게시물 ID ${postId} 정보 가져오기 실패:`, postResponse.status);
-            }
-          } catch (error) {
-            console.error(`❌ 게시물 ID ${postId} 정보 가져오기 오류:`, error);
-          }
-        }
-        
-        // 구매 항목에 post 정보 연결
-        if (Object.keys(postsMap).length > 0) {
-          console.log("게시물 정보 매핑:", postsMap);
-          purchasesArray = purchasesArray.map((purchase: any) => {
-            const postId = purchase.post_id;
-            if (postId && postsMap[postId]) {
-              return {
-                ...purchase,
-                post: postsMap[postId]
-              };
-            }
-            return purchase;
-          });
-          console.log("게시물 정보가 연결된 구매 데이터:", purchasesArray);
-        }
-      } catch (postError) {
-        console.error("게시물 정보 가져오기 오류:", postError);
-      }
-    }
-    
-    // 구매 내역 처리 - 조건 완화
-    setOngoingPurchases(purchasesArray ?? []);
-    processPurchaseData(purchasesArray, setPurchaseStatus, setOngoingPurchases);
+
+    console.log("✅ 구매 데이터:", data.purchases);
+
+    // ✅ CONFIRMED 제외하고 표시할 구매 목록 필터링
+    const newPurchaseStatus = {
+      취켓팅진행중: 0,
+      판매중인상품: 0,
+      취켓팅완료: 0,
+      거래완료: 0,
+      거래취소: 0,
+    };
+
+    const processed = data.purchases.map((purchase: any) => {
+      const status = purchase.status || "";
+      if (["PENDING", "PROCESSING"].includes(status)) newPurchaseStatus.취켓팅진행중 += 1;
+      else if (status === "COMPLETED") newPurchaseStatus.취켓팅완료 += 1;
+      else if (status === "CONFIRMED") newPurchaseStatus.거래완료 += 1;
+      else if (status === "CANCELLED") newPurchaseStatus.거래취소 += 1;
+
+      return {
+        id: purchase.id,
+        orderNumber: purchase.order_number || purchase.orderNumber,
+        title: purchase.post?.title || purchase.title || purchase.ticket_title || purchase.event_name || "제목 없음",
+        post: purchase.post,
+        date: purchase.created_at || "날짜 없음",
+        price: (purchase.total_price || purchase.post?.ticket_price || 0).toLocaleString() + "원",
+        status: status,
+        seller: purchase.seller?.name || "판매자 정보 없음"
+      };
+    });
+
+    const filtered = processed.filter(p => p.status !== "CONFIRMED");
+
+    setOngoingPurchases(filtered);
+    setPurchaseStatus(newPurchaseStatus);
   } catch (error) {
-    console.error("구매 데이터 로딩 오류:", error);
-    toast.error("구매 내역을 불러오는 중 오류가 발생했습니다.");
-    
-    // 오류 시에도 빈 배열로 설정하여 UI가 깨지지 않도록 함
+    console.error("구매 목록 로딩 오류:", error);
+    toast.error('구매 목록을 불러오는데 실패했습니다.');
     setOngoingPurchases([]);
   } finally {
     setIsLoadingPurchases(false);
