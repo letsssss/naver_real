@@ -30,9 +30,13 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient<Database>({ req, res });
 
+  console.log('[MW] 받은 쿠키:', req.cookies);
+  
   const {
     data: { session },
   } = await supabase.auth.getSession();
+  
+  console.log('[MW] Supabase 세션:', session);
 
   // 보호된 라우트 목록
   const protectedRoutes = ['/tickets', '/proxy-ticketing', '/ticket-cancellation', '/mypage'];
