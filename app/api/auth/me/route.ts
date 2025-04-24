@@ -3,6 +3,7 @@ import { jwtVerify } from 'jose';
 import { createAdminClient } from '@/lib/supabase';
 import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@/lib/supabase-server';
+import type { Database } from '@/types/supabase.types';
 
 export const runtime = 'nodejs';
 
@@ -11,35 +12,32 @@ const userCache = new Map<string, { user: any, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
 export async function GET() {
-  try {
-    const supabase = createRouteHandlerClient();
-    const { data: { session }, error } = await supabase.auth.getSession();
+  const supabase = createRouteHandlerClient<Database>({ cookies });
 
-    if (error) {
-      console.error('Session check error:', error);
-      return NextResponse.json({ error: 'Failed to get session' }, { status: 500 });
-    }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-    if (!session) {
-      return NextResponse.json({ error: 'No active session' }, { status: 401 });
-    }
-
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
-
-    if (userError) {
-      console.error('User fetch error:', userError);
-      return NextResponse.json({ error: 'Failed to get user data' }, { status: 500 });
-    }
-
-    return NextResponse.json({ user });
-  } catch (error) {
-    console.error('Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (!session) {
+    return new NextResponse('Unauthorized', { status: 401 });
   }
+
+  // 사용자 정보 반환
+  return NextResponse.json({
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.user_metadata?.name || '사용자',
+      role: session.user.user_metadata?.role || 'USER',
+      avatar_url: session.user.user_metadata?.avatar_url,
+      created_at: session.user.created_at,
+      last_sign_in_at: session.user.last_sign_in_at,
+    },
+    session: {
+      access_token: session.access_token.substring(0, 10) + '...',
+      expires_at: new Date(session.expires_at! * 1000).toLocaleString(),
+    }
+  });
 }
 
 // OPTIONS 메서드 처리 (CORS)

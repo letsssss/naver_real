@@ -16,6 +16,8 @@ import {
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
 import { getAuthUser } from '@/lib/auth/getAuthUser';
 import { createRouteHandlerClient } from '@/lib/supabase-server';
+import { cookies } from 'next/headers';
+import type { Database } from '@/types/supabase.types';
 
 // 표준 응답 헤더 정의
 const CORS_HEADERS = {
@@ -58,37 +60,23 @@ export async function OPTIONS() {
   });
 }
 
-// 알림 목록 조회
+// ✅ 인증된 사용자만 접근 가능한 API 기본 템플릿
 export async function GET() {
-  try {
-    const supabase = createRouteHandlerClient();
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const supabase = createRouteHandlerClient<Database>({ cookies });
 
-    if (sessionError) {
-      console.error('Session check error:', sessionError);
-      return NextResponse.json({ error: 'Failed to get session' }, { status: 500 });
-    }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-    if (!session) {
-      return NextResponse.json({ error: 'No active session' }, { status: 401 });
-    }
-
-    const { data: notifications, error: notificationsError } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
-
-    if (notificationsError) {
-      console.error('Notifications fetch error:', notificationsError);
-      return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
-    }
-
-    return NextResponse.json({ notifications });
-  } catch (error) {
-    console.error('Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (!session) {
+    return new NextResponse('Unauthorized', { status: 401 });
   }
+
+  // 🔽 여기에 실제 처리할 데이터 로직 작성
+  return NextResponse.json({
+    message: '✅ 인증된 사용자입니다',
+    user: session.user,
+  });
 }
 
 // 알림 생성
