@@ -52,84 +52,39 @@ export async function OPTIONS() {
 
 // 사용자 인증 함수
 async function authenticateUser(req: Request): Promise<{ userId: string; authenticated: boolean }> {
-  // 개발 환경 감지
   const isDev = process.env.NODE_ENV === 'development';
-  
-  // 토큰 가져오기
+
   const headerToken = getTokenFromHeaders(req.headers);
   const cookieToken = getTokenFromCookies(req);
+
+  console.log('[🛡️ 인증 디버그] 헤더 토큰:', headerToken?.substring(0, 20)); // 앞 20자만 표시
+  console.log('[🛡️ 인증 디버그] 쿠키 토큰:', cookieToken?.substring(0, 20));
+
   const token = headerToken || cookieToken;
-  
-  // 토큰 추출 과정 로깅
-  console.log('[알림 API] 헤더에서 추출한 토큰:', headerToken ? '있음' : '없음');
-  console.log('[알림 API] 쿠키에서 추출한 토큰:', cookieToken ? '있음' : '없음');
-  console.log('[알림 API] 최종 사용 토큰:', token ? '있음' : '없음');
-  
+
+  if (!token) {
+    console.log('[🛡️ 인증 실패] 토큰이 없습니다');
+    return { userId: '', authenticated: false };
+  }
+
   try {
-    if (token) {
-      // 1. Supabase 인증 시도
-      try {
-        const serverClient = createServerSupabaseClient();
-        const { data: { user }, error } = await serverClient.auth.getUser(token);
-        
-        if (!error && user) {
-          console.log('[인증] Supabase 인증 성공:', user.id);
-          return { userId: user.id, authenticated: true };
-        }
-      } catch (e) {
-        console.error('[인증] Supabase 인증 오류:', e);
-      }
-      
-      // 2. JWT 인증 시도
-      try {
-        const decoded = await verifyToken(token);
-        if (decoded && decoded.userId) {
-          const userId = formatUserId(decoded.userId);
-          console.log('[인증] JWT 인증 성공:', userId);
-          return { userId, authenticated: true };
-        }
-      } catch (e) {
-        console.error('[인증] JWT 인증 오류:', e);
-      }
-    }
-    
-    // 개발 환경에서는 기본 사용자 허용
-    if (isDev) {
-      console.log('[인증] 개발 환경이지만 유효한 인증 필요');
-      // 쿼리 파라미터에서 userId 확인 (개발용)
-      const url = new URL(req.url);
-      const queryUserId = url.searchParams.get('userId');
-      
-      if (queryUserId && queryUserId.length > 10) {
-        console.log(`[인증] 개발 환경 - 쿼리 파라미터 userId 사용: ${queryUserId}`);
-        return { userId: queryUserId, authenticated: true };
-      }
-      
+    console.log('[🛡️ 인증 시도] Supabase로 토큰 검증 시작');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error) {
+      console.error('[🛡️ 인증 실패] Supabase 검증 오류:', error.message);
       return { userId: '', authenticated: false };
     }
-    
-    return { userId: '', authenticated: false };
-  } catch (e) {
-    console.error('[인증] 통합 인증 오류:', e);
-    
-    // 개발 환경에서도 인증 필요
-    if (isDev) {
-      console.log('[인증] 개발 환경이지만 유효한 인증 필요 (오류 복구)');
-      
-      // 쿼리 파라미터에서 userId 확인 (개발용)
-      try {
-        const url = new URL(req.url);
-        const queryUserId = url.searchParams.get('userId');
-        
-        if (queryUserId && queryUserId.length > 10) {
-          console.log(`[인증] 개발 환경 - 쿼리 파라미터 userId 사용: ${queryUserId}`);
-          return { userId: queryUserId, authenticated: true };
-        }
-      } catch (err) {
-        console.error('[인증] URL 파싱 오류:', err);
-      }
+
+    if (!user) {
+      console.log('[🛡️ 인증 실패] 사용자 정보가 없습니다');
+      return { userId: '', authenticated: false };
     }
-    
+
+    console.log('[🛡️ 인증 성공] 사용자 ID:', user.id);
+    return { userId: user.id, authenticated: true };
+  } catch (error) {
+    console.error('[🛡️ 인증 오류] 예외 발생:', error);
     return { userId: '', authenticated: false };
   }
 }
