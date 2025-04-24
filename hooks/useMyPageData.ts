@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
 
 // 타입 정의
 interface TransactionStatus {
@@ -270,29 +271,10 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
     
     setIsLoadingPurchases(true);
     try {
-      // 토큰 가져오기
-      let authToken = '';
-      
-      if (typeof window !== 'undefined') {
-        const supabaseKey = Object.keys(localStorage).find(key => 
-          key.startsWith('sb-') && key.endsWith('-auth-token')
-        );
-        
-        if (supabaseKey) {
-          try {
-            const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-            authToken = supabaseData.access_token || '';
-          } catch (e) {
-            console.error("토큰 파싱 실패:", e);
-          }
-        }
-        
-        if (!authToken) {
-          authToken = localStorage.getItem('token') || 
-                    localStorage.getItem('access_token') || 
-                    localStorage.getItem('supabase_token') || '';
-        }
-      }
+      // Supabase 세션에서 토큰 가져오기
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       
       // API 호출
       const timestamp = Date.now();
@@ -300,7 +282,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Authorization': token ? `Bearer ${token}` : '',
           'Cache-Control': 'no-cache'
         },
         credentials: 'include'
@@ -420,14 +402,15 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
     
     setIsLoadingNotifications(true);
     try {
-      const authToken = typeof window !== 'undefined' 
-        ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
-        : '';
+      // Supabase 세션에서 토큰 가져오기
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       
       const response = await fetch(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : ''
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         credentials: 'include'
       });
@@ -478,15 +461,16 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
   // 알림 읽음 상태 업데이트
   const markNotificationAsRead = async (notificationId: number) => {
     try {
-      const authToken = typeof window !== 'undefined' 
-        ? localStorage.getItem('token') || localStorage.getItem('supabase_token') || '' 
-        : '';
+      // Supabase 세션에서 토큰 가져오기
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
       
       const response = await fetch(`${apiBaseUrl}/api/notifications?userId=${user?.id || ''}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : ''
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         credentials: 'include',
         body: JSON.stringify({ notificationId }),

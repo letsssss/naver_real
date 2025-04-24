@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
 
 // API에서 받는 알림 데이터 타입
 interface ApiNotification {
@@ -128,7 +129,17 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
-      const response = await fetch('/api/notifications');
+      // Supabase 세션에서 토큰 가져오기
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      // 토큰을 Authorization 헤더에 포함하여 요청
+      const response = await fetch('/api/notifications', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       
       if (!response.ok) {
         let errorData;
