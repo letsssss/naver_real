@@ -63,7 +63,7 @@ export default function TicketCancellationPage() {
     setMounted(true)
     fetchCancellationTickets()
     
-    // 인기 티켓 데이터 설정 (실제로는 API에서 가져와야 함)
+    // 인기 티켓 데이터 설정
     setPopularTickets([
       {
         id: 1,
