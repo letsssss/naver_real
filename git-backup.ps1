@@ -1,24 +1,24 @@
-# 깃 백업 스크립트
+# 깃허브 백업 스크립트
+Write-Host "🚀 깃허브 백업 시작..." -ForegroundColor Green
 
-# 현재 상태 출력
-Write-Host "===== 깃 상태 확인 =====" -ForegroundColor Green
+# 현재 시간을 커밋 메시지에 포함
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$commitMessage = "백업: $timestamp"
+
+# 변경사항 확인
+Write-Host "📝 변경사항 확인 중..." -ForegroundColor Yellow
 git status
 
-# 변경된 파일 스테이징
-Write-Host "`n===== 변경된 파일 스테이징 =====" -ForegroundColor Green
+# 모든 변경사항 스테이징
+Write-Host "📦 변경사항 스테이징 중..." -ForegroundColor Yellow
 git add .
 
-# 커밋 메시지 작성
-$commitMessage = "Supabase 마이그레이션 및 실시간 기능 구현"
-Write-Host "`n===== 커밋 메시지: $commitMessage =====" -ForegroundColor Green
+# 커밋 생성
+Write-Host "💾 커밋 생성 중..." -ForegroundColor Yellow
 git commit -m $commitMessage
 
-# 원격 저장소 정보 출력
-Write-Host "`n===== 원격 저장소 정보 =====" -ForegroundColor Green
-git remote -v
-
-# 변경 사항 푸시
-Write-Host "`n===== 변경 사항 푸시 =====" -ForegroundColor Green
+# 원격 저장소에 푸시
+Write-Host "⬆️ 깃허브에 푸시 중..." -ForegroundColor Yellow
 git push origin master
 
-Write-Host "`n===== 백업 완료 =====" -ForegroundColor Green 
+Write-Host "✅ 백업 완료!" -ForegroundColor Green 

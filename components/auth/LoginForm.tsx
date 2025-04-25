@@ -1,70 +1,102 @@
-import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+'use client';
 
-export default function LoginForm({ redirectTo = '/' }: { redirectTo?: string }) {
-  const router = useRouter()
-  const supabase = createClientComponentClient()
+import { useState } from 'react';
+import { createBrowserClient } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Loader2, Mail, Lock } from 'lucide-react';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+export default function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-    if (error) {
-      console.error('Login error:', error.message)
-      // 에러 처리 (예: 토스트 메시지)
-      return
+    try {
+      const supabase = createBrowserClient();
+      
+      // 이메일/비밀번호로 로그인
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('로그인 실패:', error.message);
+        toast.error('이메일 또는 비밀번호가 올바르지 않습니다.');
+        return;
+      }
+      
+      if (data.session) {
+        toast.success('로그인 성공!');
+        router.push('/');
+      }
+    } catch (error: any) {
+      console.error('로그인 중 오류 발생:', error);
+      toast.error('로그인 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
-
-    // 로그인 성공 시 리다이렉트
-    router.push(redirectTo)
-  }
+  };
 
   return (
-    <form onSubmit={handleLogin} className="mt-8 space-y-6">
-      <div className="rounded-md shadow-sm -space-y-px">
-        <div>
-          <label htmlFor="email" className="sr-only">
-            이메일
-          </label>
-          <input
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email">이메일</Label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
             id="email"
-            name="email"
             type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your-email@example.com"
             required
-            className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-            placeholder="이메일"
+            className="pl-10"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="sr-only">
-            비밀번호
-          </label>
-          <input
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="password">비밀번호</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
             id="password"
-            name="password"
             type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="********"
             required
-            className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-            placeholder="비밀번호"
+            className="pl-10"
           />
         </div>
       </div>
 
-      <div>
-        <button
-          type="submit"
-          className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          로그인
-        </button>
+      <div className="flex items-center justify-between text-sm">
+        <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-800">
+          비밀번호를 잊으셨나요?
+        </Link>
       </div>
+      
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            로그인 중...
+          </>
+        ) : (
+          '로그인'
+        )}
+      </Button>
     </form>
-  )
+  );
 } 

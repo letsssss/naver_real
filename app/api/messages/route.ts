@@ -25,8 +25,15 @@ export async function POST(request: NextRequest) {
 
     const tokenUserId = parseInt(decoded.userId.toString());
     const requestSenderId = parseInt(senderId.toString());
+    
+    console.log("🔥 sender_id:", requestSenderId);
+    console.log("🧑‍💻 auth.uid():", tokenUserId);
+    
+    // sender_id를 토큰의 사용자 ID로 강제 대입
+    const fixedSenderId = tokenUserId;
+    
     if (tokenUserId !== requestSenderId) {
-      return NextResponse.json({ error: '토큰 사용자와 발신자 ID 불일치' }, { status: 403 });
+      console.log("⚠️ 토큰 사용자와 발신자 ID 불일치 - 강제 대입됨");
     }
 
     let finalReceiverId = receiverId ? parseInt(receiverId.toString()) : null;
@@ -87,7 +94,7 @@ export async function POST(request: NextRequest) {
       .from('messages')
       .insert({
         content,
-        sender_id: requestSenderId,
+        sender_id: fixedSenderId,
         receiver_id: finalReceiverId,
         room_id: roomId,
         purchase_id: purchaseId ?? null,
