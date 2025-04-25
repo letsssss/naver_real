@@ -290,8 +290,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       checkAuthStatus();
     }
     
-    // 보호된 라우트 목록
-    const protectedRoutes = ['/proxy-ticketing', '/ticket-cancellation', '/tickets'];
+    // 보호된 라우트 목록 - PROTECTED_ROUTES 상수 사용
+    const protectedRoutes = PROTECTED_ROUTES;
     
     // 현재 경로가 보호된 라우트인 경우 세션 확인
     if (protectedRoutes.some(route => pathname?.startsWith(route))) {
