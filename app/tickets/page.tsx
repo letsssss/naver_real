@@ -12,6 +12,7 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ComingSoonDialog } from "@/components/coming-soon-dialog"
 
 const categories = [
   { name: "콘서트", href: "/category/콘서트" },
@@ -47,6 +48,7 @@ export default function TicketsPage() {
   const [availableTickets, setAvailableTickets] = useState<AvailableTicket[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingAvailable, setIsLoadingAvailable] = useState(true)
+  const [showComingSoon, setShowComingSoon] = useState(true)
   const router = useRouter()
   const { user, isLoading: authLoading, logout } = useAuth()
 
@@ -352,6 +354,11 @@ export default function TicketsPage() {
 
   return (
     <div className="min-h-screen">
+      <ComingSoonDialog 
+        isOpen={showComingSoon} 
+        onClose={() => setShowComingSoon(false)}
+        title="티켓 구매/판매 서비스 오픈 예정"
+      />
       <header className="w-full bg-white shadow-sm">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
