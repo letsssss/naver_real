@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
 
     // 2️⃣ 메시지 저장
     const messageInsert = await supabase
+      .schema('public')
       .from('messages')
       .insert({
         content,
@@ -221,6 +222,7 @@ export async function GET(request: NextRequest) {
       
       if (unreadMessageIds.length > 0) {
         await supabase
+          .schema('public')
           .from('messages')
           .update({ is_read: true })
           .in('id', unreadMessageIds);

@@ -108,6 +108,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
         setMessages(formatted);
 
         await supabase
+          .schema('public')
           .from('messages')
           .update({ is_read: true })
           .eq('room_id', roomId)
@@ -157,6 +158,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
     console.log("💬 메시지 내용:", newMessage);
 
     const { data, error } = await supabase
+      .schema('public')
       .from('messages')
       .insert({
         content: newMessage,
