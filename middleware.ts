@@ -14,10 +14,11 @@ const devToken = 'dev-test-token';
 
 // ✅ 보호 경로 목록
 const PROTECTED_ROUTES = [
-  '/proxy-ticketing',
-  '/ticket-cancellation',
-  '/tickets',
   '/mypage',
+  '/sell',
+  '/cart',
+  '/write-post',
+  '/user-info'
 ];
 
 // ✅ 보호된 API 경로
@@ -39,7 +40,7 @@ export async function middleware(req: NextRequest) {
   console.log('[MW] Supabase 세션:', session);
 
   // 보호된 라우트 목록
-  const protectedRoutes = ['/tickets', '/proxy-ticketing', '/ticket-cancellation', '/mypage'];
+  const protectedRoutes = PROTECTED_ROUTES;
   const isProtectedRoute = protectedRoutes.some(route => req.nextUrl.pathname.startsWith(route));
 
   if (isProtectedRoute && !session) {
@@ -55,10 +56,11 @@ export async function middleware(req: NextRequest) {
 // ✅ App Router용 matcher 설정 - 정규식 오류 수정
 export const config = {
   matcher: [
-    '/tickets/:path*',
-    '/proxy-ticketing/:path*',
-    '/ticket-cancellation/:path*',
     '/mypage/:path*',
+    '/sell/:path*',
+    '/cart/:path*',
+    '/write-post/:path*',
+    '/user-info/:path*',
     '/api/:path*'
   ],
 }; 
