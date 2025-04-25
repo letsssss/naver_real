@@ -137,6 +137,8 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
   const handleSendMessage = async () => {
     if (!currentUser || !newMessage.trim()) return;
 
+    console.log("📩 전송하는 user:", currentUser.id);
+    
     const tempId = Date.now().toString();
     const tempMessage: Message = {
       id: tempId,
@@ -151,6 +153,9 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
     setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
 
+    console.log("🔥 sender_id:", currentUser.id);
+    console.log("💬 메시지 내용:", newMessage);
+
     const { data, error } = await supabase
       .from('messages')
       .insert({
@@ -164,6 +169,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
       .single();
 
     if (error) {
+      console.error("❌ 메시지 전송 오류:", error);
       setMessages(prev =>
         prev.map(msg =>
           msg.clientId === tempId ? { ...msg, status: 'failed' } : msg
@@ -171,6 +177,8 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
       );
       return;
     }
+
+    console.log("✅ 메시지 전송 성공:", data);
 
     setMessages(prev =>
       prev.map(msg =>
