@@ -11,23 +11,113 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 
+// 임시 판매자 데이터
+const sellerData = {
+  id: "seller123",
+  username: "티켓마스터",
+  joinDate: "2022-05-15",
+  profileImage: "/placeholder.svg?height=200&width=200",
+  rating: 4.8,
+  reviewCount: 56,
+  responseRate: 98,
+  responseTime: "평균 30분 이내",
+  successfulSales: 124,
+  verificationBadges: ["본인인증", "계좌인증", "휴대폰인증"],
+  description: "안녕하세요! 항상 정확하고 빠른 거래를 약속드립니다. 궁금한 점이 있으시면 언제든지 문의해주세요.",
+  // 추가된 성공확률 정보
+  proxyTicketingSuccessRate: 98.5,
+  cancellationTicketingSuccessRate: 97.2,
+  totalProxyTicketings: 87,
+  totalCancellationTicketings: 63,
+}
+
+// 임시 리뷰 데이터
+const reviewsData = [
+  {
+    id: 1,
+    reviewer: "콘서트러버",
+    rating: 5,
+    date: "2024-02-15",
+    content: "정말 빠른 응답과 친절한 대응 감사합니다. 티켓도 약속한 시간에 정확히 전달해주셨어요!",
+    ticketInfo: "세븐틴 콘서트 - VIP석",
+    helpful: 12,
+  },
+  {
+    id: 2,
+    reviewer: "음악팬",
+    rating: 5,
+    date: "2024-01-20",
+    content: "두 번째 거래인데 역시 믿을 수 있는 판매자입니다. 다음에도 또 거래하고 싶어요.",
+    ticketInfo: "아이유 콘서트 - R석",
+    helpful: 8,
+  },
+  {
+    id: 3,
+    reviewer: "공연매니아",
+    rating: 4,
+    date: "2023-12-05",
+    content: "전반적으로 만족스러운 거래였습니다. 티켓 상태도 좋았고 설명대로였어요.",
+    ticketInfo: "뮤지컬 라이온킹 - S석",
+    helpful: 5,
+  },
+]
+
+// 임시 판매 중인 티켓 데이터
+const activeListingsData = [
+  {
+    id: 1,
+    title: "세븐틴 'FOLLOW' TO SEOUL",
+    date: "2024.03.20",
+    time: "19:00",
+    venue: "잠실종합운동장 주경기장",
+    price: 110000,
+    image: "/placeholder.svg?height=150&width=300",
+  },
+  {
+    id: 2,
+    title: "아이유 콘서트",
+    date: "2024.05.01",
+    time: "18:00",
+    venue: "올림픽공원 체조경기장",
+    price: 99000,
+    image: "/placeholder.svg?height=150&width=300",
+  },
+]
+
 export default function SellerProfile() {
   const params = useParams()
   const [activeTab, setActiveTab] = useState("reviews")
-  const [seller, setSeller] = useState<any>(null)
-  const [reviews, setReviews] = useState<any[]>([])
-  const [activeListings, setActiveListings] = useState<any[]>([])
+  const [seller, setSeller] = useState(sellerData)
+  const [reviews, setReviews] = useState(reviewsData)
+  const [activeListings, setActiveListings] = useState(activeListingsData)
 
   useEffect(() => {
     const fetchSellerData = async () => {
       try {
         const res = await fetch(`/api/seller/${params.id}`)
         const result = await res.json()
-        setSeller(result.seller)
-        setReviews(result.reviews || [])
-        setActiveListings(result.activeListings || [])
+        
+        // API 응답이 성공적인 경우에만 상태 업데이트
+        if (result.seller) {
+          setSeller({
+            ...sellerData, // 기존 데이터 구조 유지
+            ...result.seller, // API 데이터로 덮어쓰기
+            // API 응답과 UI 데이터 구조 매핑
+            proxyTicketingSuccessRate: result.seller.proxy_ticketing_success,
+            cancellationTicketingSuccessRate: result.seller.cancellation_ticketing_success,
+            totalProxyTicketings: result.seller.proxy_ticketing_total,
+            totalCancellationTicketings: result.seller.cancellation_ticketing_total,
+          })
+        }
+        if (result.reviews) {
+          setReviews(result.reviews)
+        }
+        if (result.activeListings) {
+          setActiveListings(result.activeListings)
+        }
       } catch (err) {
         console.error("❌ 판매자 정보 불러오기 실패:", err)
+        // 에러 발생 시 기본 데이터 유지
       }
     }
 
@@ -37,9 +127,9 @@ export default function SellerProfile() {
   }, [params.id])
 
   const handleHelpfulClick = (reviewId: number) => {
-    setReviews(reviews.map((review) =>
+    setReviews(reviews.map((review) => (
       review.id === reviewId ? { ...review, helpful: review.helpful + 1 } : review
-    ))
+    )))
   }
 
   if (!seller) return <div className="p-10 text-center text-gray-500">판매자 정보를 불러오는 중입니다...</div>
@@ -109,17 +199,17 @@ export default function SellerProfile() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-medium text-blue-800">대리티켓팅</h3>
                       <span className="text-xl font-bold text-blue-600">
-                        {seller.proxy_ticketing_success || 0}%
+                        {seller.proxyTicketingSuccessRate}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-blue-600 h-2.5 rounded-full"
-                        style={{ width: `${seller.proxy_ticketing_success || 0}%` }}
+                        style={{ width: `${seller.proxyTicketingSuccessRate}%` }}
                       ></div>
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
-                      총 {seller.proxy_ticketing_total || 0}건 진행
+                      총 {seller.totalProxyTicketings}건 진행
                     </p>
                   </div>
 
@@ -127,17 +217,17 @@ export default function SellerProfile() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-medium text-green-800">취켓팅</h3>
                       <span className="text-xl font-bold text-green-600">
-                        {seller.cancellation_ticketing_success || 0}%
+                        {seller.cancellationTicketingSuccessRate}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-green-600 h-2.5 rounded-full"
-                        style={{ width: `${seller.cancellation_ticketing_success || 0}%` }}
+                        style={{ width: `${seller.cancellationTicketingSuccessRate}%` }}
                       ></div>
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
-                      총 {seller.cancellation_ticketing_total || 0}건 진행
+                      총 {seller.totalCancellationTicketings}건 진행
                     </p>
                   </div>
                 </div>
