@@ -13,8 +13,12 @@ interface ComingSoonDialogProps {
 export function ComingSoonDialog({ isOpen, onClose, title = "서비스 오픈 예정" }: ComingSoonDialogProps) {
   const router = useRouter()
 
+  const handleClose = () => {
+    router.push("/")
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-center text-xl font-bold">{title}</DialogTitle>
@@ -25,7 +29,7 @@ export function ComingSoonDialog({ isOpen, onClose, title = "서비스 오픈 �
             <br />
             더 나은 서비스로 곧 찾아뵙겠습니다.
           </p>
-          <Button onClick={() => router.push("/")} className="w-full">
+          <Button onClick={handleClose} className="w-full">
             메인으로 돌아가기
           </Button>
         </div>
