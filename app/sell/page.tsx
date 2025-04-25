@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,6 +51,7 @@ const concertData: Concert[] = [
 ]
 
 export default function SellPage() {
+  const { user, isLoading } = useAuth()
   const router = useRouter()
   const [concertTitle, setConcertTitle] = useState("")
   // 날짜의 초기값을 오늘 날짜로 설정
@@ -70,39 +72,12 @@ export default function SellPage() {
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
 
   useEffect(() => {
-    // 컴포넌트 마운트 시 로그인 상태 확인
-    const checkAuthStatus = async () => {
-      try {
-        // Supabase 프로젝트 ID와 토큰 키
-        const supabaseProjectId = 'jdubrjczdyqqtsppojgu';
-        const tokenKey = `sb-${supabaseProjectId}-auth-token`;
-        
-        // localStorage에서 토큰 데이터 확인
-        const tokenData = localStorage.getItem(tokenKey);
-        
-        if (!tokenData) {
-          // 토큰이 없으면 로그인되지 않은 상태로 간주
-          toast({
-            title: "로그인 필요",
-            description: "티켓을 판매하려면 로그인이 필요합니다.",
-            variant: "destructive",
-            duration: 3000,
-          });
-          
-          // 로그인 페이지로 리다이렉트
-          setTimeout(() => {
-            router.push('/login?callbackUrl=/sell');
-          }, 2000);
-        } else {
-          console.log('로그인 상태 확인됨: 인증 토큰이 존재합니다.');
-        }
-      } catch (error) {
-        console.error("인증 상태 확인 오류:", error);
-      }
-    };
-    
-    checkAuthStatus();
-  }, [router, toast]);
+    if (!isLoading && !user) {
+      router.replace("/login?callbackUrl=/sell")
+    }
+  }, [user, isLoading, router])
+
+  if (isLoading || !user) return null
 
   const addSection = () => {
     setSections([...sections, { id: sections.length + 1, name: "", price: "" }])
@@ -122,14 +97,14 @@ export default function SellPage() {
 
   const updateSectionPrice = (index: number, price: string) => {
     // 모든 숫자가 아닌 문자 제거
-    const numericValue = price.replace(/[^\d]/g, '');
+    const numericValue = price.replace(/[^\d]/g, '')
     
     // 천단위 구분 적용
-    const formattedValue = numericValue === '' ? '' : Number(numericValue).toLocaleString();
+    const formattedValue = numericValue === '' ? '' : Number(numericValue).toLocaleString()
     
-    const newSections = [...sections];
-    newSections[index].price = formattedValue;
-    setSections(newSections);
+    const newSections = [...sections]
+    newSections[index].price = formattedValue
+    setSections(newSections)
   }
 
   // 날짜 관련 함수 추가
@@ -218,13 +193,13 @@ export default function SellPage() {
 
     try {
       // 첫 번째 날짜를 주요 날짜로 사용
-      const primaryDate = concertDates[0]?.date || "";
+      const primaryDate = concertDates[0]?.date || ""
       
       // 모든 날짜를 텍스트로 포맷팅
-      const formattedDates = concertDates.map(d => d.date).join(', ');
+      const formattedDates = concertDates.map(d => d.date).join(', ')
       
       // 모든 섹션을 텍스트로 포맷팅
-      const formattedSections = sections.map(s => `${s.name}: ${s.price}원`).join('\n');
+      const formattedSections = sections.map(s => `${s.name}: ${s.price}원`).join('\n')
       
       // 판매 데이터 준비
       const saleData = {
@@ -249,29 +224,29 @@ export default function SellPage() {
         // 문자열을 숫자로 변환하여 서버에 전송 (첫 번째 섹션 가격 사용)
         price: Number(sections[0].price.replace(/[^0-9]/g, '')), // 모든 비숫자 문자 제거하고 변환
         ticketPrice: Number(sections[0].price.replace(/[^0-9]/g, '')), // 데이터베이스의 ticketPrice 필드용
-      };
+      }
 
-      console.log("제출할 판매 데이터:", saleData);
+      console.log("제출할 판매 데이터:", saleData)
 
       // Supabase 프로젝트 ID
-      const supabaseProjectId = 'jdubrjczdyqqtsppojgu';
-      const tokenKey = `sb-${supabaseProjectId}-auth-token`;
+      const supabaseProjectId = 'jdubrjczdyqqtsppojgu'
+      const tokenKey = `sb-${supabaseProjectId}-auth-token`
       
       // localStorage에서 토큰을 가져오기
-      let authToken = '';
+      let authToken = ''
       try {
-        const tokenData = localStorage.getItem(tokenKey);
+        const tokenData = localStorage.getItem(tokenKey)
         if (tokenData) {
           // JSON 형식으로 저장된 경우 파싱
-          const parsedToken = JSON.parse(tokenData);
+          const parsedToken = JSON.parse(tokenData)
           // access_token 추출
-          authToken = parsedToken.access_token || '';
-          console.log('토큰을 성공적으로 추출했습니다.');
+          authToken = parsedToken.access_token || ''
+          console.log('토큰을 성공적으로 추출했습니다.')
         } else {
-          console.warn('로컬 스토리지에 토큰이 없습니다.');
+          console.warn('로컬 스토리지에 토큰이 없습니다.')
         }
       } catch (error) {
-        console.error('토큰 파싱 오류:', error);
+        console.error('토큰 파싱 오류:', error)
       }
 
       // 서버에 판매 데이터 저장 (API 호출)
@@ -282,47 +257,47 @@ export default function SellPage() {
           'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify(saleData),
-      });
+      })
 
-      const result = await response.json();
-      console.log("서버 응답:", result);
+      const result = await response.json()
+      console.log("서버 응답:", result)
       
       if (!response.ok) {
         // 서버에서 반환된 구체적인 오류 메시지 확인
-        console.error("서버 응답 상태:", response.status, response.statusText);
-        console.error("서버 응답 전체:", result);
+        console.error("서버 응답 상태:", response.status, response.statusText)
+        console.error("서버 응답 전체:", result)
         
         // 오류 메시지 구성
-        let errorMessage = '판매 등록에 실패했습니다.';
-        let errorDetails = '';
+        let errorMessage = '판매 등록에 실패했습니다.'
+        let errorDetails = ''
         
         if (result) {
           // 응답 객체에서 오류 정보 추출
           if (result.error) {
-            errorMessage = result.error;
+            errorMessage = result.error
           }
           
           // 오류 세부 정보가 있는 경우
           if (result.details) {
             if (typeof result.details === 'string') {
-              errorDetails = result.details;
+              errorDetails = result.details
             } else {
-              errorDetails = JSON.stringify(result.details, null, 2);
+              errorDetails = JSON.stringify(result.details, null, 2)
             }
-            console.error("오류 세부 정보:", result.details);
+            console.error("오류 세부 정보:", result.details)
           }
           
           // 코드 정보가 있는 경우
           if (result.code) {
-            errorDetails += `\n오류 코드: ${result.code}`;
+            errorDetails += `\n오류 코드: ${result.code}`
           }
           
           // 여러 유효성 검사 오류가 있는 경우
           if (result.errors && Array.isArray(result.errors)) {
-            errorMessage = "유효성 검사 오류가 발생했습니다:";
+            errorMessage = "유효성 검사 오류가 발생했습니다:"
             errorDetails = result.errors.map((err: any) => 
               `- ${err.path || '필드'}: ${err.message || '알 수 없는 오류'}`
-            ).join('\n');
+            ).join('\n')
           }
         }
         
@@ -342,22 +317,22 @@ export default function SellPage() {
           ),
           variant: "destructive",
           duration: 10000, // 10초 동안 표시
-        });
+        })
         
-        throw new Error(errorMessage);
+        throw new Error(errorMessage)
       }
       
       // 성공 메시지 표시
       toast({
         title: "성공",
         description: "티켓 판매가 성공적으로 등록되었습니다.",
-      });
+      })
 
       // 마이페이지로 리다이렉트
-      router.push("/mypage");
+      router.push("/mypage")
     } catch (error) {
-      console.error("판매 등록 오류:", error);
-      console.error("오류 스택:", error instanceof Error ? error.stack : '스택 정보 없음');
+      console.error("판매 등록 오류:", error)
+      console.error("오류 스택:", error instanceof Error ? error.stack : '스택 정보 없음')
       
       // 이미 토스트가 표시되지 않은 경우에만 기본 오류 메시지 표시
       if (!(error instanceof Error && error.message !== '판매 등록에 실패했습니다.')) {
@@ -366,7 +341,7 @@ export default function SellPage() {
           description: error instanceof Error ? error.message : "판매 등록 중 오류가 발생했습니다.",
           variant: "destructive",
           duration: 5000,
-        });
+        })
       }
     }
   }
