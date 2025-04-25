@@ -11,113 +11,87 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 
-// 임시 판매자 데이터
-const sellerData = {
-  id: "seller123",
-  username: "티켓마스터",
-  joinDate: "2022-05-15",
-  profileImage: "/placeholder.svg?height=200&width=200",
-  rating: 4.8,
-  reviewCount: 56,
-  responseRate: 98,
-  responseTime: "평균 30분 이내",
-  successfulSales: 124,
-  verificationBadges: ["본인인증", "계좌인증", "휴대폰인증"],
-  description: "안녕하세요! 항상 정확하고 빠른 거래를 약속드립니다. 궁금한 점이 있으시면 언제든지 문의해주세요.",
-  // 추가된 성공확률 정보
-  proxyTicketingSuccessRate: 98.5,
-  cancellationTicketingSuccessRate: 97.2,
-  totalProxyTicketings: 87,
-  totalCancellationTicketings: 63,
+interface SellerData {
+  id: string
+  name: string
+  joinDate: string
+  profileImage: string
+  rating: number
+  reviewCount: number
+  responseRate: number
+  responseTime: string
+  successfulSales: number
+  verificationBadges: string[]
+  description: string
+  proxyTicketingSuccessRate: number
+  cancellationTicketingSuccessRate: number
+  totalProxyTicketings: number
+  totalCancellationTicketings: number
 }
 
-// 임시 리뷰 데이터
-const reviewsData = [
-  {
-    id: 1,
-    reviewer: "콘서트러버",
-    rating: 5,
-    date: "2024-02-15",
-    content: "정말 빠른 응답과 친절한 대응 감사합니다. 티켓도 약속한 시간에 정확히 전달해주셨어요!",
-    ticketInfo: "세븐틴 콘서트 - VIP석",
-    helpful: 12,
-  },
-  {
-    id: 2,
-    reviewer: "음악팬",
-    rating: 5,
-    date: "2024-01-20",
-    content: "두 번째 거래인데 역시 믿을 수 있는 판매자입니다. 다음에도 또 거래하고 싶어요.",
-    ticketInfo: "아이유 콘서트 - R석",
-    helpful: 8,
-  },
-  {
-    id: 3,
-    reviewer: "공연매니아",
-    rating: 4,
-    date: "2023-12-05",
-    content: "전반적으로 만족스러운 거래였습니다. 티켓 상태도 좋았고 설명대로였어요.",
-    ticketInfo: "뮤지컬 라이온킹 - S석",
-    helpful: 5,
-  },
-]
+interface Review {
+  id: number
+  reviewer: string
+  rating: number
+  date: string
+  content: string
+  ticketInfo: string
+  helpful: number
+}
 
-// 임시 판매 중인 티켓 데이터
-const activeListingsData = [
-  {
-    id: 1,
-    title: "세븐틴 'FOLLOW' TO SEOUL",
-    date: "2024.03.20",
-    time: "19:00",
-    venue: "잠실종합운동장 주경기장",
-    price: 110000,
-    image: "/placeholder.svg?height=150&width=300",
-  },
-  {
-    id: 2,
-    title: "아이유 콘서트",
-    date: "2024.05.01",
-    time: "18:00",
-    venue: "올림픽공원 체조경기장",
-    price: 99000,
-    image: "/placeholder.svg?height=150&width=300",
-  },
-]
+interface Ticket {
+  id: number
+  title: string
+  date: string
+  time: string
+  venue: string
+  price: number
+  image: string
+}
 
 export default function SellerProfile() {
   const params = useParams()
   const [activeTab, setActiveTab] = useState("reviews")
-  const [seller, setSeller] = useState(sellerData)
-  const [reviews, setReviews] = useState(reviewsData)
-  const [activeListings, setActiveListings] = useState(activeListingsData)
+  const [seller, setSeller] = useState<SellerData | null>(null)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [activeListings, setActiveListings] = useState<Ticket[]>([])
 
   useEffect(() => {
     const fetchSellerData = async () => {
       try {
         const res = await fetch(`/api/seller/${params.id}`)
         const result = await res.json()
-        
-        // API 응답이 성공적인 경우에만 상태 업데이트
+
         if (result.seller) {
+          const s = result.seller
           setSeller({
-            ...sellerData, // 기존 데이터 구조 유지
-            ...result.seller, // API 데이터로 덮어쓰기
-            // API 응답과 UI 데이터 구조 매핑
-            proxyTicketingSuccessRate: result.seller.proxy_ticketing_success,
-            cancellationTicketingSuccessRate: result.seller.cancellation_ticketing_success,
-            totalProxyTicketings: result.seller.proxy_ticketing_total,
-            totalCancellationTicketings: result.seller.cancellation_ticketing_total,
+            id: s.id,
+            name: s.name,
+            joinDate: new Date(s.created_at).toISOString().split("T")[0],
+            profileImage: s.avatar_url || "/placeholder.svg",
+            rating: s.rating ?? 0,
+            reviewCount: result.reviews?.length ?? 0,
+            responseRate: s.response_rate ?? 0,
+            responseTime: "응답 시간 비공개",
+            successfulSales: s.successful_sales ?? 0,
+            verificationBadges: [
+              s.verifications?.identity_verified && "본인인증",
+              s.verifications?.account_verified && "계좌인증",
+              s.verifications?.phone_verified && "휴대폰인증"
+            ].filter(Boolean) as string[],
+            description: s.description ?? "",
+            proxyTicketingSuccessRate: s.proxy_ticketing_success ?? 0,
+            cancellationTicketingSuccessRate: s.cancellation_ticketing_success ?? 0,
+            totalProxyTicketings: s.proxy_ticketing_total ?? 0,
+            totalCancellationTicketings: s.cancellation_ticketing_total ?? 0
           })
         }
-        if (result.reviews) {
-          setReviews(result.reviews)
-        }
-        if (result.activeListings) {
-          setActiveListings(result.activeListings)
-        }
+
+        if (result.reviews) setReviews(result.reviews)
+        if (result.activeListings) setActiveListings(result.activeListings)
+
       } catch (err) {
         console.error("❌ 판매자 정보 불러오기 실패:", err)
-        // 에러 발생 시 기본 데이터 유지
       }
     }
 
@@ -127,9 +101,9 @@ export default function SellerProfile() {
   }, [params.id])
 
   const handleHelpfulClick = (reviewId: number) => {
-    setReviews(reviews.map((review) => (
+    setReviews(reviews.map((review) =>
       review.id === reviewId ? { ...review, helpful: review.helpful + 1 } : review
-    )))
+    ))
   }
 
   if (!seller) return <div className="p-10 text-center text-gray-500">판매자 정보를 불러오는 중입니다...</div>
@@ -154,14 +128,14 @@ export default function SellerProfile() {
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
                   <Image
                     src={seller.profileImage || "/placeholder.svg"}
-                    alt={seller.username}
+                    alt={seller.name}
                     fill
                     className="object-cover"
                   />
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h1 className="text-2xl font-bold">{seller.username}</h1>
+                    <h1 className="text-2xl font-bold">{seller.name}</h1>
                     <div className="flex items-center text-yellow-500">
                       <Star className="h-5 w-5 fill-current" />
                       <span className="ml-1 font-medium">{seller.rating}</span>
@@ -185,7 +159,7 @@ export default function SellerProfile() {
                     </div>
                     <div>
                       <p className="text-gray-500">거래 성사</p>
-                      <p className="font-medium">{seller.successfulSales || 0}건</p>
+                      <p className="font-medium">{seller.successfulSales}건</p>
                     </div>
                   </div>
                 </div>
