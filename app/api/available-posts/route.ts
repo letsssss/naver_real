@@ -169,10 +169,17 @@ export async function GET(req: NextRequest) {
     // 작성자 ID 목록 추출 (중복 제거)
     const authorIds = [...new Set(formattedPosts.map(post => post.authorId).filter(Boolean))];
     
+    // 디버깅: authorId 확인
+    console.log('=== Author ID 디버깅 ===');
+    formattedPosts.forEach((post, index) => {
+      console.log(`[Post ${index}] ID: ${post.id}, AuthorId: ${post.authorId}, Title: ${post.title}`);
+    });
+    
     // 작성자 정보 조회
     let authorsMap: AuthorsMap = {};
     if (authorIds.length > 0) {
       console.log(`[사용 가능한 게시물 API] ${authorIds.length}명의 작성자 정보 조회 중...`);
+      console.log('조회할 작성자 ID 목록:', authorIds);
       
       const { data: authorsData, error: authorsError } = await adminSupabase
         .from('profiles')  // 프로필 테이블에서 작성자 정보 조회
@@ -182,6 +189,10 @@ export async function GET(req: NextRequest) {
       if (authorsError) {
         console.error("[사용 가능한 게시물 API] 작성자 정보 조회 오류:", authorsError);
       } else if (authorsData) {
+        // 디버깅: 조회된 프로필 정보 확인
+        console.log('=== 조회된 프로필 정보 ===');
+        console.log(authorsData);
+        
         // 작성자 정보를 맵으로 변환하여 빠르게 조회할 수 있도록 함
         authorsMap = authorsData.reduce<AuthorsMap>((acc, author) => {
           acc[author.id] = author;
@@ -194,36 +205,40 @@ export async function GET(req: NextRequest) {
     
     // 작성자 정보를 게시물에 통합
     const postsWithAuthors: PostWithAuthor[] = formattedPosts.map(post => {
-      // 작성자 ID로 작성자 정보 조회
-      const authorInfo = post.authorId ? authorsMap[post.authorId] : null;
+      const author = post.authorId ? authorsMap[post.authorId] : null;
       
-      // 최종 게시물 객체 구성
+      // 디버깅: 각 게시물의 작성자 정보 매핑 확인
+      console.log(`=== 게시물 ${post.id}의 작성자 정보 매핑 ===`);
+      console.log('AuthorId:', post.authorId);
+      console.log('Found Author:', author);
+      
       return {
         ...post,
-        author: authorInfo ? {
-          id: authorInfo.id,
-          name: authorInfo.name || '사용자',
-          email: authorInfo.email,
-          profileImage: authorInfo.avatar_url || null,
-          rating: authorInfo.rating || 4.5 // 기본 평점 설정
+        author: author ? {
+          id: author.id,
+          name: author.name,
+          email: author.email,
+          profileImage: author.avatar_url || null,
+          rating: author.rating || 0
         } : null
       };
     });
+
+    // 디버깅: 최종 응답 데이터 확인
+    console.log('=== 최종 응답 데이터 샘플 ===');
+    console.log('First post with author:', postsWithAuthors[0]);
     
     return addCorsHeaders(NextResponse.json({
       success: true,
-      posts: postsWithAuthors, // 작성자 정보가 포함된 게시물 반환
+      posts: postsWithAuthors,
       pagination: {
-        totalCount: totalCount,
-        totalPages: Math.ceil(totalCount / limit),
-        currentPage: page,
-        hasMore: offset + (posts?.length || 0) < totalCount
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit)
       },
-      filters: {
-        search: search || null
-      },
-      source: 'get_available_posts_function' // 데이터 소스 표시 업데이트
-    }, { status: 200 }));
+      source: 'get_available_posts'
+    }));
   } catch (error) {
     console.error("[사용 가능한 게시물 API] 오류:", error);
     

@@ -32,11 +32,13 @@ interface Post {
   eventVenue: string;
   ticketPrice: number;
   createdAt: string;
+  image?: string;
   author: {
     id: string;
     name: string;
     email: string;
-  };
+    rating?: number;
+  } | null;
 }
 
 // 인기 티켓 데이터 타입 정의
@@ -104,7 +106,7 @@ export default function TicketCancellationPage() {
       console.log("취켓팅 가능 티켓 불러오기 시작...")
       
       // API 호출을 available-posts로 변경
-      let apiUrl = '/api/available-posts' // 변경됨: /api/posts -> /api/available-posts
+      let apiUrl = '/api/available-posts'
       console.log("수정된 API 호출 (구매 가능한 게시물):", apiUrl)
       
       // 캐시 방지를 위한 타임스탬프 추가
@@ -119,7 +121,7 @@ export default function TicketCancellationPage() {
           'Expires': '0'
         },
         cache: 'no-store',
-        next: { revalidate: 0 } // 데이터 재검증 비활성화
+        next: { revalidate: 0 }
       })
       
       console.log("API 응답 상태:", response.status)
@@ -134,33 +136,19 @@ export default function TicketCancellationPage() {
         return;
       }
       
-      // 모든 게시물 검사
-      console.log("모든 게시물 세부 정보:", data.posts);
-      
-      // 각 게시물의 구조를 검사
-      data.posts.forEach((post: any, index: number) => {
-        console.log(`[게시물 ${index + 1}] ID: ${post.id}`);
-        console.log(`- 제목: ${post.title}`);
-        console.log(`- 카테고리: ${post.category || '카테고리 없음'}`);
-        console.log(`- 작성자: ${post.author?.name || '작성자 정보 없음'}`);
-        
-        // content가 JSON 문자열인 경우 파싱 시도
-        try {
-          if (typeof post.content === 'string' && (post.content.startsWith('{') || post.content.startsWith('['))) {
-            const contentObj = JSON.parse(post.content);
-            console.log(`- 콘텐츠: JSON 파싱 성공`, contentObj);
-          }
-        } catch (e) {
-          // JSON 파싱 실패는 무시
+      // 모든 게시물의 작성자 정보 디버깅
+      console.log("=== 게시물 작성자 정보 디버깅 ===");
+      data.posts.forEach((post: Post) => {
+        console.log(`[게시물 ${post.id}]`);
+        console.log('- 제목:', post.title);
+        console.log('- 작성자:', post.author);
+        if (post.author) {
+          console.log('  - ID:', post.author.id);
+          console.log('  - 이름:', post.author.name);
+          console.log('  - 평점:', post.author.rating);
         }
       });
       
-      // 모든 게시물의 카테고리 확인
-      const sampleCategories = [...new Set(data.posts.map((p: any) => p.category))].filter(Boolean)
-      console.log("발견된 카테고리 목록:", sampleCategories)
-      
-      // 모든 게시물 표시 (카테고리 필터 없이)
-      console.log("카테고리 필터 없이 모든 게시물 표시");
       setTickets(data.posts);
     } catch (err) {
       console.error("취켓팅 티켓 불러오기 오류:", err)
@@ -428,79 +416,86 @@ export default function TicketCancellationPage() {
               </div>
             ) : (
               // 실제 티켓 데이터 표시
-              tickets.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all transform hover:-translate-y-1"
-                >
-                  <div className="relative">
-                    <Link href={`/ticket-cancellation/${ticket.id}`}>
-                      <Image
-                        src={"/placeholder.svg"}
-                        alt={ticket.title}
-                        width={400}
-                        height={200}
-                        className="w-full h-48 object-cover"
-                      />
-                    </Link>
-                    <div className="absolute top-3 right-3">
-                      <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-green-500 text-white hover:bg-green-600">
-                        성공률 98%
+              tickets.map((ticket) => {
+                // 디버깅: 작성자 정보 로깅
+                console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
+                console.log('전체 티켓 데이터:', ticket);
+                console.log('작성자 정보:', ticket.author);
+                
+                return (
+                  <div
+                    key={ticket.id}
+                    className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all transform hover:-translate-y-1"
+                  >
+                    <div className="relative">
+                      <Link href={`/ticket-cancellation/${ticket.id}`}>
+                        <Image
+                          src={"/placeholder.svg"}
+                          alt={ticket.title}
+                          width={400}
+                          height={200}
+                          className="w-full h-48 object-cover"
+                        />
+                      </Link>
+                      <div className="absolute top-3 right-3">
+                        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-green-500 text-white hover:bg-green-600">
+                          성공률 98%
+                        </div>
+                      </div>
+                      <div className="absolute bottom-3 left-3">
+                        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
+                          {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '날짜 정보 없음'}
+                        </div>
                       </div>
                     </div>
-                    <div className="absolute bottom-3 left-3">
-                      <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
-                        {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '날짜 정보 없음'}
+                    <div className="p-4">
+                      <Link href={`/ticket-cancellation/${ticket.id}`}>
+                        <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
+                      </Link>
+                      <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>판매자:</span>
+                        {ticket.author ? (
+                          <Link
+                            href={`/seller/${ticket.author.id}`}
+                            className="text-blue-600 hover:underline flex items-center"
+                          >
+                            {ticket.author.name}
+                            <div className="flex items-center ml-2 text-yellow-500">
+                              <Star className="h-3 w-3 fill-current" />
+                              <span className="text-xs ml-0.5">{ticket.author.rating?.toFixed(1) || '4.5'}</span>
+                            </div>
+                          </Link>
+                        ) : (
+                          <span className="text-gray-500">판매자 정보 없음</span>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <Link href={`/ticket-cancellation/${ticket.id}`}>
-                      <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
-                    </Link>
-                    <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-                      <span>판매자:</span>
-                      {ticket.author ? (
-                        <Link
-                          href={`/seller/${ticket.author.id}`}
-                          className="text-blue-600 hover:underline flex items-center"
+                      <div className="space-y-2 text-sm text-gray-500 mb-3">
+                        <div className="flex items-center">
+                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                          <span>{ticket.eventDate || '날짜 정보 없음'}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                          <span className="line-clamp-1">{ticket.eventVenue || '장소 정보 없음'}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="font-medium text-[#FF2F6E] text-lg">{Number(getTicketPrice(ticket)).toLocaleString()}원</span>
+                        </div>
+                        <Button
+                          className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium w-28 flex items-center justify-center transition-all"
+                          onClick={() => router.push(`/ticket-cancellation/${ticket.id}`)}
                         >
-                          {ticket.author.name}
-                          <div className="flex items-center ml-2 text-yellow-500">
-                            <Star className="h-3 w-3 fill-current" />
-                            <span className="text-xs ml-0.5">4.5</span>
-                          </div>
-                        </Link>
-                      ) : (
-                        <span className="text-gray-500">판매자 정보 없음</span>
-                      )}
-                    </div>
-                    <div className="space-y-2 text-sm text-gray-500 mb-3">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                        <span>{ticket.eventDate || '날짜 정보 없음'}</span>
+                          신청하기
+                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                        <span className="line-clamp-1">{ticket.eventVenue || '장소 정보 없음'}</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="font-medium text-[#FF2F6E] text-lg">{Number(getTicketPrice(ticket)).toLocaleString()}원</span>
-                      </div>
-                      <Button
-                        className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium w-28 flex items-center justify-center transition-all"
-                        onClick={() => router.push(`/ticket-cancellation/${ticket.id}`)}
-                      >
-                        신청하기
-                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                      </Button>
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
