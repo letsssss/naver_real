@@ -117,9 +117,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // 보호된 경로 목록
 const PROTECTED_ROUTES = [
-  '/proxy-ticketing',
-  '/ticket-cancellation',
-  '/tickets',
+  // 실제 로그인이 필요한 경로만 남깁니다
+  '/mypage',
+  '/sell',
+  '/cart',
+  '/write-post',
+  '/user-info'
 ];
 
 // 스토리지에서 초기 사용자 정보 가져오기
