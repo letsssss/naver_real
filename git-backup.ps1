@@ -1,3 +1,8 @@
+# UTF-8 인코딩 설정
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+chcp 65001 | Out-Null
+
 # 깃허브 백업 스크립트
 Write-Host "🚀 깃허브 백업 시작..." -ForegroundColor Green
 
