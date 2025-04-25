@@ -1,7 +1,11 @@
-# UTF-8 인코딩 설정
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# 인코딩 설정 강화
+$PSDefaultParameterValues['*:Encoding'] = 'UTF8'
 $OutputEncoding = [System.Text.Encoding]::UTF8
-chcp 65001 | Out-Null
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "UTF-8"
+
+# 콘솔 코드페이지 변경
+$null = & cmd /c chcp 65001
 
 # 깃허브 백업 스크립트
 Write-Host "🚀 깃허브 백업 시작..." -ForegroundColor Green
