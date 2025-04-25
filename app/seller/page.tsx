@@ -53,6 +53,8 @@ export default function SellerRedirect() {
 
         const data = await response.json();
         if (data.success && data.user && data.user.id) {
+          // 사용자 정보를 로컬 스토리지에 저장
+          localStorage.setItem('user', JSON.stringify(data.user));
           return data.user.id.toString();
         } else {
           throw new Error('사용자 ID를 찾을 수 없습니다.');

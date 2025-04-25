@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!finalReceiverId) {
-        finalReceiverId = buyer_id === requestSenderId ? seller_id : buyer_id;
+        finalReceiverId = buyer_id === fixedSenderId ? seller_id : buyer_id;
       }
     }
 
