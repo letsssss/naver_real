@@ -17,12 +17,7 @@ export async function GET(
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from("purchases")
-    .select(`
-      *,
-      post:posts(*),
-      buyer:users!buyer_id(*),
-      seller:users!seller_id(*)
-    `)
+    .select("*")
     .eq("order_number", order_number)
     .single()
 
