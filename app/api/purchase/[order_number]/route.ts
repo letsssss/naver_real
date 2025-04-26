@@ -15,10 +15,14 @@ export async function GET(
   console.log('✅ SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 10))
 
   const supabase = createAdminClient()
-  // join 없이 purchases만 조회
   const { data, error } = await supabase
     .from("purchases")
-    .select("*")
+    .select(`
+      *,
+      post:posts(*),
+      buyer:users!buyer_id(*),
+      seller:users!seller_id(*)
+    `)
     .eq("order_number", order_number)
     .single()
 
