@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowLeft } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import supabase from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -217,44 +218,33 @@ export default function SellPage() {
             available: true
           }))
         }),
-        category: "TICKET_CANCELLATION", // 카테고리를 TICKET_CANCELLATION으로 변경
-        type: "TICKET_SALE", // 티켓 판매 타입으로 설정
-        concertDate: primaryDate, // 첫 번째 날짜 정보
-        location: concertVenue || concertTitle, // 장소 정보
-        // 문자열을 숫자로 변환하여 서버에 전송 (첫 번째 섹션 가격 사용)
-        price: Number(sections[0].price.replace(/[^0-9]/g, '')), // 모든 비숫자 문자 제거하고 변환
-        ticketPrice: Number(sections[0].price.replace(/[^0-9]/g, '')), // 데이터베이스의 ticketPrice 필드용
+        category: "TICKET_CANCELLATION",
+        type: "TICKET_SALE",
+        concertDate: primaryDate,
+        location: concertVenue || concertTitle,
+        price: Number(sections[0].price.replace(/[^0-9]/g, '')),
+        ticketPrice: Number(sections[0].price.replace(/[^0-9]/g, '')),
       }
 
       console.log("제출할 판매 데이터:", saleData)
 
-      // Supabase 프로젝트 ID
-      const supabaseProjectId = 'jdubrjczdyqqtsppojgu'
-      const tokenKey = `sb-${supabaseProjectId}-auth-token`
-      
-      // localStorage에서 토큰을 가져오기
-      let authToken = ''
-      try {
-        const tokenData = localStorage.getItem(tokenKey)
-        if (tokenData) {
-          // JSON 형식으로 저장된 경우 파싱
-          const parsedToken = JSON.parse(tokenData)
-          // access_token 추출
-          authToken = parsedToken.access_token || ''
-          console.log('토큰을 성공적으로 추출했습니다.')
-        } else {
-          console.warn('로컬 스토리지에 토큰이 없습니다.')
-        }
-      } catch (error) {
-        console.error('토큰 파싱 오류:', error)
+      // ✅ Supabase 세션에서 직접 토큰 가져오기
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      if (!token) {
+        console.error('세션에서 토큰을 찾을 수 없습니다.')
+        throw new Error('로그인이 필요합니다.')
       }
+
+      console.log('Supabase 세션 토큰 존재 여부:', !!token)
 
       // 서버에 판매 데이터 저장 (API 호출)
       const response = await fetch('/api/posts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(saleData),
       })

@@ -325,37 +325,70 @@ export async function getAuthenticatedUser(request: NextRequest) {
  * @returns 인증된 사용자 객체 또는 null
  */
 export async function validateRequestToken(req: Request | NextRequest): Promise<{ userId: string; authenticated: boolean; message?: string }> {
-  console.log("🧪 [TOKEN DEBUG] validateRequestToken() 진입");
-  console.log("🧪 [TOKEN DEBUG] Method:", req.method);
-
-  const headerToken = getTokenFromHeaders(req.headers);
-  const cookieToken = getTokenFromCookies(req);
-
-  console.log("🧪 [TOKEN DEBUG] Header token:", headerToken?.slice(0, 10));
-  console.log("🧪 [TOKEN DEBUG] Cookie token:", cookieToken?.slice(0, 10));
-
-  const token = headerToken || cookieToken;
-  console.log("🧩 [AUTH] 추출된 토큰:", token?.substring?.(0, 40)); // 앞부분만
-
-  if (!token) {
-    console.log("🧩 [AUTH] 토큰 없음");
-    return { userId: '', authenticated: false, message: '토큰이 없습니다' };
-  }
-
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    console.log("🧩 [AUTH] Supabase 응답:", { user: user?.id, error: error?.message });
-
-    if (error || !user) {
-      console.log("🧩 [AUTH] Supabase 인증 실패");
-      return { userId: '', authenticated: false, message: error?.message || '사용자를 찾을 수 없습니다' };
+    // 헤더에서 토큰 추출
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.warn('Authorization 헤더가 없습니다.');
+      return { userId: '', authenticated: false, message: '인증 토큰이 없습니다.' };
     }
 
-    console.log("🧩 [AUTH] 인증 성공:", user.id);
-    return { userId: user.id, authenticated: true };
+    // Bearer 토큰 형식 확인
+    const [bearer, token] = authHeader.split(' ');
+    if (bearer !== 'Bearer' || !token) {
+      console.warn('잘못된 토큰 형식:', authHeader);
+      return { userId: '', authenticated: false, message: '잘못된 토큰 형식입니다.' };
+    }
+
+    try {
+      // 1. Supabase 토큰 검증 시도
+      const { data: { user }, error: supabaseError } = await supabase.auth.getUser(token);
+      
+      if (!supabaseError && user) {
+        console.log('Supabase 토큰 검증 성공:', user.id);
+        return {
+          userId: user.id,
+          authenticated: true
+        };
+      }
+    } catch (supabaseError) {
+      console.warn('Supabase 토큰 검증 실패, 다른 방식 시도:', supabaseError);
+    }
+
+    // 2. 커스텀 JWT 검증 시도
+    const decodedToken = await verifyToken(token);
+    if (decodedToken && (decodedToken.userId || decodedToken.sub)) {
+      console.log('커스텀 JWT 검증 성공:', decodedToken.userId || decodedToken.sub);
+      return {
+        userId: decodedToken.userId || decodedToken.sub,
+        authenticated: true
+      };
+    }
+
+    // 3. 개발 환경에서 추가 검증
+    if (isDevelopment) {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (!error && session?.user) {
+          console.log('개발 환경: 세션에서 사용자 ID 사용:', session.user.id);
+          return {
+            userId: session.user.id,
+            authenticated: true
+          };
+        }
+      } catch (sessionError) {
+        console.error('개발 환경: 세션 확인 오류:', sessionError);
+      }
+    }
+
+    return { userId: '', authenticated: false, message: '유효하지 않은 토큰입니다.' };
   } catch (error) {
-    console.error("🧩 [AUTH] 예외 발생:", error);
-    return { userId: '', authenticated: false, message: '인증 처리 중 오류가 발생했습니다' };
+    console.error('토큰 검증 중 오류 발생:', error);
+    return { 
+      userId: '', 
+      authenticated: false, 
+      message: error instanceof Error ? error.message : '토큰 검증 중 오류가 발생했습니다.' 
+    };
   }
 }
 
