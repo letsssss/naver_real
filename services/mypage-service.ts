@@ -199,17 +199,14 @@ export const fetchOngoingSales = async (
     
     // 상태에 따라 정렬 - 취켓팅 진행중인 상품이 먼저 오도록
     const sortedSalesData = [...salesData].sort((a, b) => a.sortPriority - b.sortPriority);
-    
+
+    // 🔥 거래완료 상품 제외
+    const filteredSales = sortedSalesData.filter(item => item.status !== '거래완료');
+
     // 상태 업데이트
     setSaleStatus(newSaleStatus);
-      
-    console.log("변환된 판매 데이터:", salesData);
-    console.log("정렬된 판매 데이터:", sortedSalesData);
-    console.log("판매 상태별 카운트:", newSaleStatus);
-    console.log(`전체 상품 수: ${salesData.length}`);
-    console.log(`판매 가능한 상품(ACTIVE) 수: ${newSaleStatus.판매중인상품}`);
-    setOriginalSales(sortedSalesData);
-    setOngoingSales(sortedSalesData);
+    setOriginalSales(filteredSales);
+    setOngoingSales(filteredSales);
   } catch (error) {
     console.error('판매 목록 로딩 오류:', error);
     toast.error('판매 목록을 불러오는데 실패했습니다.');
