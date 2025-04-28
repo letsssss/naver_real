@@ -24,7 +24,94 @@ export const fetchOngoingSales = async (
     // 인증 토큰 가져오기
     const authToken = getAuthToken();
     
-    // 요청 URL에 userId 및 타임스탬프 추가 (캐시 방지)
+    // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기 (구매 현황 우선)
+    const timestamp = Date.now();
+    const userId = user?.id || '';
+    console.log(`판매자 구매 내역 요청: ${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
+    
+    const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authToken ? `Bearer ${authToken}` : '',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      },
+      credentials: 'include' // 쿠키 포함
+    });
+    
+    console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);
+    
+    let purchasesByPostId: Record<number, any> = {};
+    let salesWithPurchaseInfo: any[] = [];
+    
+    if (purchaseResponse.ok) {
+      const purchaseData = await purchaseResponse.json();
+      console.log("판매자 구매 내역 데이터:", purchaseData);
+      
+      if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
+        // 게시글 ID별로 구매 정보를 인덱싱
+        purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
+          if (purchase.postId || purchase.post_id) {
+            // post_id 또는 postId 필드 처리
+            const postId = purchase.postId || purchase.post_id;
+            acc[postId] = purchase;
+          }
+          return acc;
+        }, {});
+        
+        // 구매 정보가 있는 판매 상품 목록 생성 - 구매 현황 방식과 유사
+        salesWithPurchaseInfo = purchaseData.purchases.map((purchase: any) => {
+          const postId = purchase.postId || purchase.post_id;
+          const post = purchase.post || {};
+          
+          // 판매 데이터 기본 형식 생성
+          const status = purchase.status || 'ACTIVE';
+          const statusText = getStatusText(status);
+          
+          // 날짜 처리
+          const dateStr = purchase.created_at || post.created_at || new Date().toISOString();
+          const date = new Date(dateStr);
+          const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
+          
+          // 가격 처리
+          const priceValue = post.ticket_price || post.ticketPrice || post.price || 0;
+          const formattedPrice = priceValue 
+            ? `${Number(priceValue).toLocaleString()}원` 
+            : '가격 정보 없음';
+            
+          return {
+            id: postId,
+            title: post.title || post.eventName || purchase.ticket_title || '제목 없음',
+            date: formattedDate,
+            price: formattedPrice,
+            ticket_price: priceValue,
+            status: statusText,
+            isActive: status === 'ACTIVE',
+            sortPriority: getStatusPriority(status),
+            purchaseInfo: {
+              id: purchase.id,
+              status: purchase.status,
+              originalStatus: status
+            }
+          };
+        });
+      }
+    } else {
+      console.error("판매자 구매 내역 가져오기 실패:", purchaseResponse.status);
+      const errorText = await purchaseResponse.text().catch(() => "");
+      console.error("오류 응답:", errorText);
+      
+      try {
+        // JSON 응답인 경우 구조적으로 파싱하여 표시
+        const errorJson = JSON.parse(errorText);
+        console.error("오류 응답:", errorJson);
+      } catch (e) {
+        // JSON이 아닌 경우 그냥 텍스트 로깅
+      }
+    }
+    
+    // 2. 판매 목록 API 호출 - 구매 정보가 없는 경우만 추가
     const salesTimestamp = Date.now();
     console.log("판매 목록 불러오기 시도... 사용자 ID:", user.id);
     const response = await fetch(`${API_BASE_URL}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
@@ -51,20 +138,14 @@ export const fetchOngoingSales = async (
     
     if (!data.posts || !Array.isArray(data.posts)) {
       console.error("API 응답에 posts 배열이 없거나 유효하지 않습니다:", data);
-      setOngoingSales([]);
+      // 구매 정보가 있는 판매 상품 처리
+      if (salesWithPurchaseInfo.length > 0) {
+        processAndSetSalesData(salesWithPurchaseInfo, setSaleStatus, setOriginalSales, setOngoingSales);
+      } else {
+        setOngoingSales([]);
+        setOriginalSales([]);
+      }
       return;
-    }
-    
-    // 첫 번째 게시물의 필드 구조 확인
-    if (data.posts.length > 0) {
-      console.log("🧪 첫 번째 게시물 구조 확인:", {
-        id: data.posts[0].id,
-        title: data.posts[0].title,
-        ticket_price: data.posts[0].ticket_price,
-        ticketPrice: data.posts[0].ticketPrice,
-        price: data.posts[0].price,
-        allFields: Object.keys(data.posts[0])
-      });
     }
     
     // 상태 카운트 초기화
@@ -75,158 +156,64 @@ export const fetchOngoingSales = async (
       거래완료: 0,
       거래취소: 0,
     };
-    console.log("[LOG] 상태 카운트 초기화:", { ...newSaleStatus });
     
-    // 판매자의 판매 상품에 대한 구매 정보도 함께 가져옵니다
-    // 구매 확정(CONFIRMED) 상태 확인을 위해 추가 API 호출
-    const timestamp = Date.now();
-    const userId = user?.id || '';
-    console.log(`판매자 구매 내역 요청: ${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
+    // 3. 구매 정보가 없는 판매 상품 처리
+    // 이미 구매 정보가 있는 ID 목록 생성
+    const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
     
-    const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : '',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
-      credentials: 'include' // 쿠키 포함
-    });
+    // 구매 정보가 없는 상품만 필터링
+    const remainingPosts = data.posts.filter((post: any) => !existingPostIds.includes(post.id));
     
-    console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);
-    
-    let purchasesByPostId: Record<number, any> = {};
-    
-    if (purchaseResponse.ok) {
-      const purchaseData = await purchaseResponse.json();
-      console.log("판매자 구매 내역 데이터:", purchaseData);
-      if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
-        // 게시글 ID별로 구매 정보를 인덱싱
-        purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
-          if (purchase.postId || purchase.post_id) {
-            // post_id 또는 postId 필드 처리
-            const postId = purchase.postId || purchase.post_id;
-            acc[postId] = purchase;
-          }
-          return acc;
-        }, {});
-      }
-    } else {
-      console.error("판매자 구매 내역 가져오기 실패:", purchaseResponse.status);
-      const errorText = await purchaseResponse.text().catch(() => "");
-      console.error("오류 응답:", errorText);
-      
-      try {
-        // JSON 응답인 경우 구조적으로 파싱하여 표시
-        const errorJson = JSON.parse(errorText);
-        console.error("오류 응답:", errorJson);
-      } catch (e) {
-        // JSON이 아닌 경우 그냥 텍스트 로깅
-      }
-    }
-      
-    // API 응답을 화면에 표시할 형식으로 변환
-    const salesData = data.posts.map((post: any, idx: number) => {
+    // 구매 정보가 없는 상품 처리
+    const additionalSales = remainingPosts.map((post: any, idx: number) => {
       // content 필드에서 가격 정보 추출 (JSON 파싱)
       let parsedContent: any = {};
       try {
         if (post.content && typeof post.content === 'string') {
           parsedContent = JSON.parse(post.content);
-          console.log("✅ content JSON 파싱 성공:", { 
-            postId: post.id, 
-            title: post.title,
-            extractedPrice: parsedContent.price 
-          });
         }
       } catch (e) {
         console.warn('❗ content 파싱 오류:', post.id, e);
       }
       
-      // 판매 데이터 변환
-      // 해당 게시글에 대한 구매 내역 확인
-      const purchase = purchasesByPostId[post.id];
-      // 구매 내역이 있으면 구매 상태 우선, 없으면 post.status 사용
-      const status = purchase?.status || post.status || 'ACTIVE';
+      // status는 post.status를 직접 사용 (구매 정보가 없음)
+      const status = post.status || 'ACTIVE';
       const isActive = status === 'ACTIVE';
-      
-      // 상태 카운트 - getStatusText 함수 사용
       const statusText = getStatusText(status);
-      if (statusText === '취켓팅진행중') {
-        newSaleStatus.취켓팅진행중 += 1;
-      } else if (statusText === '취켓팅완료') {
-        newSaleStatus.취켓팅완료 += 1;
-      } else if (statusText === '거래완료') {
-        newSaleStatus.거래완료 += 1;
-      } else if (statusText === '거래취소') {
-        newSaleStatus.거래취소 += 1;
-      } else if (statusText === '판매중') {
-        newSaleStatus.판매중인상품 += 1;
-      }
-      // 상품별 상태 로그
-      console.log(`[LOG][상품${idx}] id=${post.id}, title=${post.title}, 원본status=${post.status}, statusText=${statusText}, isActive=${isActive}, 누적카운트:`, { ...newSaleStatus });
-      
-      // 정렬 우선 순위 설정 - getStatusPriority 함수 사용
-      const sortPriority = getStatusPriority(status);
       
       // 날짜 처리
       const dateStr = post.created_at || post.updatedAt || post.createdAt || new Date().toISOString();
       const date = new Date(dateStr);
       const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
       
-      // 가격 처리 - 다양한 필드명 고려 + content에서 추출한 가격
-      const contentPrice = parsedContent?.price; // content에서 추출한 가격
-      console.log("🔍 post 객체 가격 필드 확인:", { 
-        ticket_price: post.ticket_price, 
-        ticketPrice: post.ticketPrice,
-        price: post.price,
-        contentPrice: contentPrice
-      });
-      
-      // 가격 값 가져오기 (여러 가능한 필드 + content에서 추출한 가격)
+      // 가격 처리
+      const contentPrice = parsedContent?.price;
       const priceValue = contentPrice || post.ticket_price || post.ticketPrice || post.price || 0;
       const formattedPrice = priceValue 
         ? `${Number(priceValue).toLocaleString()}원` 
         : '가격 정보 없음';
       
-      // 최종 반환
       return {
         ...post, // 기존 필드 유지
         id: post.id,
         title: post.title || post.eventName || '제목 없음',
         date: formattedDate,
-        price: formattedPrice, // 가격 정보 (중요: ...post 뒤에 위치하여 덮어쓰기)
-        ticket_price: priceValue, // 원본 가격 값도 보존
-        status: statusText, // getStatusText 함수로 변환된 상태 사용
+        price: formattedPrice,
+        ticket_price: priceValue,
+        status: statusText,
         isActive,
-        sortPriority,
-        // content에서 추출한 추가 정보
-        parsedContent: parsedContent, // 파싱된 전체 content
-        rawPrice: contentPrice, // 파싱된 원시 가격 값
-        // 구매 정보 추가 - 디버깅용
-        purchaseInfo: purchase ? {
-          id: purchase.id,
-          status: purchase.status,
-          originalStatus: status
-        } : null
+        sortPriority: getStatusPriority(status),
+        parsedContent: parsedContent,
+        rawPrice: contentPrice,
+        purchaseInfo: null // 구매 정보 없음
       };
     });
     
-    // 상태에 따라 정렬 - getStatusPriority 함수 사용
-    const sortedSalesData = [...salesData].sort((a, b) => a.sortPriority - b.sortPriority);
-
-    // 🔥 거래완료 상품 제외
-    const filteredSales = sortedSalesData.filter(item => item.status !== '거래완료');
-
-    // 최종 카운트 및 상품 개수 로그
-    console.log("[LOG] 최종 판매중인 상품 카운트:", newSaleStatus.판매중인상품);
-    console.log("[LOG] 최종 상태별 카운트:", { ...newSaleStatus });
-    console.log("[LOG] 최종 필터링된 상품 개수:", filteredSales.length);
-
-    // 상태 업데이트
-    setSaleStatus(newSaleStatus);
-    setOriginalSales(filteredSales);
-    setOngoingSales(filteredSales);
+    // 4. 모든 판매 데이터 결합
+    const combinedSales = [...salesWithPurchaseInfo, ...additionalSales];
+    
+    // 5. 데이터 처리 및 상태 업데이트
+    processAndSetSalesData(combinedSales, setSaleStatus, setOriginalSales, setOngoingSales);
   } catch (error) {
     console.error('판매 목록 로딩 오류:', error);
     toast.error('판매 목록을 불러오는데 실패했습니다.');
@@ -239,6 +226,67 @@ export const fetchOngoingSales = async (
     setIsLoadingSales(false);
   }
 };
+
+// 판매 데이터 처리 함수 (구매 데이터 처리 함수와 유사한 구조)
+export const processAndSetSalesData = (
+  sales: any[],
+  setSaleStatus: (status: TransactionStatus) => void,
+  setOriginalSales: (sales: Sale[]) => void,
+  setOngoingSales: (sales: Sale[]) => void
+) => {
+  // 상태 카운트 초기화
+  const newSaleStatus = {
+    취켓팅진행중: 0,
+    판매중인상품: 0,
+    취켓팅완료: 0,
+    거래완료: 0,
+    거래취소: 0,
+  };
+  
+  // 배열이 비어있는 경우
+  if (!Array.isArray(sales) || sales.length === 0) {
+    console.log("판매 데이터가 없습니다");
+    setOngoingSales([]);
+    setOriginalSales([]);
+    setSaleStatus(newSaleStatus);
+    return;
+  }
+  
+  // 상태 카운트 계산
+  sales.forEach(sale => {
+    const statusText = sale.status;
+    if (statusText === '취켓팅진행중') {
+      newSaleStatus.취켓팅진행중 += 1;
+    } else if (statusText === '취켓팅완료') {
+      newSaleStatus.취켓팅완료 += 1;
+    } else if (statusText === '거래완료') {
+      newSaleStatus.거래완료 += 1;
+    } else if (statusText === '거래취소') {
+      newSaleStatus.거래취소 += 1;
+    } else if (statusText === '판매중') {
+      newSaleStatus.판매중인상품 += 1;
+    }
+    
+    // 상품별 상태 로그
+    console.log(`[LOG][상품] id=${sale.id}, title=${sale.title}, statusText=${statusText}, isActive=${sale.isActive}, 누적카운트:`, { ...newSaleStatus });
+  });
+  
+  // 상태에 따라 정렬
+  const sortedSalesData = [...sales].sort((a, b) => a.sortPriority - b.sortPriority);
+  
+  // 거래완료 상품 제외
+  const filteredSales = sortedSalesData.filter(item => item.status !== '거래완료');
+  
+  // 최종 카운트 및 상품 개수 로그
+  console.log("[LOG] 최종 판매중인 상품 카운트:", newSaleStatus.판매중인상품);
+  console.log("[LOG] 최종 상태별 카운트:", { ...newSaleStatus });
+  console.log("[LOG] 최종 필터링된 상품 개수:", filteredSales.length);
+  
+  // 상태 업데이트
+  setSaleStatus(newSaleStatus);
+  setOriginalSales(filteredSales);
+  setOngoingSales(filteredSales);
+}
 
 // 구매 중인 상품 목록 가져오기
 export const fetchOngoingPurchases = async (
