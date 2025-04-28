@@ -279,13 +279,13 @@ export default function TransactionDetail() {
       if (confirm("구매를 확정하시겠습니까? 구매확정 후에는 취소할 수 없습니다.")) {
         try {
           // 거래 상태 업데이트 API 호출
-          const response = await fetch(`/api/transactions/${orderNumber}`, {
-            method: "PATCH",
+          const response = await fetch(`/api/purchase/${orderNumber}`, {
+            method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              currentStep: "confirmed",
+              status: "CONFIRMED",
             }),
           })
           
