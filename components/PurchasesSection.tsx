@@ -17,7 +17,7 @@ interface Purchase {
   title?: string;
   date?: string;
   price?: string | number;
-  status?: string;
+  status: string;  // API에서 직접 반환되는 status
   post?: {
     title?: string;
     eventName?: string;
