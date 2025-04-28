@@ -677,7 +677,7 @@ export default function MyPage() {
   };
   
   // 구매 데이터 처리 함수 수정
-  const processPurchaseData = (purchases: any[]) => {
+  const processPurchaseData = async (purchases: any[]) => {
     // 구매 상태에 따른 카운트
     const newPurchaseStatus = {
       취켓팅진행중: 0,
@@ -696,7 +696,7 @@ export default function MyPage() {
     }
     
     // API 응답을 화면에 표시할 형식으로 변환
-    const purchasesData = purchases.map((purchase: any) => {
+    const purchasesData = await Promise.all(purchases.map(async (purchase: any) => {
       // 구매 상태에 따라 카운트 증가
       const purchaseStatus = purchase.status || '';
       
@@ -793,7 +793,7 @@ export default function MyPage() {
       
       console.log(`[구매 데이터] ID ${purchase.id} 변환:`, formattedPurchase);
       return formattedPurchase;
-    });
+    }));
     
     console.log("최종 구매 상태 카운트:", newPurchaseStatus);
     
@@ -821,6 +821,25 @@ export default function MyPage() {
     setPurchaseStatus(newPurchaseStatus);
     
     console.log("구매 데이터 로딩 완료:", sortedPurchases.length, "개 항목 중", ongoingPurchasesOnly.length, "개 진행중");
+
+    // ✅ CONFIRMED 상태의 구매 항목이 있으면 posts 테이블 status도 동기화
+    const confirmedPostIds = purchasesData
+      .filter((p: any) => p.status === 'CONFIRMED' && p.postId)
+      .map((p: any) => p.postId);
+    if (confirmedPostIds.length > 0) {
+      const { supabase } = await import("@/lib/supabase");
+      for (const postId of confirmedPostIds) {
+        try {
+          await supabase
+            .from('posts')
+            .update({ status: 'CONFIRMED' })
+            .eq('id', postId);
+          console.log(`[동기화] postId ${postId}의 status를 CONFIRMED로 업데이트 완료`);
+        } catch (e) {
+          console.error(`[동기화] postId ${postId}의 status 업데이트 실패:`, e);
+        }
+      }
+    }
   };
 
   // 상태 텍스트 변환 함수
