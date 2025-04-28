@@ -25,49 +25,60 @@ export const formatDate = (...dates: (string | undefined)[]): string => {
 // 상태 텍스트 변환 함수
 export const getStatusText = (status: string): string => {
   const statusMap: { [key: string]: string } = {
-    'PENDING': '결제 대기',
-    'PROCESSING': '처리 중',
-    'CONFIRMED': '구매 확정',
-    'COMPLETED': '완료',
-    'CANCELLED': '취소됨',
-    'REFUNDED': '환불됨',
-    'FAILED': '실패',
-    'EXPIRED': '만료됨',
-    'TICKETING_STARTED': '취켓팅 시작',
-    'TICKETING_COMPLETED': '취켓팅 완료',
-    'TICKETING_FAILED': '취켓팅 실패',
-    'TICKETING_EXPIRED': '취켓팅 만료',
-    'TICKETING_CANCELLED': '취켓팅 취소',
-    'TICKETING_REFUNDED': '취켓팅 환불',
-    'TICKETING_PROCESSING': '취켓팅 처리 중',
-    'TICKETING_PENDING': '취켓팅 대기',
-    'TICKETING_CONFIRMED': '취켓팅 확정'
-  }
-  return statusMap[status] || status
-}
+    'PENDING': '취켓팅진행중',
+    'PENDING_PAYMENT': '취켓팅진행중',
+    'PROCESSING': '취켓팅진행중',
+    'PROCESS': '취켓팅진행중',
+    'COMPLETED': '취켓팅완료',
+    'CONFIRMED': '거래완료',
+    'CANCELLED': '거래취소',
+    'ACTIVE': '판매중',
+    '판매중': '판매중',
+    '취켓팅 진행중': '취켓팅진행중',
+    '취켓팅 완료': '취켓팅완료',
+    '거래 완료': '거래완료',
+    '거래 취소': '거래취소'
+  };
+  return statusMap[status] || status;
+};
 
 export const getStatusColor = (status: string): string => {
   const colorMap: { [key: string]: string } = {
-    'PENDING': 'text-yellow-600',
-    'PROCESSING': 'text-blue-600',
-    'CONFIRMED': 'text-green-600',
-    'COMPLETED': 'text-green-600',
-    'CANCELLED': 'text-red-600',
-    'REFUNDED': 'text-gray-600',
-    'FAILED': 'text-red-600',
-    'EXPIRED': 'text-gray-600',
-    'TICKETING_STARTED': 'text-blue-600',
-    'TICKETING_COMPLETED': 'text-green-600',
-    'TICKETING_FAILED': 'text-red-600',
-    'TICKETING_EXPIRED': 'text-gray-600',
-    'TICKETING_CANCELLED': 'text-red-600',
-    'TICKETING_REFUNDED': 'text-gray-600',
-    'TICKETING_PROCESSING': 'text-blue-600',
-    'TICKETING_PENDING': 'text-yellow-600',
-    'TICKETING_CONFIRMED': 'text-green-600'
-  }
-  return colorMap[status] || 'text-gray-600'
-}
+    'PENDING': 'text-blue-500',
+    'PENDING_PAYMENT': 'text-blue-500',
+    'PROCESSING': 'text-blue-500',
+    'PROCESS': 'text-blue-500',
+    'COMPLETED': 'text-green-500',
+    'CONFIRMED': 'text-purple-500',
+    'CANCELLED': 'text-red-500',
+    'ACTIVE': 'text-gray-500',
+    '판매중': 'text-gray-500',
+    '취켓팅진행중': 'text-blue-500',
+    '취켓팅완료': 'text-green-500',
+    '거래완료': 'text-purple-500',
+    '거래취소': 'text-red-500'
+  };
+  return colorMap[status] || 'text-gray-500';
+};
+
+export const getStatusPriority = (status: string): number => {
+  const priorityMap: { [key: string]: number } = {
+    'PENDING': 1,
+    'PENDING_PAYMENT': 1,
+    'PROCESSING': 1,
+    'PROCESS': 1,
+    'COMPLETED': 2,
+    'CONFIRMED': 3,
+    'CANCELLED': 4,
+    'ACTIVE': 0,
+    '판매중': 0,
+    '취켓팅진행중': 1,
+    '취켓팅완료': 2,
+    '거래완료': 3,
+    '거래취소': 4
+  };
+  return priorityMap[status] || 5;
+};
 
 // Supabase 토큰을 가져오는 함수
 export const getAuthToken = (): string => {

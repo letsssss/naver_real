@@ -1,6 +1,13 @@
 import { Sale, Notification, TransactionStatus, Purchase } from "@/types/mypage";
-import { API_BASE_URL, getAuthToken } from "@/utils/mypage-utils";
+import { API_BASE_URL, getAuthToken, getStatusText, getStatusColor, getStatusPriority } from "@/utils/mypage-utils";
 import { toast } from "sonner";
+
+export interface StatusCount {
+  '취켓팅진행중': number;
+  '취켓팅완료': number;
+  '거래완료': number;
+  '거래취소': number;
+}
 
 // 판매 중인 상품 목록 가져오기
 export const fetchOngoingSales = async (
@@ -139,26 +146,22 @@ export const fetchOngoingSales = async (
       const status = post.status || 'ACTIVE';
       const isActive = status === 'ACTIVE';
       
-      // 상태 카운트
-      if (isActive) {
-        newSaleStatus.판매중인상품 += 1;
-      } else if (status === 'PENDING' || status === 'PROCESSING') {
+      // 상태 카운트 - getStatusText 함수 사용
+      const statusText = getStatusText(status);
+      if (statusText === '취켓팅진행중') {
         newSaleStatus.취켓팅진행중 += 1;
-      } else if (status === 'COMPLETED') {
+      } else if (statusText === '취켓팅완료') {
         newSaleStatus.취켓팅완료 += 1;
-      } else if (status === 'CONFIRMED') {
+      } else if (statusText === '거래완료') {
         newSaleStatus.거래완료 += 1;
-      } else if (status === 'CANCELLED') {
+      } else if (statusText === '거래취소') {
         newSaleStatus.거래취소 += 1;
+      } else if (statusText === '판매중') {
+        newSaleStatus.판매중인상품 += 1;
       }
       
-      // 정렬 우선 순위 설정
-      let sortPriority = 0;
-      if (isActive) sortPriority = 1;
-      else if (status === 'PENDING' || status === 'PROCESSING') sortPriority = 2;
-      else if (status === 'COMPLETED') sortPriority = 3;
-      else if (status === 'CONFIRMED') sortPriority = 4;
-      else if (status === 'CANCELLED') sortPriority = 5;
+      // 정렬 우선 순위 설정 - getStatusPriority 함수 사용
+      const sortPriority = getStatusPriority(status);
       
       // 날짜 처리
       const dateStr = post.created_at || post.updatedAt || post.createdAt || new Date().toISOString();
@@ -188,7 +191,7 @@ export const fetchOngoingSales = async (
         date: formattedDate,
         price: formattedPrice, // 가격 정보 (중요: ...post 뒤에 위치하여 덮어쓰기)
         ticket_price: priceValue, // 원본 가격 값도 보존
-        status: isActive ? '판매중' : post.status,
+        status: statusText, // getStatusText 함수로 변환된 상태 사용
         isActive,
         sortPriority,
         // content에서 추출한 추가 정보
@@ -197,7 +200,7 @@ export const fetchOngoingSales = async (
       };
     });
     
-    // 상태에 따라 정렬 - 취켓팅 진행중인 상품이 먼저 오도록
+    // 상태에 따라 정렬 - getStatusPriority 함수 사용
     const sortedSalesData = [...salesData].sort((a, b) => a.sortPriority - b.sortPriority);
 
     // 🔥 거래완료 상품 제외
@@ -212,7 +215,7 @@ export const fetchOngoingSales = async (
     toast.error('판매 목록을 불러오는데 실패했습니다.');
     // 더미 데이터로 대체
     setOngoingSales([
-      { id: 2, title: "웃는 남자 [더미 데이터]", date: "2024-01-09", price: "110,000원", status: "취켓팅 진행중", isActive: false, sortPriority: 1 },
+      { id: 2, title: "웃는 남자 [더미 데이터]", date: "2024-01-09", price: "110,000원", status: "취켓팅진행중", isActive: false, sortPriority: 1 },
       { id: 1, title: "아이브 팬미팅 [더미 데이터]", date: "2024-04-05", price: "88,000원", status: "판매중", isActive: true, sortPriority: 2 },
     ]);
   } finally {
@@ -279,10 +282,20 @@ export const fetchOngoingPurchases = async (
 
     const processed = data.purchases.map((purchase: any) => {
       const status = purchase.status || "";
-      if (["PENDING", "PROCESSING"].includes(status)) newPurchaseStatus.취켓팅진행중 += 1;
-      else if (status === "COMPLETED") newPurchaseStatus.취켓팅완료 += 1;
-      else if (status === "CONFIRMED") newPurchaseStatus.거래완료 += 1;
-      else if (status === "CANCELLED") newPurchaseStatus.거래취소 += 1;
+      const statusText = getStatusText(status);
+      
+      // 상태 카운트 - getStatusText 함수 사용
+      if (statusText === '취켓팅진행중') {
+        newPurchaseStatus.취켓팅진행중 += 1;
+      } else if (statusText === '취켓팅완료') {
+        newPurchaseStatus.취켓팅완료 += 1;
+      } else if (statusText === '거래완료') {
+        newPurchaseStatus.거래완료 += 1;
+      } else if (statusText === '거래취소') {
+        newPurchaseStatus.거래취소 += 1;
+      } else if (statusText === '판매중') {
+        newPurchaseStatus.판매중인상품 += 1;
+      }
 
       return {
         id: purchase.id,
@@ -291,12 +304,17 @@ export const fetchOngoingPurchases = async (
         post: purchase.post,
         date: purchase.created_at || "날짜 없음",
         price: (purchase.total_price || purchase.post?.ticket_price || 0).toLocaleString() + "원",
-        status: status,
+        status: statusText,
+        sortPriority: getStatusPriority(status),
         seller: purchase.seller?.name || "판매자 정보 없음"
       };
     });
 
-    const filtered = processed.filter(p => p.status !== "CONFIRMED");
+    // 상태에 따라 정렬 - getStatusPriority 함수 사용
+    const sortedPurchases = [...processed].sort((a, b) => a.sortPriority - b.sortPriority);
+    
+    // CONFIRMED 상태의 구매 항목 필터링
+    const filtered = sortedPurchases.filter(p => p.status !== '거래완료');
 
     setOngoingPurchases(filtered);
     setPurchaseStatus(newPurchaseStatus);
@@ -336,24 +354,28 @@ export const processPurchaseData = (
   const purchasesData = purchases.map((purchase: any) => {
     // 구매 상태에 따라 카운트 증가
     const purchaseStatus = purchase.status || '';
+    const statusText = getStatusText(purchaseStatus);
     
-    console.log(`구매 데이터 처리: ID=${purchase.id}, 상태=${purchaseStatus}`);
+    console.log(`구매 데이터 처리: ID=${purchase.id}, 상태=${purchaseStatus}, 변환된 상태=${statusText}`);
     
-    // 상태 카운트 로직
-    if (purchaseStatus === 'PENDING' || purchaseStatus === 'PENDING_PAYMENT' || purchaseStatus === 'PROCESSING' || purchaseStatus === 'PROCESS') {
+    // 상태 카운트 로직 - getStatusText 함수 사용
+    if (statusText === '취켓팅진행중') {
       newPurchaseStatus.취켓팅진행중 += 1;
       console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅진행중 (+1)`);
-    } else if (purchaseStatus === 'COMPLETED') {
+    } else if (statusText === '취켓팅완료') {
       newPurchaseStatus.취켓팅완료 += 1;
       console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅완료 (+1)`);
-    } else if (purchaseStatus === 'CONFIRMED') {
+    } else if (statusText === '거래완료') {
       newPurchaseStatus.거래완료 += 1;
       console.log(`[구매 카운트] ID ${purchase.id}: 거래완료 (+1)`);
-    } else if (purchaseStatus === 'CANCELLED') {
+    } else if (statusText === '거래취소') {
       newPurchaseStatus.거래취소 += 1;
       console.log(`[구매 카운트] ID ${purchase.id}: 거래취소 (+1)`);
+    } else if (statusText === '판매중') {
+      newPurchaseStatus.판매중인상품 += 1;
+      console.log(`[구매 카운트] ID ${purchase.id}: 판매중인상품 (+1)`);
     } else {
-      console.log(`[구매 카운트] 알 수 없는 상태: ${purchase.id}, status=${purchaseStatus}`);
+      console.log(`[구매 카운트] 알 수 없는 상태: ${purchase.id}, status=${purchaseStatus}, 변환된 상태=${statusText}`);
     }
     
     // 게시물 데이터 안전하게 접근
@@ -406,35 +428,26 @@ export const processPurchaseData = (
       ticketTitle: purchase.ticket_title || purchase.ticketTitle,
       eventName: purchase.event_name || post.event_name || post.eventName,
       post: post,
-      status: purchaseStatus,
+      status: statusText,
       seller: seller.name || '판매자 정보 없음',
       sellerId: purchase.seller_id || seller.id,
       quantity: purchase.quantity || 1,
       price: purchase.total_price || post.ticket_price || post.ticketPrice || 0,
       createdAt: purchase.created_at || new Date().toISOString(),
       updatedAt: purchase.updated_at || purchase.created_at || new Date().toISOString(),
+      sortPriority: getStatusPriority(purchaseStatus)
     };
   });
   
   console.log("최종 구매 상태 카운트:", newPurchaseStatus);
   
   // 정렬: 취켓팅 진행중 > 취켓팅 완료 > 거래완료 > 거래취소
-  const sortedPurchases = [...purchasesData].sort((a, b) => {
-    const getPriority = (status: string) => {
-      if (status === 'PENDING' || status === 'PENDING_PAYMENT' || status === 'PROCESSING' || status === 'PROCESS') return 1;
-      if (status === 'COMPLETED') return 2;
-      if (status === 'CONFIRMED') return 3;
-      if (status === 'CANCELLED') return 4;
-      return 5;
-    };
-    
-    return getPriority(a.status) - getPriority(b.status);
-  });
+  const sortedPurchases = [...purchasesData].sort((a, b) => a.sortPriority - b.sortPriority);
   
   console.log("정렬된 구매 데이터:", sortedPurchases);
   
   // ✅ CONFIRMED 상태의 구매 항목 필터링 (진행중인 구매만 표시)
-  const ongoingPurchasesOnly = sortedPurchases.filter((p) => p.status !== 'CONFIRMED');
+  const ongoingPurchasesOnly = sortedPurchases.filter((p) => p.status !== '거래완료');
   console.log("진행중인 구매 데이터 (CONFIRMED 제외):", ongoingPurchasesOnly);
   
   // 상태 업데이트 - 진행중인 구매만 표시
@@ -668,9 +681,9 @@ export const deletePost = async (
       if (deletedItem) {
         if (deletedItem.status === "판매중" && deletedItem.isActive) {
           newStatus.판매중인상품 = Math.max(0, newStatus.판매중인상품 - 1);
-        } else if (deletedItem.status === "취켓팅 진행중") {
+        } else if (deletedItem.status === "취켓팅진행중") {
           newStatus.취켓팅진행중 = Math.max(0, newStatus.취켓팅진행중 - 1);
-        } else if (deletedItem.status === "취켓팅 완료") {
+        } else if (deletedItem.status === "취켓팅완료") {
           newStatus.취켓팅완료 = Math.max(0, newStatus.취켓팅완료 - 1);
         } else if (deletedItem.status === "거래완료") {
           newStatus.거래완료 = Math.max(0, newStatus.거래완료 - 1);
@@ -685,4 +698,49 @@ export const deletePost = async (
     console.error('게시물 삭제 오류:', error);
     toast.error(error instanceof Error ? error.message : "게시물 삭제 중 오류가 발생했습니다.");
   }
+};
+
+export const getPurchaseStatusCount = (purchases: Purchase[]): StatusCount => {
+  const statusCount: StatusCount = {
+    '취켓팅진행중': 0,
+    '취켓팅완료': 0,
+    '거래완료': 0,
+    '거래취소': 0
+  };
+
+  purchases.forEach(purchase => {
+    const status = getStatusText(purchase.status);
+    if (status in statusCount) {
+      statusCount[status as keyof StatusCount]++;
+    }
+  });
+
+  return statusCount;
+};
+
+export const getPurchaseStatusText = (status: string): string => {
+  return getStatusText(status);
+};
+
+export const getPurchaseStatusColor = (status: string): string => {
+  return getStatusColor(status);
+};
+
+// 판매 현황 카운트 함수 추가
+export const getSaleStatusCount = (sales: Sale[]): StatusCount => {
+  const statusCount: StatusCount = {
+    '취켓팅진행중': 0,
+    '취켓팅완료': 0,
+    '거래완료': 0,
+    '거래취소': 0
+  };
+
+  sales.forEach(sale => {
+    const status = getStatusText(sale.status);
+    if (status in statusCount) {
+      statusCount[status as keyof StatusCount]++;
+    }
+  });
+
+  return statusCount;
 }; 
