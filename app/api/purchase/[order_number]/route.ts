@@ -51,6 +51,12 @@ export async function POST(
       return NextResponse.json({ error: "상태가 제공되지 않았습니다." }, { status: 400 })
     }
 
+    // 유효한 상태값 검증
+    const validStatuses = ['PENDING', 'PROCESSING', 'COMPLETED', 'CONFIRMED', 'CANCELLED']
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json({ error: "유효하지 않은 상태값입니다." }, { status: 400 })
+    }
+
     const supabase = createAdminClient()
     
     // 주문 정보 조회
@@ -66,13 +72,15 @@ export async function POST(
     }
 
     // 상태 업데이트
-    const { error: updateError } = await supabase
+    const { data: updatedPurchase, error: updateError } = await supabase
       .from("purchases")
       .update({ 
         status,
         updated_at: new Date().toISOString()
       })
       .eq("order_number", order_number)
+      .select()
+      .single()
 
     if (updateError) {
       console.error("상태 업데이트 오류:", updateError)
@@ -81,7 +89,7 @@ export async function POST(
 
     return NextResponse.json({ 
       message: "상태가 성공적으로 업데이트되었습니다.",
-      status 
+      purchase: updatedPurchase
     })
 
   } catch (error) {

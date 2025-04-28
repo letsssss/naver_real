@@ -294,7 +294,7 @@ export default function TransactionDetail() {
             throw new Error(errorData.error || "구매 확정에 실패했습니다.")
           }
           
-          alert("구매가 확정되었습니다.")
+          const result = await response.json()
           
           // 상태 업데이트
           setTransaction({
@@ -306,6 +306,11 @@ export default function TransactionDetail() {
               confirmed: new Date().toISOString(),
             },
           })
+
+          // UI 갱신을 위해 페이지 새로고침
+          window.location.reload()
+          
+          alert("구매가 확정되었습니다.")
         } catch (error) {
           console.error("구매 확정 에러:", error)
           alert(error instanceof Error ? error.message : "구매 확정에 실패했습니다.")
