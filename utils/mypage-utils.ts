@@ -35,7 +35,7 @@ export const getStatusText = (status: string): string => {
     'ACTIVE': '판매중'
   };
   
-  return statusMap[status] || '판매중';
+  return statusMap[status?.toUpperCase()] || '판매중';
 };
 
 // 상태별 색상 클래스 반환 함수
@@ -51,7 +51,7 @@ export const getStatusColor = (status: string): string => {
     'ACTIVE': 'text-gray-600'
   };
   
-  return colorMap[status] || 'text-gray-600';
+  return colorMap[status?.toUpperCase()] || 'text-gray-600';
 };
 
 // 상태 우선순위 반환 함수
@@ -67,7 +67,7 @@ export const getStatusPriority = (status: string): number => {
     'ACTIVE': 5
   };
   
-  return priorityMap[status] || 6;
+  return priorityMap[status?.toUpperCase()] || 6;
 };
 
 // Supabase 토큰을 가져오는 함수
