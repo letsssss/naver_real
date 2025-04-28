@@ -144,7 +144,10 @@ export const fetchOngoingSales = async (
       }
       
       // 판매 데이터 변환
-      const status = post.status || 'ACTIVE';
+      // 해당 게시글에 대한 구매 내역 확인
+      const purchase = purchasesByPostId[post.id];
+      // 구매 내역이 있으면 구매 상태 우선, 없으면 post.status 사용
+      const status = purchase?.status || post.status || 'ACTIVE';
       const isActive = status === 'ACTIVE';
       
       // 상태 카운트 - getStatusText 함수 사용

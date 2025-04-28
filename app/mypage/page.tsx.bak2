@@ -329,8 +329,10 @@ export default function MyPage() {
         
       // API 응답을 화면에 표시할 형식으로 변환
       const salesData = data.posts.map((post: any) => {
-        // 판매 데이터 변환
-        const status = post.status || 'ACTIVE';
+        // 판매 데이터 변환 - purchasesByPostId에서 구매 상태 확인
+        const purchase = purchasesByPostId[post.id];
+        // 구매 상태가 있으면 먼저 사용, 없으면 post.status 사용
+        const status = purchase?.status || post.status || 'ACTIVE';
         const isActive = status === 'ACTIVE';
         
         // 상태 카운트
@@ -366,7 +368,7 @@ export default function MyPage() {
           price: post.ticketPrice 
             ? `${Number(post.ticketPrice).toLocaleString()}원` 
             : '가격 정보 없음',
-          status: isActive ? '판매중' : post.status,
+          status: purchase?.status || (isActive ? '판매중' : post.status),
           isActive,
           sortPriority
         };
