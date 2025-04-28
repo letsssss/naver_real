@@ -272,13 +272,10 @@ export default function TransactionDetail() {
 
   const handleAction = async () => {
     if (transaction.currentStep === "ticketing_started") {
-      // 취켓팅 상태 확인 로직
       alert("현재 취켓팅이 진행 중입니다. 취소표 발생 시 알림을 보내드립니다.")
     } else if (transaction.currentStep === "ticketing_completed") {
-      // 취켓팅 완료 후 구매 확정 로직
       if (confirm("구매를 확정하시겠습니까? 구매확정 후에는 취소할 수 없습니다.")) {
         try {
-          // 거래 상태 업데이트 API 호출
           const response = await fetch(`/api/purchase/${orderNumber}`, {
             method: "POST",
             headers: {
@@ -296,11 +293,15 @@ export default function TransactionDetail() {
           
           const result = await response.json()
           
+          if (result.error) {
+            throw new Error(result.error)
+          }
+          
           // 상태 업데이트
           setTransaction({
             ...transaction,
             currentStep: "confirmed",
-            status: "구매 확정",
+            status: "거래완료",
             stepDates: {
               ...transaction.stepDates,
               confirmed: new Date().toISOString(),
@@ -317,7 +318,6 @@ export default function TransactionDetail() {
         }
       }
     } else if (transaction.currentStep === "confirmed") {
-      // 이미 구매 확정된 경우 리뷰 페이지로 이동
       router.push(`/review/${orderNumber}`)
     }
   }

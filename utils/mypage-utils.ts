@@ -24,7 +24,7 @@ export const formatDate = (...dates: (string | undefined)[]): string => {
 
 // 상태 텍스트 변환 함수
 export const getStatusText = (status: string): string => {
-  const statusMap: { [key: string]: string } = {
+  const statusMap: Record<string, string> = {
     'PENDING': '취켓팅진행중',
     'PENDING_PAYMENT': '취켓팅진행중',
     'PROCESSING': '취켓팅진행중',
@@ -32,37 +32,31 @@ export const getStatusText = (status: string): string => {
     'COMPLETED': '취켓팅완료',
     'CONFIRMED': '거래완료',
     'CANCELLED': '거래취소',
-    'ACTIVE': '판매중',
-    '판매중': '판매중',
-    '취켓팅 진행중': '취켓팅진행중',
-    '취켓팅 완료': '취켓팅완료',
-    '거래 완료': '거래완료',
-    '거래 취소': '거래취소'
+    'ACTIVE': '판매중'
   };
-  return statusMap[status] || status;
+  
+  return statusMap[status] || '판매중';
 };
 
+// 상태별 색상 클래스 반환 함수
 export const getStatusColor = (status: string): string => {
-  const colorMap: { [key: string]: string } = {
-    'PENDING': 'text-blue-500',
-    'PENDING_PAYMENT': 'text-blue-500',
-    'PROCESSING': 'text-blue-500',
-    'PROCESS': 'text-blue-500',
-    'COMPLETED': 'text-green-500',
-    'CONFIRMED': 'text-purple-500',
-    'CANCELLED': 'text-red-500',
-    'ACTIVE': 'text-gray-500',
-    '판매중': 'text-gray-500',
-    '취켓팅진행중': 'text-blue-500',
-    '취켓팅완료': 'text-green-500',
-    '거래완료': 'text-purple-500',
-    '거래취소': 'text-red-500'
+  const colorMap: Record<string, string> = {
+    'PENDING': 'text-blue-600',
+    'PENDING_PAYMENT': 'text-blue-600',
+    'PROCESSING': 'text-blue-600',
+    'PROCESS': 'text-blue-600',
+    'COMPLETED': 'text-green-600',
+    'CONFIRMED': 'text-purple-600',
+    'CANCELLED': 'text-red-600',
+    'ACTIVE': 'text-gray-600'
   };
-  return colorMap[status] || 'text-gray-500';
+  
+  return colorMap[status] || 'text-gray-600';
 };
 
+// 상태 우선순위 반환 함수
 export const getStatusPriority = (status: string): number => {
-  const priorityMap: { [key: string]: number } = {
+  const priorityMap: Record<string, number> = {
     'PENDING': 1,
     'PENDING_PAYMENT': 1,
     'PROCESSING': 1,
@@ -70,14 +64,10 @@ export const getStatusPriority = (status: string): number => {
     'COMPLETED': 2,
     'CONFIRMED': 3,
     'CANCELLED': 4,
-    'ACTIVE': 0,
-    '판매중': 0,
-    '취켓팅진행중': 1,
-    '취켓팅완료': 2,
-    '거래완료': 3,
-    '거래취소': 4
+    'ACTIVE': 5
   };
-  return priorityMap[status] || 5;
+  
+  return priorityMap[status] || 6;
 };
 
 // Supabase 토큰을 가져오는 함수

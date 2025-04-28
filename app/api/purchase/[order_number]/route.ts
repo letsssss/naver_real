@@ -71,6 +71,14 @@ export async function POST(
       return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { status: 404 })
     }
 
+    // 현재 상태와 동일한 상태로 업데이트하려는 경우
+    if (purchase.status === status) {
+      return NextResponse.json({ 
+        message: "상태가 이미 동일합니다.",
+        purchase
+      })
+    }
+
     // 상태 업데이트
     const { data: updatedPurchase, error: updateError } = await supabase
       .from("purchases")
