@@ -202,7 +202,13 @@ export const fetchOngoingSales = async (
         sortPriority,
         // content에서 추출한 추가 정보
         parsedContent: parsedContent, // 파싱된 전체 content
-        rawPrice: contentPrice // 파싱된 원시 가격 값
+        rawPrice: contentPrice, // 파싱된 원시 가격 값
+        // 구매 정보 추가 - 디버깅용
+        purchaseInfo: purchase ? {
+          id: purchase.id,
+          status: purchase.status,
+          originalStatus: status
+        } : null
       };
     });
     
