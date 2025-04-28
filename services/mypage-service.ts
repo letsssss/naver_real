@@ -75,6 +75,7 @@ export const fetchOngoingSales = async (
       거래완료: 0,
       거래취소: 0,
     };
+    console.log("[LOG] 상태 카운트 초기화:", { ...newSaleStatus });
     
     // 판매자의 판매 상품에 대한 구매 정보도 함께 가져옵니다
     // 구매 확정(CONFIRMED) 상태 확인을 위해 추가 API 호출
@@ -126,7 +127,7 @@ export const fetchOngoingSales = async (
     }
       
     // API 응답을 화면에 표시할 형식으로 변환
-    const salesData = data.posts.map((post: any) => {
+    const salesData = data.posts.map((post: any, idx: number) => {
       // content 필드에서 가격 정보 추출 (JSON 파싱)
       let parsedContent: any = {};
       try {
@@ -159,6 +160,8 @@ export const fetchOngoingSales = async (
       } else if (statusText === '판매중') {
         newSaleStatus.판매중인상품 += 1;
       }
+      // 상품별 상태 로그
+      console.log(`[LOG][상품${idx}] id=${post.id}, title=${post.title}, 원본status=${post.status}, statusText=${statusText}, isActive=${isActive}, 누적카운트:`, { ...newSaleStatus });
       
       // 정렬 우선 순위 설정 - getStatusPriority 함수 사용
       const sortPriority = getStatusPriority(status);
@@ -205,6 +208,11 @@ export const fetchOngoingSales = async (
 
     // 🔥 거래완료 상품 제외
     const filteredSales = sortedSalesData.filter(item => item.status !== '거래완료');
+
+    // 최종 카운트 및 상품 개수 로그
+    console.log("[LOG] 최종 판매중인 상품 카운트:", newSaleStatus.판매중인상품);
+    console.log("[LOG] 최종 상태별 카운트:", { ...newSaleStatus });
+    console.log("[LOG] 최종 필터링된 상품 개수:", filteredSales.length);
 
     // 상태 업데이트
     setSaleStatus(newSaleStatus);
