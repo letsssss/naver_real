@@ -23,16 +23,51 @@ export const formatDate = (...dates: (string | undefined)[]): string => {
 };
 
 // 상태 텍스트 변환 함수
-export const getStatusText = (status: string) => {
-  switch (status) {
-    case 'PENDING': return '입금 대기중';
-    case 'PROCESSING': return '처리 중';
-    case 'COMPLETED': return '완료됨';
-    case 'CONFIRMED': return '구매 확정됨';
-    case 'CANCELLED': return '취소됨';
-    default: return '상태 불명';
+export const getStatusText = (status: string): string => {
+  const statusMap: { [key: string]: string } = {
+    'PENDING': '결제 대기',
+    'PROCESSING': '처리 중',
+    'CONFIRMED': '구매 확정',
+    'COMPLETED': '완료',
+    'CANCELLED': '취소됨',
+    'REFUNDED': '환불됨',
+    'FAILED': '실패',
+    'EXPIRED': '만료됨',
+    'TICKETING_STARTED': '취켓팅 시작',
+    'TICKETING_COMPLETED': '취켓팅 완료',
+    'TICKETING_FAILED': '취켓팅 실패',
+    'TICKETING_EXPIRED': '취켓팅 만료',
+    'TICKETING_CANCELLED': '취켓팅 취소',
+    'TICKETING_REFUNDED': '취켓팅 환불',
+    'TICKETING_PROCESSING': '취켓팅 처리 중',
+    'TICKETING_PENDING': '취켓팅 대기',
+    'TICKETING_CONFIRMED': '취켓팅 확정'
   }
-};
+  return statusMap[status] || status
+}
+
+export const getStatusColor = (status: string): string => {
+  const colorMap: { [key: string]: string } = {
+    'PENDING': 'text-yellow-600',
+    'PROCESSING': 'text-blue-600',
+    'CONFIRMED': 'text-green-600',
+    'COMPLETED': 'text-green-600',
+    'CANCELLED': 'text-red-600',
+    'REFUNDED': 'text-gray-600',
+    'FAILED': 'text-red-600',
+    'EXPIRED': 'text-gray-600',
+    'TICKETING_STARTED': 'text-blue-600',
+    'TICKETING_COMPLETED': 'text-green-600',
+    'TICKETING_FAILED': 'text-red-600',
+    'TICKETING_EXPIRED': 'text-gray-600',
+    'TICKETING_CANCELLED': 'text-red-600',
+    'TICKETING_REFUNDED': 'text-gray-600',
+    'TICKETING_PROCESSING': 'text-blue-600',
+    'TICKETING_PENDING': 'text-yellow-600',
+    'TICKETING_CONFIRMED': 'text-green-600'
+  }
+  return colorMap[status] || 'text-gray-600'
+}
 
 // Supabase 토큰을 가져오는 함수
 export const getAuthToken = (): string => {
