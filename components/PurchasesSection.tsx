@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import MessageButton from "./MessageButton";
 
 // Loader 컴포넌트
 import { Loader as LoaderIcon } from "lucide-react";
@@ -92,25 +93,7 @@ export default function PurchasesSection({ purchases, isLoading, router }: Purch
                 </Button>
               </Link>
               <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
-                <Button 
-                  variant="outline" 
-                  className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  메시지
-                </Button>
+                <MessageButton orderNumber={item.orderNumber || `ORDER-${item.id}`} />
               </Link>
             </div>
           </div>

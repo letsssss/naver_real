@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import SaleStatusBadge from "./SaleStatusBadge";
+import MessageButton from "./MessageButton";
 
 // 판매 중인 상품 타입 정의
 export type Sale = {
@@ -116,27 +117,12 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
                 </svg>
                 {isLoading ? "로딩 중..." : "거래 상세 보기"}
               </Button>
-              <Button 
-                variant="outline" 
-                className="text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
+              {/* 기존 메시지 버튼을 MessageButton 컴포넌트로 대체 */}
+              <MessageButton 
+                orderNumber={sale.orderNumber}
                 onClick={() => handleTransactionClick(false)}
-                disabled={isLoading}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                {isLoading ? "로딩 중..." : "메시지"}
-              </Button>
+                isLoading={isLoading}
+              />
             </>
           )}
         </div>
