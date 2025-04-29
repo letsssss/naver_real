@@ -4,15 +4,18 @@ import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import { getServerSession } from 'next-auth/next';
 import * as jsonwebtoken from 'jsonwebtoken';
+import { JwtPayload } from 'jsonwebtoken';
 import supabase from '@/lib/supabase';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
 // @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Database } from '@/types/supabase.types';
+// @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
 import { createClient } from '@supabase/supabase-js';
+import jwt from "jsonwebtoken";
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {
@@ -208,14 +211,22 @@ export async function verifyToken(token: string): Promise<any> {
 }
 
 // JWT 토큰 유효성 검증
-export function verifyAccessToken(token: string) {
+export function verifyAccessToken(token: string): JwtPayload | null {
   try {
     console.log("JWT 토큰 검증 시도");
     
     // 개발 환경에서도 실제 토큰 검증 시도
     const decoded = jsonwebtoken.verify(token, JWT_SECRET);
     console.log("JWT 토큰 검증 성공", decoded);
-    return decoded;
+    
+    // string | JwtPayload 타입 처리
+    if (typeof decoded === 'string') {
+      // 문자열인 경우 (드문 케이스)
+      console.warn("JWT 토큰이 문자열로 디코딩됨");
+      return null;
+    }
+    
+    return decoded as JwtPayload;
   } catch (error) {
     console.error("JWT 토큰 처리 중 오류:", error);
     // 개발 환경에서 토큰 검증에 실패해도 null을 반환하도록 수정
@@ -224,9 +235,16 @@ export function verifyAccessToken(token: string) {
 }
 
 // 리프레시 토큰 유효성 검증
-export function verifyRefreshToken(token: string) {
+export function verifyRefreshToken(token: string): JwtPayload | null {
   try {
-    return jsonwebtoken.verify(token, JWT_REFRESH_SECRET);
+    const decoded = jsonwebtoken.verify(token, JWT_REFRESH_SECRET);
+    
+    // string | JwtPayload 타입 처리
+    if (typeof decoded === 'string') {
+      return null;
+    }
+    
+    return decoded as JwtPayload;
   } catch (error) {
     return null;
   }
@@ -353,16 +371,22 @@ export async function getAuthenticatedUser(request: NextRequest) {
         console.log("[getAuthenticatedUser] 토큰 직접 검증 시도");
         const decoded = verifyAccessToken(token);
         
-        if (decoded && (decoded.sub || decoded.userId)) {
-          const userId = decoded.sub || decoded.userId;
-          console.log("[getAuthenticatedUser] 토큰에서 사용자 ID 추출:", userId);
+        // 더 안전한 타입 가드 추가
+        if (decoded && typeof decoded === 'object') {
+          // userId나 sub 속성이 있는지 확인
+          const userId = typeof decoded.sub === 'string' ? decoded.sub : 
+                         typeof decoded.userId === 'string' ? decoded.userId : null;
           
-          // 간이 사용자 객체 반환
-          return {
-            id: userId,
-            email: decoded.email || null,
-            role: decoded.role || 'USER'
-          };
+          if (userId) {
+            console.log("[getAuthenticatedUser] 토큰에서 사용자 ID 추출:", userId);
+            
+            // 간이 사용자 객체 반환
+            return {
+              id: userId,
+              email: typeof decoded.email === 'string' ? decoded.email : null,
+              role: typeof decoded.role === 'string' ? decoded.role : 'USER'
+            };
+          }
         }
       } catch (verifyError) {
         console.error("[getAuthenticatedUser] 토큰 검증 오류:", verifyError);

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>티켓 구매 API 테스트</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, button {
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>티켓 구매 API 테스트</h1>
+  
+  <div class="form-group">
+    <label for="postId">게시글 ID</label>
+    <input type="number" id="postId" value="1">
+  </div>
+  
+  <div class="form-group">
+    <label for="quantity">수량</label>
+    <input type="number" id="quantity" value="1">
+  </div>
+  
+  <div class="form-group">
+    <label for="selectedSeats">선택한 좌석 (선택사항)</label>
+    <input type="text" id="selectedSeats" placeholder="A1, A2, ...">
+  </div>
+  
+  <div class="form-group">
+    <label for="phoneNumber">전화번호 (선택사항)</label>
+    <input type="text" id="phoneNumber" placeholder="010-1234-5678">
+  </div>
+  
+  <div class="form-group">
+    <label for="paymentMethod">결제 방법 (선택사항)</label>
+    <input type="text" id="paymentMethod" placeholder="카드, 계좌이체, ...">
+  </div>
+  
+  <div class="form-group">
+    <label for="token">인증 토큰 (Bearer 토큰)</label>
+    <input type="text" id="token" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+  </div>
+  
+  <button id="submitBtn">구매 신청하기</button>
+  
+  <div id="result"></div>
+  
+  <script>
+    document.getElementById('submitBtn').addEventListener('click', async function() {
+      const resultElement = document.getElementById('result');
+      resultElement.textContent = '요청 처리 중...';
+      
+      try {
+        const postId = parseInt(document.getElementById('postId').value);
+        const quantity = parseInt(document.getElementById('quantity').value);
+        const selectedSeats = document.getElementById('selectedSeats').value;
+        const phoneNumber = document.getElementById('phoneNumber').value;
+        const paymentMethod = document.getElementById('paymentMethod').value;
+        const token = document.getElementById('token').value;
+        
+        const data = {
+          postId,
+          quantity
+        };
+        
+        if (selectedSeats) data.selectedSeats = selectedSeats;
+        if (phoneNumber) data.phoneNumber = phoneNumber;
+        if (paymentMethod) data.paymentMethod = paymentMethod;
+        
+        const headers = {
+          'Content-Type': 'application/json'
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch('/api/ticket-purchase', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        resultElement.textContent = JSON.stringify(result, null, 2);
+        resultElement.style.color = response.ok ? 'green' : 'red';
+      } catch (error) {
+        resultElement.textContent = `오류 발생: ${error.message}`;
+        resultElement.style.color = 'red';
+      }
+    });
+  </script>
+</body>
+</html> 
