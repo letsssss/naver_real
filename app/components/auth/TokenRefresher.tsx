@@ -34,6 +34,38 @@ export default function TokenRefresher() {
           localStorage.setItem('token', session.access_token);
           localStorage.setItem('auth-token', session.access_token);
           
+          // 기존 Supabase 키가 있다면 통합
+          const supabaseKey = Object.keys(localStorage).find(key =>
+            key.startsWith('sb-') && key.endsWith('-auth-token')
+          );
+          
+          if (supabaseKey) {
+            // 기존 Supabase 키에도 일관된 형식으로 저장
+            // 이미 JSON 객체가 저장된 경우 최신 access_token으로 업데이트
+            try {
+              const existingData = localStorage.getItem(supabaseKey);
+              if (existingData && !existingData.startsWith('eyJ')) {
+                // JSON 객체인 경우 업데이트
+                try {
+                  const parsed = JSON.parse(existingData);
+                  parsed.access_token = session.access_token;
+                  localStorage.setItem(supabaseKey, JSON.stringify(parsed));
+                  console.log("✅ 기존 Supabase 키 JSON 객체 업데이트됨");
+                } catch (e) {
+                  // 파싱 실패 시 덮어쓰기
+                  localStorage.setItem(supabaseKey, JSON.stringify(session));
+                  console.log("✅ 기존 Supabase 키 덮어쓰기됨 (파싱 실패)");
+                }
+              } else {
+                // 직접 토큰이 저장된 경우 세션 객체로 덮어쓰기
+                localStorage.setItem(supabaseKey, JSON.stringify(session));
+                console.log("✅ 기존 Supabase 키 세션 객체로 덮어쓰기됨");
+              }
+            } catch (e) {
+              console.error("❌ Supabase 키 업데이트 중 오류:", e);
+            }
+          }
+          
           // 쿠키에도 저장 (httpOnly 아님)
           const maxAge = 30 * 24 * 60 * 60; // 30일
           document.cookie = `auth-token=${session.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;

@@ -83,17 +83,59 @@ export const getAuthToken = (): string => {
 
   if (supabaseKey) {
     try {
-      const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-      if (supabaseData.access_token) {
-        authToken = supabaseData.access_token;
-        console.log("✅ Supabase localStorage에서 토큰 발견:", authToken);
+      const supabaseData = localStorage.getItem(supabaseKey);
+      if (supabaseData) {
+        try {
+          // 먼저 JSON으로 파싱 시도
+          const parsed = JSON.parse(supabaseData);
+          if (parsed.access_token) {
+            authToken = parsed.access_token;
+            console.log("✅ Supabase localStorage에서 JSON 파싱으로 토큰 발견");
+          }
+        } catch (jsonError) {
+          // 만약 JSON이 아니면 직접 토큰으로 사용
+          if (supabaseData.startsWith('eyJ')) {
+            authToken = supabaseData;
+            console.log("✅ Supabase localStorage에서 JWT 토큰 직접 발견");
+          } else {
+            console.error("❌ Supabase localStorage 파싱 실패:", jsonError);
+          }
+        }
       }
     } catch (e) {
-      console.error("❌ Supabase localStorage 파싱 실패:", e);
+      console.error("❌ Supabase localStorage 접근 실패:", e);
     }
   }
 
-  // 2. fallback: 일반 토큰 키 확인
+  // 2. auth-token 키 확인
+  if (!authToken) {
+    const authTokenKey = Object.keys(localStorage).find(key => key.includes('auth-token'));
+    
+    if (authTokenKey) {
+      const tokenValue = localStorage.getItem(authTokenKey);
+      
+      if (tokenValue) {
+        // JWT 토큰 형식인지 확인 (eyJ로 시작하면 JWT)
+        if (tokenValue.startsWith('eyJ')) {
+          authToken = tokenValue;
+          console.log("✅ auth-token 키에서 JWT 토큰 직접 발견");
+        } else {
+          // JSON 파싱 시도
+          try {
+            const parsed = JSON.parse(tokenValue);
+            if (parsed.access_token) {
+              authToken = parsed.access_token;
+              console.log("✅ auth-token 키에서 JSON 파싱으로 토큰 발견");
+            }
+          } catch (e) {
+            console.error("❌ auth-token 키 값 파싱 실패:", e);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. fallback: 일반 토큰 키 확인
   if (!authToken) {
     authToken = localStorage.getItem('token') ||
                 localStorage.getItem('access_token') ||
@@ -104,12 +146,12 @@ export const getAuthToken = (): string => {
     }
   }
 
-  // 3. fallback: document.cookie에서 access_token 확인
+  // 4. fallback: document.cookie에서 access_token 확인
   if (!authToken && typeof document !== 'undefined') {
     const match = document.cookie.match(/access_token=([^;]+)/);
     if (match && match[1]) {
-      authToken = match[1];
-      console.log("🍪 쿠키에서 access_token 발견:", authToken);
+      authToken = decodeURIComponent(match[1]);
+      console.log("🍪 쿠키에서 access_token 발견");
     } else {
       console.warn("❌ 쿠키에서 access_token 없음");
     }

@@ -115,14 +115,12 @@ export default function MyPage() {
 
       if (session) {
         try {
-          const parsed = JSON.parse(session);
-          console.log("📦 Supabase 세션 정보:", parsed);
-          console.log("✅ access_token:", parsed.access_token);
-          
-          // 토큰이 올바른 형식인지 확인
-          if (parsed.access_token) {
+          // 먼저 JWT 토큰 형식인지 확인 (eyJ로 시작하는지)
+          if (session.startsWith('eyJ')) {
+            console.log("✅ JWT 토큰으로 인식됨, 직접 사용");
+            
             // JWT 토큰 분해 시도
-            const parts = parsed.access_token.split('.');
+            const parts = session.split('.');
             if (parts.length === 3) {
               try {
                 // 페이로드 부분만 디코딩
@@ -134,9 +132,35 @@ export default function MyPage() {
                 console.error("❌ 토큰 페이로드 파싱 실패:", e);
               }
             }
+          } else {
+            // JSON 형식으로 시도
+            try {
+              const parsed = JSON.parse(session);
+              console.log("📦 Supabase 세션 정보:", parsed);
+              
+              if (parsed.access_token) {
+                console.log("✅ access_token:", parsed.access_token.substring(0, 20) + "...");
+                
+                // JWT 토큰 분해 시도
+                const parts = parsed.access_token.split('.');
+                if (parts.length === 3) {
+                  try {
+                    // 페이로드 부분만 디코딩
+                    const payload = JSON.parse(atob(parts[1]));
+                    console.log("✅ 토큰 페이로드:", payload);
+                    console.log("✅ 사용자 역할:", payload.role);
+                    console.log("✅ 만료 시간:", new Date(payload.exp * 1000).toLocaleString());
+                  } catch (e) {
+                    console.error("❌ 토큰 페이로드 파싱 실패:", e);
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("❌ 세션 정보 파싱 실패:", e);
+            }
           }
         } catch (e) {
-          console.error("❌ 세션 정보 파싱 실패:", e);
+          console.error("❌ 세션 처리 중 오류:", e);
         }
       } else {
         console.warn("❌ 토큰 키는 있지만 세션 정보가 없음:", tokenKey);

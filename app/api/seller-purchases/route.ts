@@ -121,51 +121,87 @@ async function getAuthUser(request: NextRequest) {
         // URL 디코딩 및 JSON 파싱 전 로깅
         console.log("쿠키 값 (처음 30자):", cookieValue.substring(0, 30));
         
-        let sessionData;
-        try {
-          sessionData = JSON.parse(decodeURIComponent(cookieValue));
-        } catch (parseError) {
-          console.error("세션 데이터 파싱 실패:", parseError);
+        // 먼저 JWT 토큰인지 확인 (eyJ로 시작)
+        if (cookieValue.startsWith('eyJ')) {
+          console.log("쿠키 값이 JWT 토큰 형식입니다");
           
-          // 다른 방법으로 다시 시도
+          // 토큰으로 직접 사용자 인증
           try {
-            // URI 디코딩 없이 시도
-            sessionData = JSON.parse(cookieValue);
-            console.log("URI 디코딩 없이 파싱 성공");
-          } catch (secondError) {
-            console.error("두 번째 파싱 시도도 실패:", secondError);
-            // 계속 다른 인증 방법 시도
-          }
-        }
-        
-        if (sessionData && sessionData.access_token) {
-          console.log("세션 데이터에서 액세스 토큰 발견");
-          
-          // 세션 객체 생성
-          const { data: { user }, error: sessionError } = await client.auth.getUser(
-            sessionData.access_token
-          );
-          
-          if (!sessionError && user) {
-            console.log("인증된 사용자 ID:", user.id);
+            const { data: { user }, error: sessionError } = await client.auth.getUser(cookieValue);
             
-            // 사용자 정보 가져오기
-            const { data: userData, error: userError } = await client
-              .from('users')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            
-            if (!userError && userData) {
-              // UserData 타입으로 변환
-              const userDataTyped = userData as UserData;
+            if (!sessionError && user) {
+              console.log("JWT 토큰으로 인증된 사용자 ID:", user.id);
               
-              return {
-                id: user.id,
-                email: user.email || '',
-                name: userDataTyped?.name || user.user_metadata?.name || "",
-                role: userDataTyped?.role || user.user_metadata?.role || "USER"
-              };
+              // 사용자 정보 가져오기
+              const { data: userData, error: userError } = await client
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+              
+              if (!userError && userData) {
+                // UserData 타입으로 변환
+                const userDataTyped = userData as UserData;
+                
+                return {
+                  id: user.id,
+                  email: user.email || '',
+                  name: userDataTyped?.name || user.user_metadata?.name || "",
+                  role: userDataTyped?.role || user.user_metadata?.role || "USER"
+                };
+              }
+            }
+          } catch (jwtError) {
+            console.error("JWT 토큰 검증 오류:", jwtError);
+          }
+        } else {
+          // JSON 파싱 시도
+          let sessionData;
+          try {
+            sessionData = JSON.parse(decodeURIComponent(cookieValue));
+          } catch (parseError) {
+            console.error("세션 데이터 파싱 실패:", parseError);
+            
+            // 다른 방법으로 다시 시도
+            try {
+              // URI 디코딩 없이 시도
+              sessionData = JSON.parse(cookieValue);
+              console.log("URI 디코딩 없이 파싱 성공");
+            } catch (secondError) {
+              console.error("두 번째 파싱 시도도 실패:", secondError);
+              // 계속 다른 인증 방법 시도
+            }
+          }
+          
+          if (sessionData && sessionData.access_token) {
+            console.log("세션 데이터에서 액세스 토큰 발견");
+            
+            // 세션 객체 생성
+            const { data: { user }, error: sessionError } = await client.auth.getUser(
+              sessionData.access_token
+            );
+            
+            if (!sessionError && user) {
+              console.log("인증된 사용자 ID:", user.id);
+              
+              // 사용자 정보 가져오기
+              const { data: userData, error: userError } = await client
+                .from('users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+              
+              if (!userError && userData) {
+                // UserData 타입으로 변환
+                const userDataTyped = userData as UserData;
+                
+                return {
+                  id: user.id,
+                  email: user.email || '',
+                  name: userDataTyped?.name || user.user_metadata?.name || "",
+                  role: userDataTyped?.role || user.user_metadata?.role || "USER"
+                };
+              }
             }
           }
         }
@@ -209,6 +245,42 @@ async function getAuthUser(request: NextRequest) {
         }
       } catch (tokenError) {
         console.error("액세스 토큰 쿠키 검증 오류:", tokenError);
+      }
+    }
+    
+    // 3-1. auth-token 쿠키 확인
+    const authTokenCookie = request.cookies.get('auth-token');
+    if (authTokenCookie) {
+      console.log("auth-token 쿠키 발견");
+      
+      try {
+        const token = authTokenCookie.value;
+        const { data: { user }, error } = await client.auth.getUser(token);
+        
+        if (!error && user) {
+          console.log("auth-token 쿠키로 사용자 인증 성공:", user.id);
+          
+          // 사용자 정보 가져오기
+          const { data: userData, error: userError } = await client
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          
+          if (!userError && userData) {
+            // UserData 타입으로 변환
+            const userDataTyped = userData as UserData;
+            
+            return {
+              id: user.id,
+              email: user.email || '',
+              name: userDataTyped?.name || user.user_metadata?.name || "",
+              role: userDataTyped?.role || user.user_metadata?.role || "USER"
+            };
+          }
+        }
+      } catch (tokenError) {
+        console.error("auth-token 쿠키 검증 오류:", tokenError);
       }
     }
     
