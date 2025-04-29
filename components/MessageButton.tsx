@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
@@ -20,7 +20,12 @@ export default function MessageButton({
   className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
 }: MessageButtonProps) {
   // 읽지 않은 메시지 개수 가져오기
-  const { unreadCount } = useUnreadMessages(orderNumber);
+  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(orderNumber);
+  
+  // 디버깅: unreadCount 값 콘솔에 출력
+  useEffect(() => {
+    console.log(`🔔 MessageButton - orderNumber: ${orderNumber}, unreadCount: ${unreadCount}, isLoading: ${loadingMessages}, error: ${error?.message || 'none'}`);
+  }, [orderNumber, unreadCount, loadingMessages, error]);
 
   return (
     <Button

@@ -31,6 +31,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   console.log("💬 sale 객체:", sale);
   console.log("💰 sale.price:", sale.price);
   console.log("🏷️ sale.ticket_price:", sale.ticket_price);
+  console.log("🔢 sale.orderNumber:", sale.orderNumber);
 
   // 거래 페이지 또는 메시지 페이지로 이동
   const handleTransactionClick = async (isSeller: boolean = false) => {
@@ -92,8 +93,8 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       
       <div className="flex mt-2 justify-between items-center">
         <div className="flex gap-2">
-          {/* 판매중 상태가 아닌 경우에만 "거래상세보기"와 "메시지" 버튼 표시 */}
-          {sale.status !== "판매중" && (
+          {/* 판매중 상태이거나 거래가 있는 경우 버튼 표시 */}
+          {(sale.status !== "판매중" || Boolean(sale.orderNumber)) && (
             <>
               <Button 
                 className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
@@ -126,7 +127,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
             </>
           )}
         </div>
-        {sale.status === "판매중" && (
+        {sale.status === "판매중" && !sale.orderNumber && (
           <AlertDialog>
             <AlertDialogTrigger>
               <div 
