@@ -261,10 +261,14 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
   // NextRequest 객체인 경우
   if ('cookies' in req && typeof req.cookies === 'object' && req.cookies.get) {
     const tokenCookie = req.cookies.get('access_token')?.value ||
-                        req.cookies.get('sb-access-token')?.value ||
-                        req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token')?.value || // ✅ 추가
-                        req.cookies.get(`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`)?.value;
+                      req.cookies.get('token')?.value ||
+                      req.cookies.get('sb-access-token')?.value ||
+                      req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token')?.value || // ✅ 추가
+                      req.cookies.get(`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`)?.value;
 
+    // 쿠키 디버깅 로그
+    console.log("[getTokenFromCookies] 쿠키 추출 시도:", tokenCookie ? "찾음" : "없음");
+    
     return tokenCookie || null;
   }
 
@@ -278,13 +282,20 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
     return acc;
   }, {} as Record<string, string>);
 
-  return (
+  // 추가 쿠키 이름 확인
+  const foundToken = (
     cookies['access_token'] ||
+    cookies['token'] ||
     cookies['sb-access-token'] ||
     cookies['sb-jdubrjczdyqqtsppojgu-auth-token'] || // ✅ 여기도 반드시 포함
     cookies[`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`] ||
     null
   );
+  
+  // 쿠키 디버깅 로그
+  console.log("[getTokenFromCookies] 헤더에서 쿠키 추출 시도:", foundToken ? "찾음" : "없음");
+  
+  return foundToken;
 }
 
 // 디버그용 로그는 주석 처리
@@ -296,25 +307,74 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
 // 기존 getAuthenticatedUser 함수를 새로운 버전으로 교체
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
+    console.log("[getAuthenticatedUser] 인증 사용자 확인 시작");
+    
     // 1. 요청에서 직접 토큰 추출
-    const token = getTokenFromHeaders(request.headers) || getTokenFromCookies(request);
+    const tokenFromHeader = getTokenFromHeaders(request.headers);
+    const tokenFromCookie = getTokenFromCookies(request);
+    const token = tokenFromHeader || tokenFromCookie;
+    
+    // 토큰 출처 로그
+    if (tokenFromHeader) console.log("[getAuthenticatedUser] 헤더에서 토큰 발견");
+    if (tokenFromCookie) console.log("[getAuthenticatedUser] 쿠키에서 토큰 발견");
     
     if (!token) {
-      console.log("❌ 인증 토큰을 찾을 수 없습니다");
+      console.log("[getAuthenticatedUser] ❌ 인증 토큰을 찾을 수 없습니다");
+      
+      // 마지막 대안: 세션 확인
+      try {
+        console.log("[getAuthenticatedUser] 세션 확인 시도");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (!sessionError && session?.user) {
+          console.log("[getAuthenticatedUser] 세션에서 사용자 발견:", session.user.id);
+          return session.user;
+        } else {
+          console.log("[getAuthenticatedUser] 세션에서 사용자를 찾을 수 없음:", sessionError?.message);
+        }
+      } catch (sessionError) {
+        console.error("[getAuthenticatedUser] 세션 확인 중 오류:", sessionError);
+      }
+      
       return null;
     }
+    
+    // 토큰 디버깅 (보안을 위해 일부만 출력)
+    console.log("[getAuthenticatedUser] 토큰 발견:", token.substring(0, 15) + "...");
     
     // 2. 기존 Supabase 클라이언트에 토큰 직접 전달
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error) {
-      console.error("❌ 사용자 인증 실패:", error.message);
+      console.error("[getAuthenticatedUser] ❌ 사용자 인증 실패:", error.message);
+      
+      // 토큰으로 직접 유효성 검사 시도
+      try {
+        console.log("[getAuthenticatedUser] 토큰 직접 검증 시도");
+        const decoded = verifyAccessToken(token);
+        
+        if (decoded && (decoded.sub || decoded.userId)) {
+          const userId = decoded.sub || decoded.userId;
+          console.log("[getAuthenticatedUser] 토큰에서 사용자 ID 추출:", userId);
+          
+          // 간이 사용자 객체 반환
+          return {
+            id: userId,
+            email: decoded.email || null,
+            role: decoded.role || 'USER'
+          };
+        }
+      } catch (verifyError) {
+        console.error("[getAuthenticatedUser] 토큰 검증 오류:", verifyError);
+      }
+      
       return null;
     }
     
+    console.log("[getAuthenticatedUser] ✅ 사용자 인증 성공:", user.id);
     return user;
   } catch (error) {
-    console.error("❌ 인증 처리 중 오류 발생:", error);
+    console.error("[getAuthenticatedUser] ❌ 인증 처리 중 오류 발생:", error);
     return null;
   }
 }

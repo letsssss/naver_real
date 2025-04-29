@@ -393,12 +393,30 @@ export default function TicketCancellationDetail() {
           ? `/api/ticket-purchase?userId=${userId}`
           : '/api/ticket-purchase';
 
+        // 인증 토큰을 가져오기 (로컬 스토리지에서)
+        let token = null;
+        if (typeof window !== 'undefined') {
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+        }
+
+        // 헤더 설정 (인증 토큰 포함)
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        // 토큰이 있으면 Authorization 헤더 추가
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log("인증 토큰 헤더 추가됨");
+        } else {
+          console.log("인증 토큰을 찾을 수 없음");
+        }
+
         // 티켓 구매 API 호출
         const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             postId: parseInt(id),
             quantity: selectedSeats.length,

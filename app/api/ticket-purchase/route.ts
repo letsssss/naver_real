@@ -67,6 +67,66 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // 인증 실패 시 추가 디버깅
+    if (!authUser) {
+      // 직접 세션 확인
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (!sessionError && sessionData.session?.user) {
+          console.log("세션은 존재하지만 getAuthenticatedUser에서 인식하지 못함:", 
+            sessionData.session.user.id);
+          
+          // 세션이 있으면 인증 사용자로 사용
+          authUser = sessionData.session.user;
+          console.log("세션에서 사용자 정보 복구 성공");
+        } else {
+          console.log("세션 확인 결과: 세션 없음", sessionError?.message);
+        }
+      } catch (e) {
+        console.error("세션 확인 중 오류:", e);
+      }
+    }
+    
+    // 쿠키 디버깅
+    try {
+      const cookieHeader = request.headers.get('cookie');
+      if (cookieHeader) {
+        console.log("요청에 포함된 쿠키 헤더:", cookieHeader.substring(0, 100) + "...");
+      } else {
+        console.log("요청에 쿠키 헤더가 없음");
+      }
+    } catch (e) {
+      console.error("쿠키 디버깅 중 오류:", e);
+    }
+    
+    // 인증 헤더 디버깅
+    try {
+      const authHeader = request.headers.get('Authorization') || request.headers.get('authorization');
+      if (authHeader) {
+        console.log("Authorization 헤더 발견:", authHeader.substring(0, 20) + "...");
+        
+        // 헤더에서 토큰을 추출하여 직접 사용자 정보 가져오기 시도
+        if (!authUser && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          try {
+            const { data, error } = await supabase.auth.getUser(token);
+            if (!error && data.user) {
+              console.log("Authorization 헤더에서 사용자 인증 성공:", data.user.id);
+              authUser = data.user;
+            } else {
+              console.log("Authorization 헤더 토큰으로 사용자 조회 실패:", error?.message);
+            }
+          } catch (e) {
+            console.error("토큰으로 사용자 조회 중 오류:", e);
+          }
+        }
+      } else {
+        console.log("Authorization 헤더가 없음");
+      }
+    } catch (e) {
+      console.error("인증 헤더 디버깅 중 오류:", e);
+    }
+    
     if (!authUser) {
       console.log("인증된 사용자를 찾을 수 없음");
       return addCorsHeaders(NextResponse.json(
