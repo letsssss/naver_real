@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, Calendar, MapPin, Clock, CreditCard, Play, ThumbsUp, CheckCircle, Send, X } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
@@ -285,6 +286,22 @@ export default function SellerTransactionDetail() {
     }
 
     if (transaction.currentStep === "ticketing_started") {
+      // 취켓팅 성공 시 confetti 효과 추가
+      import('canvas-confetti').then((confetti) => {
+        confetti.default({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ["#4CAF50", "#2196F3", "#FFC107"],
+        });
+      });
+
+      // 성공 토스트 메시지
+      toast.success("취켓팅 완료 처리되었습니다!", {
+        description: "구매자의 확정을 기다리고 있습니다.",
+        duration: 3000,
+      });
+
       // 취켓팅 완료 상태로 변경
       const response = await fetch(`/api/purchase/status/${transaction.id}`, {
         method: "POST",
@@ -303,7 +320,10 @@ export default function SellerTransactionDetail() {
       } else {
         const errorText = await response.text()
         console.error("API 오류:", errorText)
-        alert("상태 변경에 실패했습니다.")
+        toast.error("상태 변경에 실패했습니다.", {
+          description: "잠시 후 다시 시도해주세요.",
+          duration: 4000,
+        });
       }
     } else if (transaction.currentStep === "confirmed") {
       // 구매자에 대한 리뷰 작성 페이지로 이동
