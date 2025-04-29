@@ -17,5 +17,9 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.redirect(requestUrl.origin);
+  // 리다이렉트 대신 JSON 응답 반환
+  return NextResponse.json({ 
+    success: true, 
+    message: "Session cookies updated" 
+  });
 } 

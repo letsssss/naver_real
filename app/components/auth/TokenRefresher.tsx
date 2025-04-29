@@ -41,12 +41,18 @@ export default function TokenRefresher() {
           
           // Supabase의 인증 쿠키를 자동으로 설정하게끔 강제로 trigger
           try {
-            await fetch('/api/auth/callback', {
+            const response = await fetch('/api/auth/callback', {
               method: 'POST',
               body: JSON.stringify({ event, session }),
               headers: { 'Content-Type': 'application/json' },
             });
-            console.log("✅ Supabase 쿠키 설정 API 호출 완료");
+            
+            // 리다이렉트된 응답을 무시 (리다이렉트가 루트 경로로 발생하는 문제 해결)
+            if (!response.redirected) {
+              console.log("✅ Supabase 쿠키 설정 API 호출 완료");
+            } else {
+              console.log("⚠️ 리다이렉트 감지됨, 무시합니다");
+            }
           } catch (error) {
             console.error("❌ Supabase 쿠키 설정 API 호출 실패:", error);
           }
