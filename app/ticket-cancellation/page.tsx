@@ -157,7 +157,7 @@ export default function TicketCancellationPage() {
           name: post.name || post.displayName || post.display_name || '판매자 정보 없음',
           email: post.email || '',
           rating: post.rating || 4.5,
-          image: post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
+          profileImage: post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
         };
         
         // 디버깅: 작성자 정보 매핑 로그

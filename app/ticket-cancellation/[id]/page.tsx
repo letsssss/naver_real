@@ -44,7 +44,7 @@ interface TicketData {
     id?: string;
     name: string;
     rating: number;
-    image: string;
+    profileImage: string;
   };
   seatOptions: SeatOption[];
 }
@@ -166,7 +166,7 @@ export default function TicketCancellationDetail() {
         if (postData.author) {
           console.log("author.id:", postData.author.id);
           console.log("author.name:", postData.author.name);
-          console.log("author.image:", postData.author.image);
+          console.log("author.profileImage:", postData.author.profileImage);
         } else {
           console.log("작성자(author) 객체가 없습니다.");
         }
@@ -301,7 +301,7 @@ export default function TicketCancellationDetail() {
             id: sellerId,
             name: postData.author?.name || '판매자 정보 없음',
             rating: 4.5,
-            image: postData.author?.image || '',
+            profileImage: postData.author?.profileImage || '',
           },
           seatOptions: seatOptions
         });
@@ -596,7 +596,7 @@ export default function TicketCancellationDetail() {
                   <div className="flex items-center gap-4">
                     <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-200">
                       <Image
-                        src={ticketData.seller.image || "/placeholder.svg"}
+                        src={ticketData.seller.profileImage || "/placeholder.svg"}
                         alt={ticketData.seller.name}
                         fill
                         className="object-cover"
