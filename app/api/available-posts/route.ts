@@ -103,10 +103,11 @@ export async function GET(req: NextRequest) {
     // from('available_posts') 대신 rpc('get_available_posts') 사용
     // 먼저 rpc 함수 실행하여 구매 가능한 게시물 가져오기
     const { data: availablePosts, error: rpcError } = await adminSupabase
-      .rpc('get_available_posts');
+      .from('available_posts_with_author')
+      .select('*');
     
     if (rpcError) {
-      console.error("[사용 가능한 게시물 API] RPC 함수 호출 오류:", rpcError);
+      console.error("[사용 가능한 게시물 API] 뷰 조회 오류:", rpcError);
       
       return addCorsHeaders(NextResponse.json({
         success: false,
@@ -151,7 +152,7 @@ export async function GET(req: NextRequest) {
     console.log(`[사용 가능한 게시물 API] 조회 성공: ${posts?.length || 0}개 게시물 발견 (총 ${totalCount}개 중)`);
     
     // 응답 데이터 구성 - 결과를 명시적인 타입으로 변환하여 처리
-    const formattedPosts: FormattedPost[] = posts?.map((post: any) => ({
+    const formattedPosts: PostWithAuthor[] = posts?.map((post: any) => ({
       id: post.id,
       title: post.title || '',
       content: post.content?.substring(0, 100) + (post.content && post.content.length > 100 ? '...' : '') || '',
@@ -163,81 +164,32 @@ export async function GET(req: NextRequest) {
       eventDate: post.event_date || null,
       eventVenue: post.event_venue || null,
       imageUrl: post.image_url || null,
-      authorId: post.author_id || post.user_id || null
+      authorId: post.author_id || post.user_id || null,
+      author: {
+        id: post.author_id || post.user_id || null,
+        name: post.author_name || '',
+        email: post.author_email || '',
+        profileImage: post.author_image || null,
+        rating: post.author_rating || 4.5
+      }
     })) || [];
 
-    // 작성자 ID 목록 추출 (중복 제거)
-    const authorIds = [...new Set(formattedPosts.map(post => post.authorId).filter(Boolean))];
-    
-    // 디버깅: authorId 확인
-    console.log('=== Author ID 디버깅 ===');
-    formattedPosts.forEach((post, index) => {
-      console.log(`[Post ${index}] ID: ${post.id}, AuthorId: ${post.authorId}, Title: ${post.title}`);
-    });
-    
-    // 작성자 정보 조회
-    let authorsMap: AuthorsMap = {};
-    if (authorIds.length > 0) {
-      console.log(`[사용 가능한 게시물 API] ${authorIds.length}명의 작성자 정보 조회 중...`);
-      console.log('조회할 작성자 ID 목록:', authorIds);
-      
-      const { data: authorsData, error: authorsError } = await adminSupabase
-        .from('profiles')  // 프로필 테이블에서 작성자 정보 조회
-        .select('id, name, email, avatar_url, rating')
-        .in('id', authorIds);
-      
-      if (authorsError) {
-        console.error("[사용 가능한 게시물 API] 작성자 정보 조회 오류:", authorsError);
-      } else if (authorsData) {
-        // 디버깅: 조회된 프로필 정보 확인
-        console.log('=== 조회된 프로필 정보 ===');
-        console.log(authorsData);
-        
-        // 작성자 정보를 맵으로 변환하여 빠르게 조회할 수 있도록 함
-        authorsMap = authorsData.reduce<AuthorsMap>((acc, author) => {
-          acc[author.id] = author;
-          return acc;
-        }, {});
-        
-        console.log(`[사용 가능한 게시물 API] ${authorsData.length}명의 작성자 정보 조회 성공`);
-      }
-    }
-    
-    // 작성자 정보를 게시물에 통합
-    const postsWithAuthors: PostWithAuthor[] = formattedPosts.map(post => {
-      const author = post.authorId ? authorsMap[post.authorId] : null;
-      
-      // 디버깅: 각 게시물의 작성자 정보 매핑 확인
-      console.log(`=== 게시물 ${post.id}의 작성자 정보 매핑 ===`);
-      console.log('AuthorId:', post.authorId);
-      console.log('Found Author:', author);
-      
-      return {
-        ...post,
-        author: author ? {
-          id: author.id,
-          name: author.name,
-          email: author.email,
-          profileImage: author.avatar_url || null,
-          rating: author.rating || 0
-        } : null
-      };
-    });
-
-    // 디버깅: 최종 응답 데이터 확인
+    // 작성자 정보가 포함된 데이터를 클라이언트에 직접 반환
     console.log('=== 최종 응답 데이터 샘플 ===');
-    console.log('First post with author:', postsWithAuthors[0]);
+    if (formattedPosts.length > 0) {
+      console.log('First post with author:', formattedPosts[0]);
+    }
     
     return addCorsHeaders(NextResponse.json({
       success: true,
-      posts: postsWithAuthors,
+      posts: formattedPosts,
       pagination: {
         total: totalCount,
         page,
         limit,
         totalPages: Math.ceil(totalCount / limit)
       },
-      source: 'get_available_posts'
+      source: 'available_posts_with_author'
     }));
   } catch (error) {
     console.error("[사용 가능한 게시물 API] 오류:", error);
