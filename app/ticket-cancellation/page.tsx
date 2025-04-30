@@ -38,6 +38,7 @@ interface Post {
     name: string;
     email: string;
     rating?: number;
+    profileImage?: string;
   } | null;
 }
 
@@ -442,9 +443,14 @@ export default function TicketCancellationPage() {
                 // 디버깅: 작성자 정보 로깅
                 console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
                 console.log('전체 티켓 데이터:', ticket);
+                console.log('작성자 객체 유무:', !!ticket.author);
                 console.log('작성자 정보:', ticket.author);
                 if (ticket.author) {
                   console.log('작성자 필드:', Object.keys(ticket.author).join(', '));
+                  console.log('작성자 이름:', ticket.author.name);
+                  console.log('작성자 이메일:', ticket.author.email);
+                  console.log('작성자 평점:', ticket.author.rating);
+                  console.log('작성자 이미지:', ticket.author.profileImage);
                 }
                 
                 return (
@@ -480,12 +486,12 @@ export default function TicketCancellationPage() {
                       <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <span>판매자:</span>
-                        {ticket.author && ticket.author.id ? (
+                        {ticket.author?.name ? (
                           <Link
-                            href={`/seller/${ticket.author.id}`}
+                            href={`/seller/${ticket.author.id || 'unknown'}`}
                             className="text-blue-600 hover:underline flex items-center"
                           >
-                            {ticket.author.name || '판매자 정보 없음'}
+                            {ticket.author.name}
                             <div className="flex items-center ml-2 text-yellow-500">
                               <Star className="h-3 w-3 fill-current" />
                               <span className="text-xs ml-0.5">{ticket.author.rating?.toFixed(1) || '4.5'}</span>
