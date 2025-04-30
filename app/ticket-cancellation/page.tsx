@@ -107,7 +107,7 @@ export default function TicketCancellationPage() {
       
       // API 호출을 available-posts로 변경
       let apiUrl = '/api/available-posts'
-      console.log("수정된 API 호출 (구매 가능한 게시물):", apiUrl)
+      console.log("API 호출 (구매 가능한 게시물):", apiUrl)
       
       // 캐시 방지를 위한 타임스탬프 추가
       const timestamp = Date.now();
@@ -136,20 +136,88 @@ export default function TicketCancellationPage() {
         return;
       }
       
-      // 모든 게시물의 작성자 정보 디버깅
-      console.log("=== 게시물 작성자 정보 디버깅 ===");
-      data.posts.forEach((post: Post) => {
-        console.log(`[게시물 ${post.id}]`);
-        console.log('- 제목:', post.title);
-        console.log('- 작성자:', post.author);
-        if (post.author) {
-          console.log('  - ID:', post.author.id);
-          console.log('  - 이름:', post.author.name);
-          console.log('  - 평점:', post.author.rating);
+      const posts = data.posts;
+      
+      // 작성자 ID 목록 추출 (중복 제거 및 유효한 ID만 필터링)
+      const authorIds = [...new Set(posts
+        .map(post => post.authorId)
+        .filter(id => id !== null && id !== undefined)
+      )];
+      
+      console.log("추출된 작성자 ID 목록:", authorIds);
+      
+      // 작성자 정보를 저장할 맵 객체
+      let authorsMap: Record<string, any> = {};
+      
+      // 작성자 ID가 있는 경우에만 추가 정보 요청
+      if (authorIds.length > 0) {
+        try {
+          console.log("작성자 정보 일괄 조회 요청 시작...");
+          
+          // 새로 만든 /api/users/batch 엔드포인트 호출
+          const authorsResponse = await fetch('/api/users/batch', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
+            },
+            body: JSON.stringify({ userIds: authorIds })
+          });
+          
+          if (authorsResponse.ok) {
+            const authorsData = await authorsResponse.json();
+            console.log("작성자 정보 응답:", authorsData);
+            
+            if (authorsData.success && authorsData.users) {
+              // ID를 키로 사용하는 맵 객체 생성
+              authorsMap = authorsData.users.reduce((acc: Record<string, any>, user: any) => {
+                if (user && user.id) {
+                  acc[user.id] = {
+                    id: user.id,
+                    name: user.name || '판매자 정보 없음',
+                    email: user.email || '',
+                    profileImage: user.profile_image || '',
+                    rating: user.rating || 4.5
+                  };
+                }
+                return acc;
+              }, {});
+              
+              console.log("작성자 정보 맵 생성 완료:", Object.keys(authorsMap).length);
+            } else {
+              console.error("작성자 정보 응답 실패:", authorsData.message);
+            }
+          } else {
+            console.error("작성자 정보 요청 실패:", await authorsResponse.text());
+          }
+        } catch (err) {
+          console.error("작성자 정보 요청 중 오류:", err);
         }
+      }
+      
+      // 게시물에 작성자 정보 병합
+      const enrichedPosts = posts.map((post: any) => {
+        // authorId를 기반으로 작성자 정보 찾기
+        const author = post.authorId ? authorsMap[post.authorId] : null;
+        
+        // 디버깅: 작성자 정보 매핑 로그
+        console.log(`게시물 ${post.id}의 작성자 ID(${post.authorId})에 대한 정보 매핑:`, author || '정보 없음');
+        
+        // author 객체가 이미 있으면 유지, 없으면 새 객체 생성 또는 authorMap에서 가져온 정보로 대체
+        return {
+          ...post,
+          author: author || post.author || {
+            id: post.authorId || '',
+            name: '판매자 정보 없음',
+            email: '',
+            profileImage: '',
+            rating: 4.5
+          }
+        };
       });
       
-      setTickets(data.posts);
+      console.log("작성자 정보가 포함된 게시물 처리 완료:", enrichedPosts.length);
+      setTickets(enrichedPosts);
     } catch (err) {
       console.error("취켓팅 티켓 불러오기 오류:", err)
       setError("데이터를 불러오는데 실패했습니다.")
