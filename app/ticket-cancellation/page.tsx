@@ -138,9 +138,42 @@ export default function TicketCancellationPage() {
       
       const posts = data.posts;
       
-      // 작성자 ID 목록 추출 (중복 제거 및 유효한 ID만 필터링)
+      // 작성자 ID 필드명 문제 디버깅
+      console.log("=== 작성자 ID 필드명 디버깅 ===");
+      if (posts && posts.length > 0) {
+        const firstPost = posts[0];
+        console.log("첫 번째 게시물 ID:", firstPost.id);
+        console.log("가능한 작성자 ID 필드들:");
+        console.log("- authorId:", firstPost.authorId);
+        console.log("- author_id:", firstPost.author_id);
+        console.log("- userId:", firstPost.userId);
+        console.log("- user_id:", firstPost.user_id);
+        console.log("- author 객체:", firstPost.author);
+        if (firstPost.author) {
+          console.log("  - author.id:", firstPost.author.id);
+        }
+      }
+      
+      // 다양한 필드명을 고려하여 작성자 ID 추출 (중복 제거 및 유효한 ID만 필터링)
       const authorIds = [...new Set(posts
-        .map(post => post.authorId)
+        .map(post => {
+          // 여러 가능한 필드명에서 작성자 ID 검색
+          const possibleId = 
+            post.authorId || 
+            post.author_id || 
+            post.userId || 
+            post.user_id || 
+            (post.author && post.author.id);
+          
+          // 추출된 ID 로깅
+          if (possibleId) {
+            console.log(`게시물 ${post.id}의 작성자 ID: ${possibleId}`);
+          } else {
+            console.log(`게시물 ${post.id}의 작성자 ID를 찾을 수 없음`);
+          }
+          
+          return possibleId;
+        })
         .filter(id => id !== null && id !== undefined)
       )];
       
@@ -172,11 +205,16 @@ export default function TicketCancellationPage() {
               // ID를 키로 사용하는 맵 객체 생성
               authorsMap = authorsData.users.reduce((acc: Record<string, any>, user: any) => {
                 if (user && user.id) {
+                  console.log(`작성자 ${user.id} 정보:`, JSON.stringify(user));
+                  
+                  // 다양한 필드명 형식에 대응
                   acc[user.id] = {
                     id: user.id,
-                    name: user.name || '판매자 정보 없음',
+                    name: user.name || user.display_name || user.displayName || '판매자 정보 없음',
                     email: user.email || '',
-                    profileImage: user.profile_image || '',
+                    // 프로필 이미지 필드는 여러 형식일 수 있음
+                    profile_image: user.profile_image || user.profileImage || user.avatar_url || user.avatarUrl || '',
+                    // rating 필드
                     rating: user.rating || 4.5
                   };
                 }
@@ -197,22 +235,36 @@ export default function TicketCancellationPage() {
       
       // 게시물에 작성자 정보 병합
       const enrichedPosts = posts.map((post: any) => {
+        // 가능한 authorId 필드 확인
+        const authorId = post.authorId || post.author_id || post.userId || post.user_id || (post.author && post.author.id);
+        
         // authorId를 기반으로 작성자 정보 찾기
-        const author = post.authorId ? authorsMap[post.authorId] : null;
+        const author = authorId ? authorsMap[authorId] : null;
         
         // 디버깅: 작성자 정보 매핑 로그
-        console.log(`게시물 ${post.id}의 작성자 ID(${post.authorId})에 대한 정보 매핑:`, author || '정보 없음');
+        console.log(`게시물 ${post.id}의 작성자 ID(${authorId})에 대한 정보 매핑:`, author || '정보 없음');
         
         // author 객체가 이미 있으면 유지, 없으면 새 객체 생성 또는 authorMap에서 가져온 정보로 대체
+        const finalAuthor = author ? {
+          id: author.id,
+          name: author.name || '판매자 정보 없음',
+          email: author.email || '',
+          // 필드명 지원: API가 profile_image를 반환하지만 프론트엔드는 rating 필드를 사용함
+          rating: author.rating || 4.5,
+          // 이미지 필드 여러 가능한 이름 지원
+          image: author.profile_image || author.profileImage || author.avatar_url || ''
+        } : (post.author || {
+          id: authorId || '',
+          name: '판매자 정보 없음',
+          email: '',
+          rating: 4.5,
+          image: ''
+        });
+        
+        // 게시물에 필요한 필드 확인 및 추가
         return {
           ...post,
-          author: author || post.author || {
-            id: post.authorId || '',
-            name: '판매자 정보 없음',
-            email: '',
-            profileImage: '',
-            rating: 4.5
-          }
+          author: finalAuthor
         };
       });
       
@@ -489,6 +541,9 @@ export default function TicketCancellationPage() {
                 console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
                 console.log('전체 티켓 데이터:', ticket);
                 console.log('작성자 정보:', ticket.author);
+                if (ticket.author) {
+                  console.log('작성자 필드:', Object.keys(ticket.author).join(', '));
+                }
                 
                 return (
                   <div
@@ -523,12 +578,12 @@ export default function TicketCancellationPage() {
                       <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <span>판매자:</span>
-                        {ticket.author ? (
+                        {ticket.author && ticket.author.id ? (
                           <Link
                             href={`/seller/${ticket.author.id}`}
                             className="text-blue-600 hover:underline flex items-center"
                           >
-                            {ticket.author.name}
+                            {ticket.author.name || '판매자 정보 없음'}
                             <div className="flex items-center ml-2 text-yellow-500">
                               <Star className="h-3 w-3 fill-current" />
                               <span className="text-xs ml-0.5">{ticket.author.rating?.toFixed(1) || '4.5'}</span>
