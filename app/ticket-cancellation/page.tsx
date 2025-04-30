@@ -139,127 +139,29 @@ export default function TicketCancellationPage() {
       const posts = data.posts;
       
       // 작성자 ID 필드명 문제 디버깅
-      console.log("=== 작성자 ID 필드명 디버깅 ===");
+      console.log("=== 데이터 구조 디버깅 ===");
       if (posts && posts.length > 0) {
         const firstPost = posts[0];
-        console.log("첫 번째 게시물 ID:", firstPost.id);
-        console.log("가능한 작성자 ID 필드들:");
-        console.log("- authorId:", firstPost.authorId);
-        console.log("- author_id:", firstPost.author_id);
-        console.log("- userId:", firstPost.userId);
-        console.log("- user_id:", firstPost.user_id);
-        console.log("- author 객체:", firstPost.author);
-        if (firstPost.author) {
-          console.log("  - author.id:", firstPost.author.id);
-        }
+        console.log("첫 번째 게시물:", firstPost);
+        console.log("게시물 키:", Object.keys(firstPost).join(', '));
       }
       
-      // 다양한 필드명을 고려하여 작성자 ID 추출 (중복 제거 및 유효한 ID만 필터링)
-      const authorIds = [...new Set(posts
-        .map(post => {
-          // 여러 가능한 필드명에서 작성자 ID 검색
-          const possibleId = 
-            post.authorId || 
-            post.author_id || 
-            post.userId || 
-            post.user_id || 
-            (post.author && post.author.id);
-          
-          // 추출된 ID 로깅
-          if (possibleId) {
-            console.log(`게시물 ${post.id}의 작성자 ID: ${possibleId}`);
-          } else {
-            console.log(`게시물 ${post.id}의 작성자 ID를 찾을 수 없음`);
-          }
-          
-          return possibleId;
-        })
-        .filter(id => id !== null && id !== undefined)
-      )];
-      
-      console.log("추출된 작성자 ID 목록:", authorIds);
-      
-      // 작성자 정보를 저장할 맵 객체
-      let authorsMap: Record<string, any> = {};
-      
-      // 작성자 ID가 있는 경우에만 추가 정보 요청
-      if (authorIds.length > 0) {
-        try {
-          console.log("작성자 정보 일괄 조회 요청 시작...");
-          
-          // 새로 만든 /api/users/batch 엔드포인트 호출
-          const authorsResponse = await fetch('/api/users/batch', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache'
-            },
-            body: JSON.stringify({ userIds: authorIds })
-          });
-          
-          if (authorsResponse.ok) {
-            const authorsData = await authorsResponse.json();
-            console.log("작성자 정보 응답:", authorsData);
-            
-            if (authorsData.success && authorsData.users) {
-              // ID를 키로 사용하는 맵 객체 생성
-              authorsMap = authorsData.users.reduce((acc: Record<string, any>, user: any) => {
-                if (user && user.id) {
-                  console.log(`작성자 ${user.id} 정보:`, JSON.stringify(user));
-                  
-                  // 다양한 필드명 형식에 대응
-                  acc[user.id] = {
-                    id: user.id,
-                    name: user.name || user.display_name || user.displayName || '판매자 정보 없음',
-                    email: user.email || '',
-                    // 프로필 이미지 필드는 여러 형식일 수 있음
-                    profile_image: user.profile_image || user.profileImage || user.avatar_url || user.avatarUrl || '',
-                    // rating 필드
-                    rating: user.rating || 4.5
-                  };
-                }
-                return acc;
-              }, {});
-              
-              console.log("작성자 정보 맵 생성 완료:", Object.keys(authorsMap).length);
-            } else {
-              console.error("작성자 정보 응답 실패:", authorsData.message);
-            }
-          } else {
-            console.error("작성자 정보 요청 실패:", await authorsResponse.text());
-          }
-        } catch (err) {
-          console.error("작성자 정보 요청 중 오류:", err);
-        }
-      }
-      
-      // 게시물에 작성자 정보 병합
+      // 게시물에 직접 작성자 정보 추가 (API 호출 없이 처리)
       const enrichedPosts = posts.map((post: any) => {
         // 가능한 authorId 필드 확인
-        const authorId = post.authorId || post.author_id || post.userId || post.user_id || (post.author && post.author.id);
+        const authorId = post.authorId || post.author_id || post.userId || post.user_id || post.id;
         
-        // authorId를 기반으로 작성자 정보 찾기
-        const author = authorId ? authorsMap[authorId] : null;
+        // 평면 구조의 필드들을 author 객체에 맵핑
+        const finalAuthor = {
+          id: authorId || '',
+          name: post.name || post.displayName || post.display_name || '판매자 정보 없음',
+          email: post.email || '',
+          rating: post.rating || 4.5,
+          image: post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
+        };
         
         // 디버깅: 작성자 정보 매핑 로그
-        console.log(`게시물 ${post.id}의 작성자 ID(${authorId})에 대한 정보 매핑:`, author || '정보 없음');
-        
-        // author 객체가 이미 있으면 유지, 없으면 새 객체 생성 또는 authorMap에서 가져온 정보로 대체
-        const finalAuthor = author ? {
-          id: author.id,
-          name: author.name || '판매자 정보 없음',
-          email: author.email || '',
-          // 필드명 지원: API가 profile_image를 반환하지만 프론트엔드는 rating 필드를 사용함
-          rating: author.rating || 4.5,
-          // 이미지 필드 여러 가능한 이름 지원
-          image: author.profile_image || author.profileImage || author.avatar_url || ''
-        } : (post.author || {
-          id: authorId || '',
-          name: '판매자 정보 없음',
-          email: '',
-          rating: 4.5,
-          image: ''
-        });
+        console.log(`게시물 ${post.id}의 작성자 정보 매핑:`, finalAuthor);
         
         // 게시물에 필요한 필드 확인 및 추가
         return {
