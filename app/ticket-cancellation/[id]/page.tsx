@@ -63,8 +63,6 @@ export default function TicketCancellationDetail() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [accountId, setAccountId] = useState("")
   const [accountPassword, setAccountPassword] = useState("")
-  const [name, setName] = useState("")
-  const [address, setAddress] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isAuthor, setIsAuthor] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -74,9 +72,6 @@ export default function TicketCancellationDetail() {
   // 마운트 상태 관리 및 사용자 ID 저장
   useEffect(() => {
     setMounted(true)
-    if (user?.name) {
-      setName(user.name)
-    }
     if (user?.id) {
       setCurrentUserId(user.id.toString())
       console.log("사용자 ID 저장됨:", user.id.toString())
@@ -757,34 +752,6 @@ export default function TicketCancellationDetail() {
                         required
                       />
                       <p className="text-sm text-gray-500 mt-1">예매 사이트에서 사용하는 계정 정보를 입력해주세요.</p>
-                    </div>
-
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                        구매자 이름
-                      </label>
-                      <Input
-                        id="name"
-                        type="text"
-                        placeholder="실명을 입력해주세요"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-                        주소
-                      </label>
-                      <Input
-                        id="address"
-                        type="text"
-                        placeholder="배송지 주소를 입력해주세요"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        required
-                      />
                     </div>
 
                     <div>
