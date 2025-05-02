@@ -38,16 +38,14 @@ export async function POST(request: Request) {
     const response = await axios.post(
       'https://api.solapi.com/messages/v4/send',
       {
-        message: {
-          to: phoneNumber,
-          from: SENDER_PHONE,
-          text: content,
-          type: 'ATA', // 알림톡 타입
-          kakaoOptions: {
-            pfId: SOLAPI_SENDER_KEY,
-            templateId: SOLAPI_TEMPLATE_CODE,
-            disableSms: false // SMS 대체 발송 활성화
-          }
+        to: phoneNumber,
+        from: SENDER_PHONE,
+        text: content,
+        type: 'ATA', // 알림톡 타입
+        kakaoOptions: {
+          pfId: SOLAPI_SENDER_KEY,
+          templateId: SOLAPI_TEMPLATE_CODE,
+          disableSms: false // SMS 대체 발송 활성화
         }
       },
       {
