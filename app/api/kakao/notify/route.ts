@@ -28,8 +28,10 @@ export async function POST(request: Request) {
     
     console.log(`🔔 카카오 알림톡 전송 시도: ${name}님(${phoneNumber})에게 알림 발송`);
     
-    // 알림톡 내용 구성 (템플릿에 맞게 조정 필요)
-    const content = `${name}님, 이지티켓에 새로운 메시지가 도착했습니다. 확인해보세요!`;
+    // 알림톡 내용 구성 (템플릿과 정확히 일치하도록 수정)
+    const content = `${name}님 가입을 환영합니다. 🎉
+본 메시지는 신규 가입자에게 발송되는 안내 메시지입니다.
+가입 사실이 없다면 상담원에게 말씀해주세요.`;
     
     // Solapi API 호출을 위한 인증 헤더 생성
     const authorizationToken = Buffer.from(`${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`).toString('base64');
@@ -44,8 +46,7 @@ export async function POST(request: Request) {
         pfId: SOLAPI_SENDER_KEY,
         templateId: SOLAPI_TEMPLATE_CODE,
         variables: {
-          name: name || '고객',
-          message: message || '새 메시지가 도착했습니다.'
+          name: name || '고객'
         },
         disableSms: false // SMS 대체 발송 활성화
       }
