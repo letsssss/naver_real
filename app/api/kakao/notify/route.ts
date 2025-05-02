@@ -18,8 +18,31 @@ console.log('✅ 환경 변수 확인', {
   phone: process.env.SENDER_PHONE,
 });
 
+// 환경 변수 타입 디버깅
+console.log('[DEBUG] SOLAPI_API_KEY:', SOLAPI_API_KEY);
+console.log('[DEBUG] typeof SOLAPI_API_KEY:', typeof SOLAPI_API_KEY);
+console.log('[DEBUG] SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
+console.log('[DEBUG] typeof SOLAPI_API_SECRET:', typeof SOLAPI_API_SECRET);
+
 export async function POST(request: Request) {
   try {
+    // 환경변수 유효성 검사
+    if (!SOLAPI_API_KEY || typeof SOLAPI_API_KEY !== 'string') {
+      console.error('❌ SOLAPI_API_KEY가 설정되지 않았거나 문자열이 아닙니다');
+      return NextResponse.json(
+        { error: 'API 키가 올바르게 설정되지 않았습니다.' },
+        { status: 500 }
+      );
+    }
+
+    if (!SOLAPI_API_SECRET || typeof SOLAPI_API_SECRET !== 'string') {
+      console.error('❌ SOLAPI_API_SECRET이 설정되지 않았거나 문자열이 아닙니다');
+      return NextResponse.json(
+        { error: 'API 시크릿이 올바르게 설정되지 않았습니다.' },
+        { status: 500 }
+      );
+    }
+    
     // 요청 본문에서 데이터 추출
     const body = await request.json();
     const { to, name, message = '새 메시지가 도착했습니다.' } = body;
@@ -40,8 +63,10 @@ export async function POST(request: Request) {
     // 환경 변수 확인
     console.log('🔑 API 키 확인:', !!SOLAPI_API_KEY, !!SOLAPI_API_SECRET, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
     
-    // API 요청 데이터 구성 (Solapi 공식 권장 방식)
+    // API 요청 데이터 구성 (본문에도 인증 정보 포함)
     const apiRequestData = {
+      apiKey: SOLAPI_API_KEY,
+      apiSecret: SOLAPI_API_SECRET,
       message: {
         to: phoneNumber,
         from: SENDER_PHONE,
@@ -60,7 +85,7 @@ export async function POST(request: Request) {
     
     console.log('📝 Solapi 요청 데이터:', JSON.stringify(apiRequestData, null, 2));
     
-    // 카카오 알림톡 전송 (Solapi 공식 권장 방식으로 변경)
+    // 카카오 알림톡 전송 (헤더와 본문 모두에 인증 정보 포함)
     const response = await axios.post(
       'https://api.solapi.com/messages/v4/send',
       apiRequestData,
