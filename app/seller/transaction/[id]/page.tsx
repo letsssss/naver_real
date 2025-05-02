@@ -334,7 +334,11 @@ export default function SellerTransactionDetail() {
     }
   }
 
-  const openChat = () => setIsChatOpen(true)
+  const openChat = () => {
+    console.log("채팅방 열기 요청 - roomId:", chatRoomId);
+    console.log("현재 거래 ID:", params.id);
+    setIsChatOpen(true);
+  }
   const closeChat = () => setIsChatOpen(false)
 
   // 현재 단계에 따른 버튼 텍스트 결정 (판매자용)
@@ -403,6 +407,7 @@ export default function SellerTransactionDetail() {
                 orderNumber={params.id} 
                 onClick={openChat}
                 className="justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 shadow-sm text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
+                debug={true}
               />
             </div>
 

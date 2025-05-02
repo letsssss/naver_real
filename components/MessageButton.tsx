@@ -10,6 +10,7 @@ interface MessageButtonProps {
   disabled?: boolean;
   isLoading?: boolean;
   className?: string;
+  debug?: boolean;
 }
 
 export default function MessageButton({ 
@@ -17,15 +18,31 @@ export default function MessageButton({
   onClick, 
   disabled = false, 
   isLoading = false,
-  className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
+  className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium",
+  debug = false
 }: MessageButtonProps) {
   // 읽지 않은 메시지 개수 가져오기
   const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(orderNumber);
   
   // 디버깅: unreadCount 값 콘솔에 출력
   useEffect(() => {
-    console.log(`🔔 MessageButton - orderNumber: ${orderNumber}, unreadCount: ${unreadCount}, isLoading: ${loadingMessages}, error: ${error?.message || 'none'}`);
-  }, [orderNumber, unreadCount, loadingMessages, error]);
+    if (debug) {
+      console.log(`🔔 MessageButton - orderNumber: ${orderNumber}`);
+      console.log(`🔔 읽지 않은 메시지 수: ${unreadCount}`);
+      console.log(`🔔 로딩 상태: ${loadingMessages}`);
+      console.log(`🔔 에러: ${error?.message || 'none'}`);
+      
+      // localStorage에 있는 토큰 확인
+      const token = localStorage.getItem('token') || 
+                    localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+      console.log(`🔑 토큰 존재 여부: ${!!token}`);
+      
+      // 토큰이 있으면 앞부분만 표시
+      if (token) {
+        console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
+      }
+    }
+  }, [orderNumber, unreadCount, loadingMessages, error, debug]);
 
   return (
     <Button
