@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useAuth } from '@/contexts/auth-context';
 
 interface MessageButtonProps {
   orderNumber?: string;
@@ -21,6 +22,8 @@ export default function MessageButton({
   className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium",
   debug = false
 }: MessageButtonProps) {
+  const { user } = useAuth();
+  
   // 읽지 않은 메시지 개수 가져오기
   const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(orderNumber);
   
@@ -28,6 +31,7 @@ export default function MessageButton({
   useEffect(() => {
     if (debug) {
       console.log(`🔔 MessageButton - orderNumber: ${orderNumber}`);
+      console.log(`🔔 MessageButton - userId: ${user?.id || 'undefined'}`);
       console.log(`🔔 읽지 않은 메시지 수: ${unreadCount}`);
       console.log(`🔔 로딩 상태: ${loadingMessages}`);
       console.log(`🔔 에러: ${error?.message || 'none'}`);
@@ -42,14 +46,17 @@ export default function MessageButton({
         console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
       }
     }
-  }, [orderNumber, unreadCount, loadingMessages, error, debug]);
+  }, [orderNumber, unreadCount, loadingMessages, error, debug, user]);
+
+  // 사용자 정보나 주문번호가 없으면 버튼 비활성화
+  const buttonDisabled = disabled || isLoading || !user;
 
   return (
     <Button
       variant="outline"
       className={className}
       onClick={onClick}
-      disabled={disabled || isLoading}
+      disabled={buttonDisabled}
     >
       <div className="relative">
         <svg
