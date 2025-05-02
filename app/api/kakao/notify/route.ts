@@ -34,20 +34,29 @@ export async function POST(request: Request) {
     // Solapi API 호출을 위한 인증 헤더 생성
     const authorizationToken = Buffer.from(`${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`).toString('base64');
     
+    // API 요청 데이터 구성
+    const apiRequestData = {
+      to: phoneNumber,
+      from: SENDER_PHONE,
+      text: content,
+      type: 'ATA', // 알림톡 타입
+      kakaoOptions: {
+        pfId: SOLAPI_SENDER_KEY,
+        templateId: SOLAPI_TEMPLATE_CODE,
+        variables: {
+          name: name || '고객',
+          message: message || '새 메시지가 도착했습니다.'
+        },
+        disableSms: false // SMS 대체 발송 활성화
+      }
+    };
+    
+    console.log('📝 Solapi 요청 데이터:', JSON.stringify(apiRequestData, null, 2));
+    
     // 카카오 알림톡 전송 (실제 템플릿 코드와 발신 프로필 키 사용)
     const response = await axios.post(
       'https://api.solapi.com/messages/v4/send',
-      {
-        to: phoneNumber,
-        from: SENDER_PHONE,
-        text: content,
-        type: 'ATA', // 알림톡 타입
-        kakaoOptions: {
-          pfId: SOLAPI_SENDER_KEY,
-          templateId: SOLAPI_TEMPLATE_CODE,
-          disableSms: false // SMS 대체 발송 활성화
-        }
-      },
+      apiRequestData,
       {
         headers: {
           Authorization: `Basic ${authorizationToken}`,
@@ -66,6 +75,9 @@ export async function POST(request: Request) {
     
   } catch (error: any) {
     console.error('❌ 카카오 알림톡 전송 실패:', error);
+    console.error('🔍 에러 상세 정보:', error.response?.data);
+    console.error('🔍 에러 상태 코드:', error.response?.status);
+    console.error('🔍 에러 헤더:', error.response?.headers);
     
     // 에러 응답 구성
     const errorMessage = error.response?.data?.message || error.message || '알 수 없는 오류';
