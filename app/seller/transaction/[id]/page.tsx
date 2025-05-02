@@ -12,6 +12,7 @@ import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
 import ChatModal from "@/components/chat/ChatModal"
+import MessageButton from "@/components/MessageButton"
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -398,15 +399,11 @@ export default function SellerTransactionDetail() {
                 <span className="text-sm text-gray-500 mb-1 block">티켓 정보</span>
                 <h2 className="text-2xl font-bold text-gray-900">{transaction.ticket.title}</h2>
               </div>
-              <button
+              <MessageButton 
+                orderNumber={params.id} 
                 onClick={openChat}
-                className="bg-teal-50 text-teal-600 px-4 py-2 rounded-full flex items-center hover:bg-teal-100 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                구매자와 채팅하기
-              </button>
+                className="justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 shadow-sm text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium"
+              />
             </div>
 
             {/* 거래 진행 상태 스텝퍼 */}
@@ -536,22 +533,11 @@ export default function SellerTransactionDetail() {
 
             {/* 판매자용 버튼 영역 */}
             <div className="mt-10 flex justify-end gap-4">
-              <Button onClick={openChat} variant="outline" className="flex items-center gap-2 border-gray-300">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                구매자에게 메시지
-              </Button>
+              <MessageButton
+                orderNumber={params.id}
+                onClick={openChat}
+                className="justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 shadow-sm text-sm flex items-center gap-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+              />
 
               {/* 취켓팅 성공 확정 버튼 (취켓팅 시작 단계일 때만 활성화) */}
               {transaction.currentStep === "ticketing_started" && (
