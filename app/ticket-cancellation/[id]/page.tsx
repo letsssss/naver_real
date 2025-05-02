@@ -756,19 +756,41 @@ export default function TicketCancellationDetail() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
-                      <div className="p-3 border rounded-lg bg-blue-50 border-blue-200">
-                        <div className="flex items-center">
-                          <input
-                            type="radio"
-                            id="toss"
-                            name="paymentMethod"
-                            value="toss"
-                            defaultChecked
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                          />
-                          <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
-                            토스페이
-                          </label>
+                      <div className="space-y-2">
+                        {/* 토스페이 옵션 */}
+                        <div className="p-3 border rounded-lg bg-blue-50 border-blue-200">
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="toss"
+                              name="paymentMethod"
+                              value="toss"
+                              defaultChecked
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
+                              토스페이
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 판매자 직접 결제 옵션 */}
+                        <div className="p-3 border rounded-lg border-gray-200 hover:border-gray-300">
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="direct"
+                              name="paymentMethod"
+                              value="direct"
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <label htmlFor="direct" className="ml-2 block text-sm text-gray-700 font-medium">
+                              판매자에게 직접 결제
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500 ml-6 mt-1">
+                            판매자와 채팅으로 결제 방법을 협의하실 수 있습니다.
+                          </p>
                         </div>
                       </div>
                     </div>
