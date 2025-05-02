@@ -31,9 +31,6 @@ export async function POST(request: Request) {
     // 환경 변수 확인
     console.log('🔑 API 키 확인:', !!SOLAPI_API_KEY, !!SOLAPI_API_SECRET, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
     
-    // Solapi API 호출을 위한 인증 헤더 생성
-    const authorizationToken = Buffer.from(`${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`).toString('base64');
-    
     // API 요청 데이터 구성 (text 필드 제거하고 간소화)
     const apiRequestData = {
       to: phoneNumber,
@@ -58,7 +55,7 @@ export async function POST(request: Request) {
       apiRequestData,
       {
         headers: {
-          Authorization: `Basic ${authorizationToken}`,
+          Authorization: `HMAC ${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`,
           'Content-Type': 'application/json'
         }
       }
