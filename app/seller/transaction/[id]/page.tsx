@@ -42,6 +42,7 @@ const defaultTransaction = {
     id: "",
     name: "",
     profileImage: "/placeholder.svg?height=50&width=50",
+    contactNumber: ""
   },
 }
 
@@ -181,6 +182,7 @@ export default function SellerTransactionDetail() {
             id: data.buyer?.id || "",
             name: data.buyer?.name || "구매자",
             profileImage: data.buyer?.profile_image || "/placeholder.svg?height=50&width=50",
+            contactNumber: data.phone_number || "연락처 정보 없음"
           },
         }
         
@@ -524,6 +526,10 @@ export default function SellerTransactionDetail() {
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <span className="text-xs text-gray-500 block mb-1">구매자 정보</span>
                   <span className="font-medium">{transaction.buyer.name}</span>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <span className="text-xs text-gray-500 block mb-1">구매자 연락처</span>
+                  <span className="font-medium">{transaction.buyer.contactNumber}</span>
                 </div>
               </div>
             </div>
