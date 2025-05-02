@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
-// 환경 변수에서 API 키 가져오기
-const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY!;
-const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET!;
+// 환경 변수 직접 로깅 (값과 타입 확인)
+console.log('✅ process.env.SOLAPI_API_KEY:', process.env.SOLAPI_API_KEY);
+console.log('✅ typeof process.env.SOLAPI_API_KEY:', typeof process.env.SOLAPI_API_KEY);
+console.log('✅ process.env.SOLAPI_API_SECRET:', process.env.SOLAPI_API_SECRET);
+console.log('✅ typeof process.env.SOLAPI_API_SECRET:', typeof process.env.SOLAPI_API_SECRET);
+
+// 환경 변수에서 API 키 가져오기 (비상 테스트용 fallback 값 설정)
+// 주의: 이 값들은 테스트 후 반드시 제거하세요!
+const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY || "NCSLR9HLUEOHFVAK"; // 테스트 후 제거 필수
+const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET || "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE"; // 테스트 후 제거 필수
 // 실제 발신자 정보 설정
 const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF2504270350090645hp8rQ1lvqL';
 const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP230126085130773ZHcIHN4i674';
@@ -24,11 +31,15 @@ console.log('[DEBUG] typeof SOLAPI_API_KEY:', typeof SOLAPI_API_KEY);
 console.log('[DEBUG] SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
 console.log('[DEBUG] typeof SOLAPI_API_SECRET:', typeof SOLAPI_API_SECRET);
 
+// 최종 사용 값 확인
+console.log('🔐 최종 사용되는 SOLAPI_API_KEY:', SOLAPI_API_KEY);
+console.log('🔐 최종 사용되는 SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
+
 export async function POST(request: Request) {
   try {
     // 환경변수 유효성 검사
     if (!SOLAPI_API_KEY || typeof SOLAPI_API_KEY !== 'string') {
-      console.error('❌ SOLAPI_API_KEY가 설정되지 않았거나 문자열이 아닙니다');
+      console.error('❌ SOLAPI_API_KEY가 설정되지 않았거나 문자열이 아닙니다', SOLAPI_API_KEY);
       return NextResponse.json(
         { error: 'API 키가 올바르게 설정되지 않았습니다.' },
         { status: 500 }
@@ -36,7 +47,7 @@ export async function POST(request: Request) {
     }
 
     if (!SOLAPI_API_SECRET || typeof SOLAPI_API_SECRET !== 'string') {
-      console.error('❌ SOLAPI_API_SECRET이 설정되지 않았거나 문자열이 아닙니다');
+      console.error('❌ SOLAPI_API_SECRET이 설정되지 않았거나 문자열이 아닙니다', SOLAPI_API_SECRET);
       return NextResponse.json(
         { error: 'API 시크릿이 올바르게 설정되지 않았습니다.' },
         { status: 500 }
