@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/contexts/auth-context';
@@ -74,7 +74,10 @@ export default function MessageButton({
   };
   
   // 읽지 않은 메시지 개수 가져오기 - 로컬 상태의 주문번호 사용
-  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(localOrderNumber);
+  // 중요: 주문번호가 없는 경우 API를 호출하지 않도록 조건부 훅 호출
+  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(
+    localOrderNumber // 주문번호가 있는 경우에만 해당 주문번호로 메시지 카운트 조회
+  );
   
   // 디버깅: unreadCount 값 콘솔에 출력
   useEffect(() => {
@@ -99,6 +102,9 @@ export default function MessageButton({
     }
   }, [localOrderNumber, orderNumber, postId, unreadCount, loadingMessages, error, debug, user, isOrderNumberLoading]);
 
+  // 주문번호가 없으면 메시지 카운트를 표시하지 않음
+  const shouldDisplayCount = !!localOrderNumber && unreadCount > 0;
+  
   // 사용자 정보나 주문번호가 없으면 버튼 비활성화
   const buttonDisabled = disabled || isLoading || !user || isOrderNumberLoading;
 
@@ -124,20 +130,13 @@ export default function MessageButton({
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
         
-        {unreadCount > 0 && (
+        {shouldDisplayCount && (
           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </div>
       {isLoading || isOrderNumberLoading ? "로딩 중..." : "메시지"}
-      
-      {/* NEW 배지 대신 숫자 배지를 사용하므로 이 부분은 주석 처리 */}
-      {/* {unreadCount > 0 && (
-        <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-md font-bold">
-          NEW
-        </span>
-      )} */}
     </Button>
   );
 } 

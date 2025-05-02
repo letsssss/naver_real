@@ -12,6 +12,7 @@ interface MessageCache {
 }
 
 // 전역 캐시 객체 - 컴포넌트 간 공유
+// 각 주문번호별 캐시와 전역 캐시를 별도로 관리
 const globalMessageCache: MessageCache = {};
 
 export function useUnreadMessages(orderNumber?: string) {
@@ -19,11 +20,15 @@ export function useUnreadMessages(orderNumber?: string) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
+  const isInitialMount = useRef(true);
   
   // 요청 캐시 키
   const cacheKey = orderNumber 
     ? `${user?.id || 'guest'}_${orderNumber}` 
     : `${user?.id || 'guest'}_all`;
+
+  // 개별 주문번호가 제공된 경우와 전체 메시지 카운트를 구분하여 처리
+  const isGlobalCount = !orderNumber || orderNumber === 'all';
 
   useEffect(() => {
     // 사용자가 로그인되어 있지 않다면 API 호출을 건너뜁니다
@@ -40,6 +45,7 @@ export function useUnreadMessages(orderNumber?: string) {
       console.log(`🗂️ 캐시에서 메시지 수 사용: ${cachedData.count} (orderNumber: ${orderNumber || 'all'})`);
       setUnreadCount(cachedData.count);
       setIsLoading(false);
+      return; // 캐시 데이터가 있으면 API 호출 스킵
     }
 
     async function fetchUnreadMessages() {
@@ -71,7 +77,7 @@ export function useUnreadMessages(orderNumber?: string) {
         // 현재 호스트를 기준으로 API URL 구성
         const baseUrl = window.location.origin;
         let endpoint = `${baseUrl}/api/messages/unread-count?userId=${user.id}`;
-        if (orderNumber) {
+        if (orderNumber && orderNumber !== 'all') {
           endpoint += `&orderNumber=${orderNumber}`;
         }
         
@@ -103,15 +109,29 @@ export function useUnreadMessages(orderNumber?: string) {
         
         // 응답 데이터 저장 및 캐싱
         const count = data.count || 0;
-        setUnreadCount(count);
         
-        // 캐시에 저장
-        globalMessageCache[cacheKey] = {
-          count,
-          timestamp: Date.now()
-        };
+        // 중요: 개별 주문번호와 전체 카운트를 서로 덮어쓰지 않도록 확인
+        // 개별 주문의 경우 해당 주문에 대한 응답만 처리
+        if (orderNumber && orderNumber !== 'all' && data.orderNumber === orderNumber) {
+          setUnreadCount(count);
+          // 캐시에 저장
+          globalMessageCache[cacheKey] = {
+            count,
+            timestamp: Date.now()
+          };
+          console.log(`💾 특정 주문 메시지 수 캐시 업데이트: ${count} (orderNumber: ${orderNumber})`);
+        }
+        // 전체 메시지 카운트의 경우
+        else if (isGlobalCount) {
+          setUnreadCount(count);
+          // 전체용 캐시에만 저장
+          globalMessageCache[cacheKey] = {
+            count,
+            timestamp: Date.now()
+          };
+          console.log(`💾 전체 메시지 수 캐시 업데이트: ${count}`);
+        }
         
-        console.log(`💾 메시지 수 캐시 업데이트: ${count} (orderNumber: ${orderNumber || 'all'})`);
       } catch (err) {
         console.error(`❌ 읽지 않은 메시지 가져오기 실패 [${orderNumber || 'all'}]:`, err);
         setError(err instanceof Error ? err : new Error(String(err)));
@@ -122,12 +142,17 @@ export function useUnreadMessages(orderNumber?: string) {
 
     fetchUnreadMessages();
     
-    // 일정 시간마다 메시지 업데이트 (필요에 따라 조정 가능)
-    const intervalId = setInterval(fetchUnreadMessages, 60000); // 60초마다 갱신
-    
-    // 컴포넌트 언마운트시 인터벌 정리
-    return () => clearInterval(intervalId);
-  }, [orderNumber, user, cacheKey]);
+    // 첫 마운트 후에만 인터벌 설정
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      
+      // 일정 시간마다 메시지 업데이트 (필요에 따라 조정 가능)
+      const intervalId = setInterval(fetchUnreadMessages, 60000); // 60초마다 갱신
+      
+      // 컴포넌트 언마운트시 인터벌 정리
+      return () => clearInterval(intervalId);
+    }
+  }, [orderNumber, user, cacheKey, isGlobalCount]);
 
   return { unreadCount, isLoading, error };
 } 
