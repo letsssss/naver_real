@@ -31,31 +31,34 @@ export async function POST(request: Request) {
     // 환경 변수 확인
     console.log('🔑 API 키 확인:', !!SOLAPI_API_KEY, !!SOLAPI_API_SECRET, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
     
-    // API 요청 데이터 구성 (text 필드 제거하고 간소화)
+    // API 요청 데이터 구성 (Solapi 공식 방식으로 변경)
     const apiRequestData = {
-      to: phoneNumber,
-      from: SENDER_PHONE,
-      type: 'ATA', // 알림톡 타입
-      kakaoOptions: {
-        pfId: SOLAPI_SENDER_KEY,
-        templateId: SOLAPI_TEMPLATE_CODE,
-        variables: {
-          '홍길동': name || '고객',
-          'url': 'https://easyticket82.com/mypage' // 버튼에 사용되는 필수 URL 변수
-        },
-        disableSms: false // SMS 대체 발송 활성화
+      apiKey: SOLAPI_API_KEY,
+      apiSecret: SOLAPI_API_SECRET,
+      message: {
+        to: phoneNumber,
+        from: SENDER_PHONE,
+        type: 'ATA', // 알림톡 타입
+        kakaoOptions: {
+          pfId: SOLAPI_SENDER_KEY,
+          templateId: SOLAPI_TEMPLATE_CODE,
+          variables: {
+            '홍길동': name || '고객',
+            'url': 'https://easyticket82.com/mypage' // 버튼에 사용되는 필수 URL 변수
+          },
+          disableSms: false // SMS 대체 발송 활성화
+        }
       }
     };
     
     console.log('📝 Solapi 요청 데이터:', JSON.stringify(apiRequestData, null, 2));
     
-    // 카카오 알림톡 전송 (실제 템플릿 코드와 발신 프로필 키 사용)
+    // 카카오 알림톡 전송 (인증 헤더 제거, 본문 인증 방식 사용)
     const response = await axios.post(
       'https://api.solapi.com/messages/v4/send',
       apiRequestData,
       {
         headers: {
-          Authorization: `HMAC-SHA256 ${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`,
           'Content-Type': 'application/json'
         }
       }
