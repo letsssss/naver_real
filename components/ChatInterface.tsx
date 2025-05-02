@@ -14,6 +14,7 @@ interface ChatInterfaceProps {
   otherUserName: string;
   otherUserProfileImage?: string;
   otherUserRole: string;
+  otherUserPhone?: string;
   onMarkAsRead?: () => Promise<boolean>;
 }
 
@@ -26,6 +27,7 @@ export function ChatInterface({
   otherUserName,
   otherUserProfileImage = '/placeholder.svg',
   otherUserRole,
+  otherUserPhone,
   onMarkAsRead
 }: ChatInterfaceProps) {
   const [newMessage, setNewMessage] = useState('');
@@ -182,8 +184,44 @@ export function ChatInterface({
       inputTimerRef.current = null;
     }
     
+    let messageSent = false;
+    
     try {
-      await onSendMessage(messageContent);
+      // 메시지 전송
+      messageSent = await onSendMessage(messageContent);
+      
+      // 메시지 전송이 성공하고 상대방 전화번호가 있으면 알림 전송
+      if (messageSent && otherUserPhone) {
+        console.log(`📱 카카오 알림톡 전송 시도: ${otherUserName}님(${otherUserPhone})`);
+        
+        try {
+          // 카카오 알림 API 호출
+          const notifyResponse = await fetch('/api/kakao/notify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: otherUserPhone,
+              name: otherUserName,
+              message: messageContent.substring(0, 30) + (messageContent.length > 30 ? '...' : '')
+            }),
+          });
+          
+          const notifyResult = await notifyResponse.json();
+          
+          if (notifyResult.success) {
+            console.log('✅ 카카오 알림톡 전송 성공:', notifyResult);
+          } else {
+            console.error('⚠️ 카카오 알림톡 전송 실패:', notifyResult.error);
+          }
+        } catch (notifyError) {
+          // 알림 전송 오류가 발생해도 메시지 전송에는 영향을 주지 않음
+          console.error('❌ 카카오 알림톡 전송 중 오류:', notifyError);
+        }
+      } else if (!otherUserPhone) {
+        console.log('⚠️ 수신자 전화번호 없음: 알림톡 전송 건너뜀');
+      }
     } catch (error) {
       console.error('메시지 전송 오류:', error);
       alert('메시지 전송에 실패했습니다. 다시 시도해주세요.');
