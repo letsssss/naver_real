@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
+// Node.js 런타임으로 설정 (환경 변수 접근을 위해 필수)
+export const runtime = 'nodejs';
+
 // 환경 변수 직접 로깅 (값과 타입 확인)
 console.log('✅ process.env.SOLAPI_API_KEY:', process.env.SOLAPI_API_KEY);
 console.log('✅ typeof process.env.SOLAPI_API_KEY:', typeof process.env.SOLAPI_API_KEY);
