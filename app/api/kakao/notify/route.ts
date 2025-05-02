@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       apiRequestData,
       {
         headers: {
-          Authorization: `HMAC ${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`,
+          Authorization: `HMAC-SHA256 ${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`,
           'Content-Type': 'application/json'
         }
       }
