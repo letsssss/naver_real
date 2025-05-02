@@ -9,6 +9,15 @@ const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF25042703500906
 const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP230126085130773ZHcIHN4i674';
 const SENDER_PHONE = process.env.SENDER_PHONE || '01056183450'; // 하이픈 제거된 형식
 
+// 환경 변수 값 자세히 로깅 (undefined 확인용)
+console.log('✅ 환경 변수 확인', {
+  apiKey: process.env.SOLAPI_API_KEY,
+  apiSecret: process.env.SOLAPI_API_SECRET,
+  senderKey: process.env.SOLAPI_SENDER_KEY,
+  templateCode: process.env.SOLAPI_TEMPLATE_CODE,
+  phone: process.env.SENDER_PHONE,
+});
+
 export async function POST(request: Request) {
   try {
     // 요청 본문에서 데이터 추출
