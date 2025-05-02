@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('messages')
       .select('id', { count: 'exact' })
-      .eq('recipient_id', userId)
+      .eq('receiver_id', userId)
       .eq('is_read', false);
     
     // 주문번호 파라미터가 있는 경우
