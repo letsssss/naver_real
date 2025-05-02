@@ -75,7 +75,7 @@ export default function MessageButton({
   
   // 읽지 않은 메시지 개수 가져오기 - 로컬 상태의 주문번호 사용
   // 중요: 주문번호가 없는 경우 API를 호출하지 않도록 조건부 훅 호출
-  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(
+  const { unreadCount, isLoading: loadingMessages, error, debugData } = useUnreadMessages(
     localOrderNumber // 주문번호가 있는 경우에만 해당 주문번호로 메시지 카운트 조회
   );
   
@@ -90,6 +90,11 @@ export default function MessageButton({
       console.log(`🔔 로딩 상태: ${loadingMessages || isOrderNumberLoading}`);
       console.log(`🔔 에러: ${error?.message || 'none'}`);
       
+      // 디버그 데이터가 있으면 출력
+      if (debugData) {
+        console.log(`🔍 MessageButton - 디버그 데이터:`, debugData);
+      }
+      
       // localStorage에 있는 토큰 확인
       const token = localStorage.getItem('token') || 
                     localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
@@ -100,10 +105,11 @@ export default function MessageButton({
         console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
       }
     }
-  }, [localOrderNumber, orderNumber, postId, unreadCount, loadingMessages, error, debug, user, isOrderNumberLoading]);
+  }, [localOrderNumber, orderNumber, postId, unreadCount, loadingMessages, error, debug, user, isOrderNumberLoading, debugData]);
 
-  // 주문번호가 없으면 메시지 카운트를 표시하지 않음
-  const shouldDisplayCount = !!localOrderNumber && unreadCount > 0;
+  // 수정: 주문번호가 없거나 불러오는 중이면 메시지 카운트를 표시하지 않도록 변경
+  // const shouldDisplayCount = !!localOrderNumber && unreadCount > 0;
+  const shouldDisplayCount = unreadCount > 0;
   
   // 사용자 정보나 주문번호가 없으면 버튼 비활성화
   const buttonDisabled = disabled || isLoading || !user || isOrderNumberLoading;

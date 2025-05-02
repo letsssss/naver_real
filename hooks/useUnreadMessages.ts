@@ -16,143 +16,154 @@ interface MessageCache {
 const globalMessageCache: MessageCache = {};
 
 export function useUnreadMessages(orderNumber?: string) {
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
-  const isInitialMount = useRef(true);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const MAX_RETRIES = 3;
+
+  // 디버깅을 위한 상태 추가
+  const [debugData, setDebugData] = useState<any>(null);
   
-  // 요청 캐시 키
-  const cacheKey = orderNumber 
-    ? `${user?.id || 'guest'}_${orderNumber}` 
-    : `${user?.id || 'guest'}_all`;
-
-  // 개별 주문번호가 제공된 경우와 전체 메시지 카운트를 구분하여 처리
-  const isGlobalCount = !orderNumber || orderNumber === 'all';
-
   useEffect(() => {
-    // 사용자가 로그인되어 있지 않다면 API 호출을 건너뜁니다
-    if (!user) {
-      setIsLoading(false);
-      return;
-    }
+    const fetchUnreadMessages = async () => {
+      // 사용자가 없으면 실행하지 않음
+      if (!user?.id) {
+        console.log('사용자 정보가 없어 메시지 개수를 조회하지 않습니다.');
+        return;
+      }
 
-    // 캐시에서 데이터를 먼저 확인 (30초 이내의 데이터만 사용)
-    const cachedData = globalMessageCache[cacheKey];
-    const now = Date.now();
-    
-    if (cachedData && (now - cachedData.timestamp < 30000)) {
-      console.log(`🗂️ 캐시에서 메시지 수 사용: ${cachedData.count} (orderNumber: ${orderNumber || 'all'})`);
-      setUnreadCount(cachedData.count);
-      setIsLoading(false);
-      return; // 캐시 데이터가 있으면 API 호출 스킵
-    }
-
-    async function fetchUnreadMessages() {
       try {
         setIsLoading(true);
+        setError(null);
         
-        // 디버깅 로그: 메시지 가져오기 시작
-        console.log(`🔄 읽지 않은 메시지 가져오기 시작... userId: ${user.id}, orderNumber: ${orderNumber || 'none'}`);
+        console.log(`📱 메시지 개수 조회 시작: userId=${user.id}, orderNumber=${orderNumber || '없음'}`);
         
-        // 토큰 가져오기 (두 가지 가능한 위치 확인)
-        const token = localStorage.getItem('token') || 
-                      localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token') ||
-                      localStorage.getItem('auth-token');
+        // 현재 브라우저의 호스트 사용 (개발/프로덕션 환경 자동 감지)
+        const host = window.location.origin;
+        const apiUrl = orderNumber 
+          ? `${host}/api/messages/unread-count?userId=${user.id}&orderNumber=${orderNumber}`
+          : `${host}/api/messages/unread-count?userId=${user.id}`;
         
-        if (!token) {
-          console.error('🚫 토큰이 없어 API 호출을 취소합니다.');
-          setError(new Error('Authentication token not found'));
+        // 요청 전 캐시 확인
+        const cacheKey = orderNumber 
+          ? `message-count-${user.id}-${orderNumber}` 
+          : `message-count-${user.id}`;
+
+        const cachedData = globalMessageCache[cacheKey];
+        const now = Date.now();
+        
+        // 최근 10초 이내 캐시된 데이터가 있으면 사용
+        if (cachedData && (now - cachedData.timestamp < 10000)) {
+          console.log(`🗂️ 캐시된 메시지 개수 사용: ${cachedData.count} (orderNumber: ${orderNumber || '없음'})`);
+          setUnreadCount(cachedData.count);
           setIsLoading(false);
           return;
         }
         
-        console.log(`🔑 토큰 존재 여부: ${!!token}`);
-        console.log(`🔑 토큰 길이: ${token.length}`);
-        console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
-        
-        // 쿠키 정보도 확인
-        console.log('🍪 쿠키 정보:', document.cookie);
-        
-        // 현재 호스트를 기준으로 API URL 구성
-        const baseUrl = window.location.origin;
-        let endpoint = `${baseUrl}/api/messages/unread-count?userId=${user.id}`;
-        if (orderNumber && orderNumber !== 'all') {
-          endpoint += `&orderNumber=${orderNumber}`;
-        }
-        
-        console.log(`🌐 API 요청 URL: ${endpoint}`);
-        
-        // API 요청 헤더
-        const headers = {
+        // API 요청 헤더 설정
+        const headers: HeadersInit = {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         };
         
-        console.log('📤 API 요청 헤더:', headers);
+        // 토큰 가져오기 - localStorage에서 토큰 확인
+        const token = localStorage.getItem('token') || 
+                     localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+                     
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log('🔑 토큰을 헤더에 추가했습니다.');
+        } else {
+          console.log('⚠️ 토큰이 없습니다.');
+        }
         
-        // API 호출
-        const response = await fetch(endpoint, {
+        // API 요청
+        const response = await fetch(apiUrl, { 
           method: 'GET',
-          headers,
-          credentials: 'include'  // 쿠키를 포함하여 요청
+          headers
         });
         
-        console.log(`📥 API 응답 상태: ${response.status}`);
-        
+        // 응답 확인
         if (!response.ok) {
-          throw new Error(`Failed to fetch unread messages: ${response.statusText}`);
+          console.error(`❌ API 오류: HTTP ${response.status} - ${response.statusText}`);
+          
+          // 응답 내용까지 로깅
+          try {
+            const errorText = await response.text();
+            console.error(`❌ 에러 응답 내용: ${errorText}`);
+            
+            // 접근 권한 오류 (401)인 경우 재인증 제안
+            if (response.status === 401) {
+              throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
+            } else {
+              throw new Error(`API 오류: ${response.status} ${response.statusText}`);
+            }
+          } catch (responseError) {
+            throw responseError;
+          }
         }
         
+        // 응답 데이터 파싱
         const data = await response.json();
-        console.log(`📊 API 응답 데이터 [${orderNumber || 'all'}]:`, data);
         
-        // 응답 데이터 저장 및 캐싱
-        const count = data.count || 0;
+        console.log(`✅ 메시지 개수 조회 결과:`, data);
         
-        // 중요: 개별 주문번호와 전체 카운트를 서로 덮어쓰지 않도록 확인
-        // 개별 주문의 경우 해당 주문에 대한 응답만 처리
-        if (orderNumber && orderNumber !== 'all' && data.orderNumber === orderNumber) {
-          setUnreadCount(count);
-          // 캐시에 저장
-          globalMessageCache[cacheKey] = {
-            count,
-            timestamp: Date.now()
-          };
-          console.log(`💾 특정 주문 메시지 수 캐시 업데이트: ${count} (orderNumber: ${orderNumber})`);
-        }
-        // 전체 메시지 카운트의 경우
-        else if (isGlobalCount) {
-          setUnreadCount(count);
-          // 전체용 캐시에만 저장
-          globalMessageCache[cacheKey] = {
-            count,
-            timestamp: Date.now()
-          };
-          console.log(`💾 전체 메시지 수 캐시 업데이트: ${count}`);
+        // 디버그 데이터 설정
+        if (data.debug) {
+          setDebugData(data.debug);
+          console.log(`🔍 디버그 정보:`, data.debug);
         }
         
-      } catch (err) {
-        console.error(`❌ 읽지 않은 메시지 가져오기 실패 [${orderNumber || 'all'}]:`, err);
+        // 유효한 카운트 값이 있는지 확인
+        if (typeof data.count === 'number') {
+          // 캐시 업데이트
+          globalMessageCache[cacheKey] = {
+            count: data.count,
+            timestamp: now
+          };
+          
+          setUnreadCount(data.count);
+          setRetryCount(0); // 성공하면 재시도 카운트 초기화
+        } else {
+          console.warn('⚠️ API 응답에 유효한 count 값이 없습니다:', data);
+          // 데이터가 없으면 0으로 설정
+          setUnreadCount(0);
+        }
+      } catch (err: any) {
+        console.error('❌ 메시지 개수 조회 중 오류:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
+        
+        // 오류 시 재시도 로직 (최대 3회)
+        if (retryCount < MAX_RETRIES) {
+          const nextRetry = retryCount + 1;
+          setRetryCount(nextRetry);
+          
+          console.log(`🔄 메시지 개수 조회 재시도 (${nextRetry}/${MAX_RETRIES})...`);
+          
+          // 지수 백오프로 재시도 - 1초, 2초, 4초 간격
+          setTimeout(() => {
+            fetchUnreadMessages();
+          }, Math.pow(2, nextRetry) * 1000);
+        } else {
+          console.error(`❌ 최대 재시도 횟수(${MAX_RETRIES})를 초과했습니다.`);
+          // 오류 상태에서도 UI가 깨지지 않도록 0 설정
+          setUnreadCount(0);
+        }
       } finally {
         setIsLoading(false);
       }
-    }
+    };
 
     fetchUnreadMessages();
-    
-    // 첫 마운트 후에만 인터벌 설정
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      
-      // 일정 시간마다 메시지 업데이트 (필요에 따라 조정 가능)
-      const intervalId = setInterval(fetchUnreadMessages, 60000); // 60초마다 갱신
-      
-      // 컴포넌트 언마운트시 인터벌 정리
-      return () => clearInterval(intervalId);
-    }
-  }, [orderNumber, user, cacheKey, isGlobalCount]);
 
-  return { unreadCount, isLoading, error };
+    // 주기적으로 메시지 개수 업데이트 (60초마다)
+    const intervalId = setInterval(fetchUnreadMessages, 60000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [user, orderNumber, retryCount]);
+
+  return { unreadCount, isLoading, error, debugData };
 } 
