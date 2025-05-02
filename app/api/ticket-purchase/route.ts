@@ -291,6 +291,32 @@ export async function POST(request: NextRequest) {
       ));
     }
 
+    // 전화번호가 제공된 경우 사용자 프로필에 저장
+    if (phoneNumber) {
+      try {
+        // 하이픈 제거
+        const cleanPhoneNumber = phoneNumber.replace(/-/g, '');
+        
+        console.log(`사용자 ID ${authUser.id}의 프로필에 전화번호 ${cleanPhoneNumber} 저장 시도`);
+        
+        // 프로필 업데이트
+        const { error: profileUpdateError } = await adminSupabase
+          .from('users')
+          .update({ phone_number: cleanPhoneNumber })
+          .eq('id', authUser.id);
+        
+        if (profileUpdateError) {
+          console.error("프로필 전화번호 업데이트 오류:", profileUpdateError);
+          // 프로필 업데이트 실패해도 구매 프로세스는 계속 진행
+        } else {
+          console.log(`사용자 ID ${authUser.id}의 프로필 전화번호 업데이트 성공`);
+        }
+      } catch (phoneUpdateError) {
+        console.error("전화번호 저장 중 오류:", phoneUpdateError);
+        // 오류가 발생해도 구매는 계속 진행
+      }
+    }
+
     // 게시물 상태 업데이트
     const updateData: any = { status: "PROCESSING" };
     const { error: updateError } = await adminSupabase
