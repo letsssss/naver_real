@@ -46,8 +46,8 @@ export async function POST(request: Request) {
         pfId: SOLAPI_SENDER_KEY,
         templateId: SOLAPI_TEMPLATE_CODE,
         variables: {
-          홍길동: name || '고객',
-          url: 'https://easyticket82.com/mypage' // 버튼에 사용되는 필수 URL 변수
+          '홍길동': name || '고객',
+          'url': 'https://easyticket82.com/mypage' // 버튼에 사용되는 필수 URL 변수
         },
         disableSms: false // SMS 대체 발송 활성화
       }
