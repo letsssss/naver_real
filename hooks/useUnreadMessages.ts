@@ -41,8 +41,9 @@ export function useUnreadMessages(orderNumber?: string) {
         // 쿠키 정보도 확인
         console.log('🍪 쿠키 정보:', document.cookie);
         
-        // API 엔드포인트 구성 (orderNumber가 있으면 쿼리 파라미터로 추가)
-        let endpoint = `/api/messages/unread-count?userId=${user.id}`;
+        // 현재 호스트를 기준으로 API URL 구성
+        const baseUrl = window.location.origin;
+        let endpoint = `${baseUrl}/api/messages/unread-count?userId=${user.id}`;
         if (orderNumber) {
           endpoint += `&orderNumber=${orderNumber}`;
         }
