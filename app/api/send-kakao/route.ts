@@ -17,13 +17,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 async function getUserPhoneById(userId: string): Promise<string | null> {
   try {
     const { data, error } = await supabase
-      .from('profiles')  // 프로필 테이블명에 맞게 수정 필요
-      .select('phone')
+      .from('users')  // users 테이블에서 조회
+      .select('phone_number')
       .eq('id', userId)
       .single();
     
     if (error) throw error;
-    return data?.phone || null;
+    return data?.phone_number || null;
   } catch (err) {
     console.error('전화번호 조회 실패:', err);
     return null;
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     // 발신자 정보 가져오기 (옵션)
     const { data: senderData } = await supabase
-      .from('profiles')
+      .from('users')  // users 테이블에서 조회
       .select('name')
       .eq('id', sender_id)
       .single();
