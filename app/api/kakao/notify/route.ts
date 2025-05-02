@@ -4,20 +4,29 @@ import axios from 'axios';
 // Node.js 런타임으로 설정 (환경 변수 접근을 위해 필수)
 export const runtime = 'nodejs';
 
-// 환경 변수 직접 로깅 (값과 타입 확인)
-console.log('✅ process.env.SOLAPI_API_KEY:', process.env.SOLAPI_API_KEY);
-console.log('✅ typeof process.env.SOLAPI_API_KEY:', typeof process.env.SOLAPI_API_KEY);
-console.log('✅ process.env.SOLAPI_API_SECRET:', process.env.SOLAPI_API_SECRET);
-console.log('✅ typeof process.env.SOLAPI_API_SECRET:', typeof process.env.SOLAPI_API_SECRET);
+// 환경 변수 직접 로깅 (값과 타입 확인) - 더 명확한 로깅 포맷
+console.log('✅ SOLAPI_API_KEY 타입:', typeof process.env.SOLAPI_API_KEY);
+console.log('✅ SOLAPI_API_KEY 값:', JSON.stringify(process.env.SOLAPI_API_KEY));
+console.log('✅ SOLAPI_API_SECRET 타입:', typeof process.env.SOLAPI_API_SECRET);
+console.log('✅ SOLAPI_API_SECRET 값:', JSON.stringify(process.env.SOLAPI_API_SECRET));
 
-// 환경 변수에서 API 키 가져오기 (비상 테스트용 fallback 값 설정)
-// 주의: 이 값들은 테스트 후 반드시 제거하세요!
-const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY || "NCSLR9HLUEOHFVAK"; // 테스트 후 제거 필수
-const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET || "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE"; // 테스트 후 제거 필수
+// 환경 변수에서 API 키 가져오기 (엄격한 타입 체크와 fallback 로직)
+const SOLAPI_API_KEY = (typeof process.env.SOLAPI_API_KEY === 'string' && process.env.SOLAPI_API_KEY.trim() !== '')
+  ? process.env.SOLAPI_API_KEY.trim()
+  : "NCSLR9HLUEOHFVAK"; // 테스트 후 제거 필수
+
+const SOLAPI_API_SECRET = (typeof process.env.SOLAPI_API_SECRET === 'string' && process.env.SOLAPI_API_SECRET.trim() !== '')
+  ? process.env.SOLAPI_API_SECRET.trim()
+  : "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE"; // 테스트 후 제거 필수
+
 // 실제 발신자 정보 설정
 const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF2504270350090645hp8rQ1lvqL';
 const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP230126085130773ZHcIHN4i674';
 const SENDER_PHONE = process.env.SENDER_PHONE || '01056183450'; // 하이픈 제거된 형식
+
+// 타입 강제 확인
+if (typeof SOLAPI_API_KEY !== 'string') throw new Error('SOLAPI_API_KEY is not a string');
+if (typeof SOLAPI_API_SECRET !== 'string') throw new Error('SOLAPI_API_SECRET is not a string');
 
 // 환경 변수 값 자세히 로깅 (undefined 확인용)
 console.log('✅ 환경 변수 확인', {
@@ -76,6 +85,11 @@ export async function POST(request: Request) {
     
     // 환경 변수 확인
     console.log('🔑 API 키 확인:', !!SOLAPI_API_KEY, !!SOLAPI_API_SECRET, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
+    
+    // 요청 직전 API 키 최종 확인
+    console.log('✅ 최종 apiKey 타입:', typeof SOLAPI_API_KEY);
+    console.log('✅ 최종 apiKey 값:', SOLAPI_API_KEY);
+    console.log('✅ 최종 apiSecret 타입:', typeof SOLAPI_API_SECRET);
     
     // API 요청 데이터 구성 (본문에도 인증 정보 포함)
     const apiRequestData = {
