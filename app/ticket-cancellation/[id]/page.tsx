@@ -756,61 +756,21 @@ export default function TicketCancellationDetail() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
-                      
-                      {/* 토스페이 - 기본 선택 */}
-                      <div className="space-y-2">
-                        <div className="p-4 border rounded-lg bg-blue-50 border-blue-200 flex items-center justify-between">
-                          <div className="flex items-center">
-                            <input
-                              type="radio"
-                              id="toss"
-                              name="paymentMethod"
-                              value="toss"
-                              defaultChecked
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                            />
-                            <label htmlFor="toss" className="ml-3 flex items-center">
-                              <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center mr-2">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M3 8.5L6 11.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </div>
-                              <span className="font-medium">토스페이</span>
-                              <span className="ml-2 text-xs text-gray-500">간편결제</span>
-                            </label>
-                          </div>
-                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">추천</span>
-                        </div>
-                        
-                        {/* 계좌이체 옵션 - 비활성화 */}
-                        <div className="p-4 border rounded-lg border-gray-200 flex items-center opacity-50">
+                      <div className="p-3 border rounded-lg bg-blue-50 border-blue-200">
+                        <div className="flex items-center">
                           <input
                             type="radio"
-                            id="bank"
+                            id="toss"
                             name="paymentMethod"
-                            value="bank"
-                            disabled
+                            value="toss"
+                            defaultChecked
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                           />
-                          <label htmlFor="bank" className="ml-3 flex items-center">
-                            <div className="w-8 h-8 bg-gray-200 rounded-md flex items-center justify-center mr-2">
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M2 12H14V14H2V12Z" fill="#666"/>
-                                <path d="M8 2L14 6V8H2V6L8 2Z" fill="#666"/>
-                                <path d="M4 8H6V12H4V8Z" fill="#666"/>
-                                <path d="M7 8H9V12H7V8Z" fill="#666"/>
-                                <path d="M10 8H12V12H10V8Z" fill="#666"/>
-                              </svg>
-                            </div>
-                            <span className="font-medium">계좌이체</span>
-                            <span className="ml-2 text-xs text-gray-500">준비중</span>
+                          <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
+                            토스페이
                           </label>
                         </div>
                       </div>
-                      
-                      <p className="text-xs text-gray-500 mt-2">
-                        현재 토스페이만 이용 가능합니다. 안전하고 빠른 결제를 위해 토스페이를 이용해주세요.
-                      </p>
                     </div>
 
                     <div>
