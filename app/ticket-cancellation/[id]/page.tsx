@@ -724,6 +724,7 @@ export default function TicketCancellationDetail() {
                       </div>
                     </div>
 
+                    {/* 티켓 예매 사이트 아이디 필드 - 일시적으로 비활성화
                     <div>
                       <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 mb-2">
                         티켓 예매 사이트 아이디
@@ -753,6 +754,7 @@ export default function TicketCancellationDetail() {
                       />
                       <p className="text-sm text-gray-500 mt-1">예매 사이트에서 사용하는 계정 정보를 입력해주세요.</p>
                     </div>
+                    */}
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
