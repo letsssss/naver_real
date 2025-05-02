@@ -4,11 +4,19 @@ import axios from 'axios';
 // Node.js 런타임으로 설정 (환경 변수 접근을 위해 필수)
 export const runtime = 'nodejs';
 
+// 런타임 확인 로그 (가장 먼저 확인)
+console.log("✅ 현재 런타임은 Node.js입니다");
+console.log("✅ 함수 진입 시점 확인", new Date().toISOString());
+
 // 환경 변수 직접 로깅 (값과 타입 확인) - 더 명확한 로깅 포맷
 console.log('✅ SOLAPI_API_KEY 타입:', typeof process.env.SOLAPI_API_KEY);
 console.log('✅ SOLAPI_API_KEY 값:', JSON.stringify(process.env.SOLAPI_API_KEY));
 console.log('✅ SOLAPI_API_SECRET 타입:', typeof process.env.SOLAPI_API_SECRET);
 console.log('✅ SOLAPI_API_SECRET 값:', JSON.stringify(process.env.SOLAPI_API_SECRET));
+
+// 환경 변수 초기 상태 확인
+console.log('🔎 process.env 내 SOLAPI_API_KEY 키 존재 여부:', 'SOLAPI_API_KEY' in process.env);
+console.log('🔎 process.env 내 SOLAPI_API_SECRET 키 존재 여부:', 'SOLAPI_API_SECRET' in process.env);
 
 // 환경 변수에서 API 키 가져오기 (엄격한 타입 체크와 fallback 로직)
 const SOLAPI_API_KEY = (typeof process.env.SOLAPI_API_KEY === 'string' && process.env.SOLAPI_API_KEY.trim() !== '')
@@ -24,9 +32,20 @@ const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF25042703500906
 const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP230126085130773ZHcIHN4i674';
 const SENDER_PHONE = process.env.SENDER_PHONE || '01056183450'; // 하이픈 제거된 형식
 
+// ===== 타입 검증 및 로깅 강화 =====
+// API Key가 string 타입인지 확인 전 로깅
+console.log('⚠️ API Key 타입 검증 전 상태:', SOLAPI_API_KEY, typeof SOLAPI_API_KEY);
+
 // 타입 강제 확인
-if (typeof SOLAPI_API_KEY !== 'string') throw new Error('SOLAPI_API_KEY is not a string');
-if (typeof SOLAPI_API_SECRET !== 'string') throw new Error('SOLAPI_API_SECRET is not a string');
+if (typeof SOLAPI_API_KEY !== 'string') {
+  console.error('🚨 심각: SOLAPI_API_KEY가 문자열이 아닙니다!', typeof SOLAPI_API_KEY);
+  throw new Error('SOLAPI_API_KEY is not a string');
+}
+
+if (typeof SOLAPI_API_SECRET !== 'string') {
+  console.error('🚨 심각: SOLAPI_API_SECRET이 문자열이 아닙니다!', typeof SOLAPI_API_SECRET);
+  throw new Error('SOLAPI_API_SECRET is not a string');
+}
 
 // 환경 변수 값 자세히 로깅 (undefined 확인용)
 console.log('✅ 환경 변수 확인', {
@@ -47,8 +66,14 @@ console.log('[DEBUG] typeof SOLAPI_API_SECRET:', typeof SOLAPI_API_SECRET);
 console.log('🔐 최종 사용되는 SOLAPI_API_KEY:', SOLAPI_API_KEY);
 console.log('🔐 최종 사용되는 SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
 
+// 문자열 강제 변환 시도 (마지막 안전장치)
+const forcedApiKey = String(SOLAPI_API_KEY);
+console.log('💡 String()으로 강제 변환된 apiKey:', forcedApiKey, typeof forcedApiKey);
+
 export async function POST(request: Request) {
   try {
+    console.log('✉️ API 요청 수신:', new Date().toISOString());
+    
     // 환경변수 유효성 검사
     if (!SOLAPI_API_KEY || typeof SOLAPI_API_KEY !== 'string') {
       console.error('❌ SOLAPI_API_KEY가 설정되지 않았거나 문자열이 아닙니다', SOLAPI_API_KEY);
@@ -92,9 +117,10 @@ export async function POST(request: Request) {
     console.log('✅ 최종 apiSecret 타입:', typeof SOLAPI_API_SECRET);
     
     // API 요청 데이터 구성 (본문에도 인증 정보 포함)
+    // 최대한 안전하게 - String() 으로 한번 더 강제 변환
     const apiRequestData = {
-      apiKey: SOLAPI_API_KEY,
-      apiSecret: SOLAPI_API_SECRET,
+      apiKey: String(SOLAPI_API_KEY),
+      apiSecret: String(SOLAPI_API_SECRET),
       message: {
         to: phoneNumber,
         from: SENDER_PHONE,
@@ -112,6 +138,7 @@ export async function POST(request: Request) {
     };
     
     console.log('📝 Solapi 요청 데이터:', JSON.stringify(apiRequestData, null, 2));
+    console.log('🔍 Solapi 요청 데이터 내 apiKey 타입:', typeof apiRequestData.apiKey);
     
     // 카카오 알림톡 전송 (헤더와 본문 모두에 인증 정보 포함)
     const response = await axios.post(
@@ -119,7 +146,7 @@ export async function POST(request: Request) {
       apiRequestData,
       {
         headers: {
-          Authorization: `HMAC-SHA256 ${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`,
+          Authorization: `HMAC-SHA256 ${String(SOLAPI_API_KEY)}:${String(SOLAPI_API_SECRET)}`,
           'Content-Type': 'application/json'
         }
       }
@@ -141,6 +168,10 @@ export async function POST(request: Request) {
       console.error('🔎 자세한 에러 메시지:', JSON.stringify(error.response?.data, null, 2));
       console.error('🔎 에러 코드:', error.response?.data?.errorCode);
       console.error('🔎 에러 메시지:', error.response?.data?.errorMessage);
+      // Joi 에러인 경우 상세 정보 출력
+      if (error.response?.data?.details) {
+        console.error('🔎 Joi 검증 에러 상세:', JSON.stringify(error.response?.data?.details, null, 2));
+      }
     }
     
     console.error('🔍 에러 상태 코드:', error.response?.status);
