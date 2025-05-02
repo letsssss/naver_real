@@ -26,21 +26,69 @@ interface SaleItemProps {
 
 export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   const [isLoading, setIsLoading] = useState(false);
+  // 로컬에서 주문번호 상태 관리
+  const [orderNumber, setOrderNumber] = useState<string | undefined>(sale.orderNumber);
+
+  // 컴포넌트 마운트 시 또는 상태 변경 시 주문번호 조회
+  useEffect(() => {
+    // 주문번호가 없고, 판매중이 아니면 주문번호 조회
+    if (!orderNumber && sale.status !== "판매중") {
+      fetchOrderNumber();
+    }
+  }, [sale.id, sale.status]);
 
   // 각 상품별 주문번호 로깅
   useEffect(() => {
-    console.log(`💬 메시지 버튼 렌더링 - 상품: ${sale.title}, 주문번호: ${sale.orderNumber || '없음'}`);
-  }, [sale.title, sale.orderNumber]);
+    console.log(`💬 메시지 버튼 렌더링 - 상품: ${sale.title}, 주문번호: ${orderNumber || sale.orderNumber || '없음'}`);
+  }, [sale.title, sale.orderNumber, orderNumber]);
+
+  // 주문번호 조회 함수
+  const fetchOrderNumber = async () => {
+    try {
+      console.log(`🔍 상품 ${sale.id}(${sale.title})의 주문번호 조회 시도`);
+      setIsLoading(true);
+      
+      // post_id로 주문번호 조회
+      const response = await fetch(`/api/purchase/from-post/${sale.id}`);
+      
+      if (!response.ok) {
+        throw new Error("주문 정보 조회 실패");
+      }
+      
+      const data = await response.json();
+      
+      if (data.order_number) {
+        setOrderNumber(data.order_number);
+        console.log(`📝 상품 ${sale.title}의 주문번호 조회 완료: ${data.order_number}`);
+      } else {
+        console.log(`❌ 상품 ${sale.title}에 대한 주문번호가 없음`);
+      }
+    } catch (error) {
+      console.error(`❌ 주문번호 조회 중 오류: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 디버깅용 콘솔 로그 추가
   console.log("💬 sale 객체:", sale);
   console.log("💰 sale.price:", sale.price);
   console.log("🏷️ sale.ticket_price:", sale.ticket_price);
   console.log("🔢 sale.orderNumber:", sale.orderNumber);
+  console.log("🔢 상태에 저장된 orderNumber:", orderNumber);
 
   // 거래 페이지 또는 메시지 페이지로 이동
   const handleTransactionClick = async (isSeller: boolean = false) => {
-    // 이미 orderNumber가 있는 경우 바로 이동
+    // 이미 조회된 주문번호가 있는 경우 바로 이동
+    if (orderNumber) {
+      const path = isSeller 
+        ? `/seller/transaction/${orderNumber}` 
+        : `/transaction/${orderNumber}`;
+      router.push(path);
+      return;
+    }
+    
+    // 원래 sale 객체에 주문번호가 있는 경우 바로 이동
     if (sale.orderNumber) {
       const path = isSeller 
         ? `/seller/transaction/${sale.orderNumber}` 
@@ -67,6 +115,9 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
         throw new Error("주문번호가 존재하지 않습니다");
       }
       
+      // 조회된 주문번호 상태 업데이트
+      setOrderNumber(data.order_number);
+      
       // 조회된 주문번호로 페이지 이동
       const path = isSeller 
         ? `/seller/transaction/${data.order_number}` 
@@ -85,7 +136,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
     <div className="border-b py-4 last:border-b-0">
       <div className="flex justify-between mb-1">
         <h3 className="font-medium">{sale.title}</h3>
-        <SaleStatusBadge status={sale.status} isActive={Boolean(sale.orderNumber)} />
+        <SaleStatusBadge status={sale.status} isActive={Boolean(orderNumber || sale.orderNumber)} />
       </div>
       <p className="text-sm text-gray-600">{sale.date}</p>
       <p className="text-sm font-semibold">
@@ -99,7 +150,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       <div className="flex mt-2 justify-between items-center">
         <div className="flex gap-2">
           {/* 판매중 상태이거나 거래가 있는 경우 버튼 표시 */}
-          {(sale.status !== "판매중" || Boolean(sale.orderNumber)) && (
+          {(sale.status !== "판매중" || Boolean(orderNumber || sale.orderNumber)) && (
             <>
               <Button 
                 className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
@@ -125,7 +176,8 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
               </Button>
               {/* 기존 메시지 버튼을 MessageButton 컴포넌트로 대체 */}
               <MessageButton 
-                orderNumber={sale.orderNumber}
+                orderNumber={orderNumber || sale.orderNumber}
+                postId={sale.id}
                 onClick={() => handleTransactionClick(false)}
                 isLoading={isLoading}
                 debug={true}
@@ -133,7 +185,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
             </>
           )}
         </div>
-        {sale.status === "판매중" && !sale.orderNumber && (
+        {sale.status === "판매중" && !sale.orderNumber && !orderNumber && (
           <AlertDialog>
             <AlertDialogTrigger>
               <div 

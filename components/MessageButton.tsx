@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/contexts/auth-context';
 
 interface MessageButtonProps {
   orderNumber?: string;
+  postId?: number;  // 상품 ID 추가
   onClick?: () => void;
   disabled?: boolean;
   isLoading?: boolean;
@@ -16,6 +17,7 @@ interface MessageButtonProps {
 
 export default function MessageButton({ 
   orderNumber, 
+  postId, // 상품 ID
   onClick, 
   disabled = false, 
   isLoading = false,
@@ -23,17 +25,66 @@ export default function MessageButton({
   debug = false
 }: MessageButtonProps) {
   const { user } = useAuth();
+  const [localOrderNumber, setLocalOrderNumber] = useState<string | undefined>(orderNumber);
+  const [isOrderNumberLoading, setIsOrderNumberLoading] = useState(false);
   
-  // 읽지 않은 메시지 개수 가져오기
-  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(orderNumber);
+  // 주문번호가 없을 때 상품 ID로 주문번호 조회
+  useEffect(() => {
+    if (orderNumber) {
+      setLocalOrderNumber(orderNumber);
+    } else if (!localOrderNumber && postId && !isOrderNumberLoading) {
+      fetchOrderNumberByPostId();
+    }
+  }, [orderNumber, postId]);
+  
+  // 상품 ID로 주문번호 조회하는 함수
+  const fetchOrderNumberByPostId = async () => {
+    if (!postId) return;
+    
+    try {
+      if (debug) {
+        console.log(`🔍 MessageButton: postId ${postId}로 주문번호 조회 시도`);
+      }
+      
+      setIsOrderNumberLoading(true);
+      
+      const response = await fetch(`/api/purchase/from-post/${postId}`);
+      
+      if (!response.ok) {
+        throw new Error('주문번호 조회 실패');
+      }
+      
+      const data = await response.json();
+      
+      if (data.order_number) {
+        setLocalOrderNumber(data.order_number);
+        if (debug) {
+          console.log(`📝 MessageButton: postId ${postId}의 주문번호 조회 완료: ${data.order_number}`);
+        }
+      } else if (debug) {
+        console.log(`ℹ️ MessageButton: postId ${postId}에 대한 주문번호가 없음`);
+      }
+    } catch (error) {
+      if (debug) {
+        console.error(`❌ MessageButton: 주문번호 조회 중 오류: ${error}`);
+      }
+    } finally {
+      setIsOrderNumberLoading(false);
+    }
+  };
+  
+  // 읽지 않은 메시지 개수 가져오기 - 로컬 상태의 주문번호 사용
+  const { unreadCount, isLoading: loadingMessages, error } = useUnreadMessages(localOrderNumber);
   
   // 디버깅: unreadCount 값 콘솔에 출력
   useEffect(() => {
     if (debug) {
       console.log(`🔔 MessageButton - orderNumber: ${orderNumber}`);
+      console.log(`🔔 MessageButton - localOrderNumber: ${localOrderNumber}`);
+      console.log(`🔔 MessageButton - postId: ${postId}`);
       console.log(`🔔 MessageButton - userId: ${user?.id || 'undefined'}`);
       console.log(`🔔 읽지 않은 메시지 수: ${unreadCount}`);
-      console.log(`🔔 로딩 상태: ${loadingMessages}`);
+      console.log(`🔔 로딩 상태: ${loadingMessages || isOrderNumberLoading}`);
       console.log(`🔔 에러: ${error?.message || 'none'}`);
       
       // localStorage에 있는 토큰 확인
@@ -46,10 +97,10 @@ export default function MessageButton({
         console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
       }
     }
-  }, [orderNumber, unreadCount, loadingMessages, error, debug, user]);
+  }, [localOrderNumber, orderNumber, postId, unreadCount, loadingMessages, error, debug, user, isOrderNumberLoading]);
 
   // 사용자 정보나 주문번호가 없으면 버튼 비활성화
-  const buttonDisabled = disabled || isLoading || !user;
+  const buttonDisabled = disabled || isLoading || !user || isOrderNumberLoading;
 
   return (
     <Button
@@ -79,7 +130,7 @@ export default function MessageButton({
           </span>
         )}
       </div>
-      {isLoading ? "로딩 중..." : "메시지"}
+      {isLoading || isOrderNumberLoading ? "로딩 중..." : "메시지"}
       
       {/* NEW 배지 대신 숫자 배지를 사용하므로 이 부분은 주석 처리 */}
       {/* {unreadCount > 0 && (
