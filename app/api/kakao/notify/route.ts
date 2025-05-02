@@ -18,14 +18,25 @@ console.log('✅ SOLAPI_API_SECRET 값:', JSON.stringify(process.env.SOLAPI_API_
 console.log('🔎 process.env 내 SOLAPI_API_KEY 키 존재 여부:', 'SOLAPI_API_KEY' in process.env);
 console.log('🔎 process.env 내 SOLAPI_API_SECRET 키 존재 여부:', 'SOLAPI_API_SECRET' in process.env);
 
-// 환경 변수에서 API 키 가져오기 (엄격한 타입 체크와 fallback 로직)
-const SOLAPI_API_KEY = (typeof process.env.SOLAPI_API_KEY === 'string' && process.env.SOLAPI_API_KEY.trim() !== '')
-  ? process.env.SOLAPI_API_KEY.trim()
-  : "NCSLR9HLUEOHFVAK"; // 테스트 후 제거 필수
+// 💡 Joi 테스트를 위한 변수 설정 방식 변경 (추가 안전장치)
+let rawApiKey = process.env.SOLAPI_API_KEY;
+let rawApiSecret = process.env.SOLAPI_API_SECRET;
 
-const SOLAPI_API_SECRET = (typeof process.env.SOLAPI_API_SECRET === 'string' && process.env.SOLAPI_API_SECRET.trim() !== '')
-  ? process.env.SOLAPI_API_SECRET.trim()
-  : "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE"; // 테스트 후 제거 필수
+console.log('🔍 rawApiKey 초기값:', typeof rawApiKey, JSON.stringify(rawApiKey));
+
+// 환경 변수에서 API 키 가져오기 (가장 엄격한 타입 체크와 fallback 로직)
+// 새로운 방식: null 병합 연산자(??)를 사용하여 undefined만 처리
+const SOLAPI_API_KEY = rawApiKey ?? "NCSLR9HLUEOHFVAK"; 
+const SOLAPI_API_SECRET = rawApiSecret ?? "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE";
+
+// 값이 빈 문자열인지 체크하고 필요시 대체
+const finalApiKey = (typeof SOLAPI_API_KEY === 'string' && SOLAPI_API_KEY.trim() !== '')
+  ? SOLAPI_API_KEY.trim()
+  : "NCSLR9HLUEOHFVAK";
+
+const finalApiSecret = (typeof SOLAPI_API_SECRET === 'string' && SOLAPI_API_SECRET.trim() !== '')
+  ? SOLAPI_API_SECRET.trim()
+  : "Z4YNIAOR6RN5LO6VWNB8NA4LWSSOPHIE";
 
 // 실제 발신자 정보 설정
 const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF2504270350090645hp8rQ1lvqL';
@@ -33,22 +44,34 @@ const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP23012608
 const SENDER_PHONE = process.env.SENDER_PHONE || '01056183450'; // 하이픈 제거된 형식
 
 // ===== 타입 검증 및 로깅 강화 =====
-// API Key가 string 타입인지 확인 전 로깅
-console.log('⚠️ API Key 타입 검증 전 상태:', SOLAPI_API_KEY, typeof SOLAPI_API_KEY);
+// 모든 중간 변수 상태 확인
+console.log('⚠️ 최초 추출값:', {
+  rawApiKey: typeof rawApiKey,
+  SOLAPI_API_KEY: typeof SOLAPI_API_KEY,
+  finalApiKey: typeof finalApiKey
+});
+
+// Joi 검증 테스트 - apiKey가 string인지 직접 확인
+console.log('✅ Joi 전달 전 apiKey:', typeof finalApiKey, JSON.stringify(finalApiKey));
+
+// 타입이 문자열이 아니면 강제 변환
+const stringApiKey = String(finalApiKey);
+console.log('✅ String()으로 강제 변환 후:', typeof stringApiKey, JSON.stringify(stringApiKey));
 
 // 타입 강제 확인
-if (typeof SOLAPI_API_KEY !== 'string') {
-  console.error('🚨 심각: SOLAPI_API_KEY가 문자열이 아닙니다!', typeof SOLAPI_API_KEY);
-  throw new Error('SOLAPI_API_KEY is not a string');
+if (typeof stringApiKey !== 'string') {
+  console.error('🚨 심각: stringApiKey가 문자열이 아닙니다!', typeof stringApiKey);
+  throw new Error('stringApiKey is not a string');
 }
 
-if (typeof SOLAPI_API_SECRET !== 'string') {
-  console.error('🚨 심각: SOLAPI_API_SECRET이 문자열이 아닙니다!', typeof SOLAPI_API_SECRET);
-  throw new Error('SOLAPI_API_SECRET is not a string');
+if (typeof finalApiSecret !== 'string') {
+  console.error('🚨 심각: finalApiSecret이 문자열이 아닙니다!', typeof finalApiSecret);
+  throw new Error('finalApiSecret is not a string');
 }
 
 // 환경 변수 값 자세히 로깅 (undefined 확인용)
 console.log('✅ 환경 변수 확인', {
+  rawApiKey: rawApiKey,
   apiKey: process.env.SOLAPI_API_KEY,
   apiSecret: process.env.SOLAPI_API_SECRET,
   senderKey: process.env.SOLAPI_SENDER_KEY,
@@ -57,34 +80,38 @@ console.log('✅ 환경 변수 확인', {
 });
 
 // 환경 변수 타입 디버깅
-console.log('[DEBUG] SOLAPI_API_KEY:', SOLAPI_API_KEY);
-console.log('[DEBUG] typeof SOLAPI_API_KEY:', typeof SOLAPI_API_KEY);
-console.log('[DEBUG] SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
-console.log('[DEBUG] typeof SOLAPI_API_SECRET:', typeof SOLAPI_API_SECRET);
+console.log('[DEBUG] rawApiKey:', typeof rawApiKey, rawApiKey);
+console.log('[DEBUG] SOLAPI_API_KEY:', typeof SOLAPI_API_KEY, SOLAPI_API_KEY);
+console.log('[DEBUG] finalApiKey:', typeof finalApiKey, finalApiKey);
+console.log('[DEBUG] stringApiKey:', typeof stringApiKey, stringApiKey);
 
 // 최종 사용 값 확인
-console.log('🔐 최종 사용되는 SOLAPI_API_KEY:', SOLAPI_API_KEY);
-console.log('🔐 최종 사용되는 SOLAPI_API_SECRET:', SOLAPI_API_SECRET);
-
-// 문자열 강제 변환 시도 (마지막 안전장치)
-const forcedApiKey = String(SOLAPI_API_KEY);
-console.log('💡 String()으로 강제 변환된 apiKey:', forcedApiKey, typeof forcedApiKey);
+console.log('🔐 최종 사용되는 SOLAPI_API_KEY:', stringApiKey);
+console.log('🔐 최종 사용되는 SOLAPI_API_SECRET:', finalApiSecret);
 
 export async function POST(request: Request) {
   try {
+    // 가장 먼저 직접 환경변수 확인 - POST 함수 내부에서 확인
+    console.log("🔍 [POST 함수 내부] process.env.SOLAPI_API_KEY =", process.env.SOLAPI_API_KEY);
+    console.log("🔍 [POST 함수 내부] typeof process.env.SOLAPI_API_KEY =", typeof process.env.SOLAPI_API_KEY);
+    
+    // 직접 fallback 테스트
+    const directApiKey = process.env.SOLAPI_API_KEY ?? "FALLBACK_API_KEY";
+    console.log("🔍 [POST 함수 내부] typeof directApiKey =", typeof directApiKey, "value =", directApiKey);
+    
     console.log('✉️ API 요청 수신:', new Date().toISOString());
     
     // 환경변수 유효성 검사
-    if (!SOLAPI_API_KEY || typeof SOLAPI_API_KEY !== 'string') {
-      console.error('❌ SOLAPI_API_KEY가 설정되지 않았거나 문자열이 아닙니다', SOLAPI_API_KEY);
+    if (!stringApiKey || typeof stringApiKey !== 'string') {
+      console.error('❌ stringApiKey가 설정되지 않았거나 문자열이 아닙니다', stringApiKey);
       return NextResponse.json(
         { error: 'API 키가 올바르게 설정되지 않았습니다.' },
         { status: 500 }
       );
     }
 
-    if (!SOLAPI_API_SECRET || typeof SOLAPI_API_SECRET !== 'string') {
-      console.error('❌ SOLAPI_API_SECRET이 설정되지 않았거나 문자열이 아닙니다', SOLAPI_API_SECRET);
+    if (!finalApiSecret || typeof finalApiSecret !== 'string') {
+      console.error('❌ finalApiSecret이 설정되지 않았거나 문자열이 아닙니다', finalApiSecret);
       return NextResponse.json(
         { error: 'API 시크릿이 올바르게 설정되지 않았습니다.' },
         { status: 500 }
@@ -109,18 +136,26 @@ export async function POST(request: Request) {
     console.log(`🔔 카카오 알림톡 전송 시도: ${name}님(${phoneNumber})에게 알림 발송`);
     
     // 환경 변수 확인
-    console.log('🔑 API 키 확인:', !!SOLAPI_API_KEY, !!SOLAPI_API_SECRET, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
+    console.log('🔑 API 키 확인:', !!stringApiKey, !!finalApiSecret, !!SOLAPI_SENDER_KEY, !!SOLAPI_TEMPLATE_CODE);
     
-    // 요청 직전 API 키 최종 확인
-    console.log('✅ 최종 apiKey 타입:', typeof SOLAPI_API_KEY);
-    console.log('✅ 최종 apiKey 값:', SOLAPI_API_KEY);
-    console.log('✅ 최종 apiSecret 타입:', typeof SOLAPI_API_SECRET);
+    // 요청 직전 API 키 최종 확인 - Joi 테스트 시뮬레이션
+    console.log('✅ 최종 apiKey 타입:', typeof stringApiKey);
+    console.log('✅ 최종 apiKey 값:', JSON.stringify(stringApiKey));
+    console.log('✅ 최종 apiSecret 타입:', typeof finalApiSecret);
+    
+    // Joi 검증 상황 시뮬레이션
+    const joiTestObj = {
+      apiKey: stringApiKey,
+      content: "테스트 메시지"
+    };
+    console.log('⚠️ Joi 검증 객체:', joiTestObj);
+    console.log('⚠️ Joi apiKey 타입:', typeof joiTestObj.apiKey);
     
     // API 요청 데이터 구성 (본문에도 인증 정보 포함)
     // 최대한 안전하게 - String() 으로 한번 더 강제 변환
     const apiRequestData = {
-      apiKey: String(SOLAPI_API_KEY),
-      apiSecret: String(SOLAPI_API_SECRET),
+      apiKey: String(stringApiKey),
+      apiSecret: String(finalApiSecret),
       message: {
         to: phoneNumber,
         from: SENDER_PHONE,
@@ -139,6 +174,7 @@ export async function POST(request: Request) {
     
     console.log('📝 Solapi 요청 데이터:', JSON.stringify(apiRequestData, null, 2));
     console.log('🔍 Solapi 요청 데이터 내 apiKey 타입:', typeof apiRequestData.apiKey);
+    console.log('🔍 Solapi 요청 데이터 내 apiKey 값:', JSON.stringify(apiRequestData.apiKey));
     
     // 카카오 알림톡 전송 (헤더와 본문 모두에 인증 정보 포함)
     const response = await axios.post(
@@ -146,7 +182,7 @@ export async function POST(request: Request) {
       apiRequestData,
       {
         headers: {
-          Authorization: `HMAC-SHA256 ${String(SOLAPI_API_KEY)}:${String(SOLAPI_API_SECRET)}`,
+          Authorization: `HMAC-SHA256 ${String(stringApiKey)}:${String(finalApiSecret)}`,
           'Content-Type': 'application/json'
         }
       }
