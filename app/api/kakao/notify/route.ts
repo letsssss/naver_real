@@ -4,9 +4,10 @@ import axios from 'axios';
 // 환경 변수에서 API 키 가져오기
 const SOLAPI_API_KEY = process.env.SOLAPI_API_KEY!;
 const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET!;
-const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || '';
-const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'NEW_MESSAGE_01'; // 메시지 도착 알림용 템플릿 코드
-const SENDER_PHONE = process.env.SENDER_PHONE || '07012345678'; // 등록된 발신 번호
+// 실제 발신자 정보 설정
+const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY || 'KA01PF2504270350090645hp8rQ1lvqL';
+const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'KA01TP230126085130773ZHcIHN4i674';
+const SENDER_PHONE = process.env.SENDER_PHONE || '01056183450'; // 하이픈 제거된 형식
 
 export async function POST(request: Request) {
   try {
@@ -27,13 +28,13 @@ export async function POST(request: Request) {
     
     console.log(`🔔 카카오 알림톡 전송 시도: ${name}님(${phoneNumber})에게 알림 발송`);
     
-    // 알림톡 내용 구성
+    // 알림톡 내용 구성 (템플릿에 맞게 조정 필요)
     const content = `${name}님, 이지티켓에 새로운 메시지가 도착했습니다. 확인해보세요!`;
     
     // Solapi API 호출을 위한 인증 헤더 생성
     const authorizationToken = Buffer.from(`${SOLAPI_API_KEY}:${SOLAPI_API_SECRET}`).toString('base64');
     
-    // 카카오 알림톡 전송
+    // 카카오 알림톡 전송 (실제 템플릿 코드와 발신 프로필 키 사용)
     const response = await axios.post(
       'https://api.solapi.com/messages/v4/send',
       {
