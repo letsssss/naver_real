@@ -26,6 +26,11 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
+    // 이름 검증 로그 추가
+    console.log('🧪 name 변수 타입:', typeof name);
+    console.log('🧪 name 변수 값:', name);
+    console.log('🧪 name 변수 null/undefined 여부:', name === null ? 'null' : (name === undefined ? 'undefined' : 'has value'));
+    
     // 전화번호 하이픈 제거
     const phoneNumber = to.replace(/-/g, '');
     
@@ -44,6 +49,17 @@ export async function POST(request: Request) {
     console.log('- Template Code:', SOLAPI_TEMPLATE_CODE);
     console.log('- To:', phoneNumber);
     
+    // [수정] 변수 처리 최적화
+    const variables = {
+      [`홍길동`]: String(name || '고객'),
+      [`url`]: 'https://easyticket82.com/mypage'
+    };
+    
+    // [추가] 변수 구조 검증 로그
+    console.log('🧪 kakaoOptions.variables 타입:', typeof variables);
+    console.log('🧪 kakaoOptions.variables 정확히:', JSON.stringify(variables));
+    console.log('🧪 변수 키 확인:', Object.keys(variables));
+    
     // API 요청 데이터 구성
     const apiRequestData = {
       apiKey: String(apiKey),
@@ -55,10 +71,7 @@ export async function POST(request: Request) {
         kakaoOptions: {
           pfId: SOLAPI_SENDER_KEY,
           templateId: SOLAPI_TEMPLATE_CODE,
-          variables: {
-            '홍길동': name || '고객',
-            'url': 'https://easyticket82.com/mypage'
-          },
+          variables, // 최적화된 변수 사용
           disableSms: false // SMS 대체 발송 활성화
         }
       }
@@ -70,6 +83,9 @@ export async function POST(request: Request) {
       apiKey: apiRequestData.apiKey.substring(0, 4) + '****',
       apiSecret: apiRequestData.apiSecret.substring(0, 4) + '****'
     };
+    
+    // [추가] API 요청 데이터 내 template 변수 확인
+    console.log('🧪 최종 요청의 variables 구조:', JSON.stringify(apiRequestData.message.kakaoOptions.variables, null, 2));
     
     // API 요청 직전 로그
     console.log('📡 Solapi에 요청 직전:', JSON.stringify(logData, null, 2));
@@ -124,6 +140,20 @@ export async function POST(request: Request) {
       console.error('- Status:', error.response?.status);
       console.error('- Response Data:', JSON.stringify(error.response?.data, null, 2));
       console.error('- Error Config:', error.config?.url, error.config?.method);
+      
+      // [추가] 요청 데이터 파싱 에러 확인
+      if (error.response?.data?.message?.includes('variables')) {
+        console.error('⚠️ variables 형식 오류 가능성 높음!');
+        
+        try {
+          // 요청 데이터 파싱
+          const reqData = JSON.parse(error.config?.data || '{}');
+          console.error('🧪 요청 시 보낸 variables:', 
+            JSON.stringify(reqData?.message?.kakaoOptions?.variables, null, 2));
+        } catch (e) {
+          console.error('🧪 요청 데이터 파싱 실패');
+        }
+      }
       
       const statusCode = error.response?.status || 500;
       return NextResponse.json({
