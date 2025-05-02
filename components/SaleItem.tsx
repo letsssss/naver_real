@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -26,6 +26,11 @@ interface SaleItemProps {
 
 export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   const [isLoading, setIsLoading] = useState(false);
+
+  // 각 상품별 주문번호 로깅
+  useEffect(() => {
+    console.log(`💬 메시지 버튼 렌더링 - 상품: ${sale.title}, 주문번호: ${sale.orderNumber || '없음'}`);
+  }, [sale.title, sale.orderNumber]);
 
   // 디버깅용 콘솔 로그 추가
   console.log("💬 sale 객체:", sale);
@@ -123,6 +128,7 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
                 orderNumber={sale.orderNumber}
                 onClick={() => handleTransactionClick(false)}
                 isLoading={isLoading}
+                debug={true}
               />
             </>
           )}
