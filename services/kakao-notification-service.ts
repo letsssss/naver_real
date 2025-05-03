@@ -1,4 +1,5 @@
 import { SolapiMessageService } from 'solapi';
+import { canSendKakao, updateKakaoSendLog } from '@/lib/kakaoRateLimiter';
 
 /**
  * 환경 변수에서 Solapi 관련 설정을 가져옵니다.
@@ -71,7 +72,15 @@ export async function sendKakaoNotification(
  * 새 메시지 알림톡 발송
  */
 export async function sendNewMessageNotification(to: string, name: string) {
-  return sendKakaoNotification(
+  const phoneNumber = to.replace(/-/g, '');
+
+  const canSend = await canSendKakao(phoneNumber, 'NEW_MESSAGE');
+  if (!canSend) {
+    console.log('⏱️ [NEW_MESSAGE] 최근 1시간 내 발송 기록 있음 → 생략');
+    return { success: false, reason: 'cooldown' };
+  }
+
+  const result = await sendKakaoNotification(
     to,
     TEMPLATE_IDS.MESSAGE_RECEIVED,
     {
@@ -79,6 +88,12 @@ export async function sendNewMessageNotification(to: string, name: string) {
       '#{url}': 'www.easyticket82.com/ticket-cancellation'
     }
   );
+
+  if (result.success) {
+    await updateKakaoSendLog(phoneNumber, 'NEW_MESSAGE');
+  }
+
+  return result;
 }
 
 /**

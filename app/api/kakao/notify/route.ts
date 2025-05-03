@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { sendNewMessageNotification } from '@/services/kakao-notification-service';
 
+// 반환 타입을 정의하여 타입 에러 해결
+interface KakaoNotificationResult {
+  success: boolean;
+  messageId?: any;
+  data?: any;
+  error?: string;
+  reason?: 'cooldown'; // rate limiting을 위한 추가 필드
+}
+
 // Node.js 런타임으로 설정 (환경 변수 접근을 위해 필수)
 export const runtime = 'nodejs';
 
@@ -33,7 +42,7 @@ export async function POST(request: Request) {
     // 새 메시지 알림 서비스 호출 - 메시지 정보도 활용
     // sendNewMessageNotification는 message 파라미터를 받지 않으므로
     // 일단 API만 받고 서비스에 전달하지 않음
-    const result = await sendNewMessageNotification(to, name || '고객');
+    const result = await sendNewMessageNotification(to, name || '고객') as KakaoNotificationResult;
     
     if (result.success) {
       // 성공 응답
@@ -42,6 +51,13 @@ export async function POST(request: Request) {
         message: '알림톡 발송 요청 완료',
         data: result
       });
+    } else if (result.reason === 'cooldown') {
+      // 제한 응답 (1시간에 1회)
+      return NextResponse.json({
+        success: false,
+        error: '최근 1시간 내 이미 알림톡이 발송되었습니다.',
+        reason: 'cooldown'
+      }, { status: 429 }); // 429 Too Many Requests
     } else {
       // 서비스 실패 응답 - 반환 값 구조에 맞게 수정
       return NextResponse.json({
