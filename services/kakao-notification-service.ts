@@ -75,7 +75,8 @@ export async function sendNewMessageNotification(to: string, name: string) {
     to,
     TEMPLATE_IDS.MESSAGE_RECEIVED,
     {
-      '#{이름}': name || '고객'
+      '#{이름}': name || '고객',
+      '#{url}': 'www.easyticket82.com/ticket-cancellation'
     }
   );
 }

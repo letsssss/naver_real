@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     console.log('🧪 name 변수 타입:', typeof name);
     console.log('🧪 name 변수 값:', name);
     console.log('🧪 message 미리보기:', message ? message.substring(0, 30) : '없음');
+    console.log('🔗 URL 변수 추가됨: www.easyticket82.com/ticket-cancellation');
     
     // 새 메시지 알림 서비스 호출 - 메시지 정보도 활용
     // sendNewMessageNotification는 message 파라미터를 받지 않으므로
