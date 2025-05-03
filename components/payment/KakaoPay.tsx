@@ -43,18 +43,24 @@ export default function KakaoPay({
     setWaitingPayment(true);
     const paymentId = generatePaymentId();
     
+    // 최소 결제 금액을 110원으로 설정
+    const minAmount = 110;
+    // 실제 사용할 금액 (0원이거나 amount가 없으면 110원으로 설정)
+    const paymentAmount = amount <= 0 ? minAmount : amount;
+    
     try {
       console.log('🔄 결제 요청 시작:', {
         storeId: STORE_ID,
         paymentId,
-        amount
+        originalAmount: amount,
+        paymentAmount: paymentAmount
       });
       
       await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
         orderName, // 공연명 - 날짜 시간 (장소)
-        totalAmount: amount,
+        totalAmount: paymentAmount, // amount 대신 paymentAmount 사용
         currency: 'CURRENCY_KRW',
         channelKey: CHANNEL_KEY,
         payMethod: 'EASY_PAY',
