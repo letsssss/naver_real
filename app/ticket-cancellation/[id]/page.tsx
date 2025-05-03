@@ -870,6 +870,7 @@ export default function TicketCancellationDetail() {
                             orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
                             customerName={user?.name || "고객"}
                             ticketInfo={`${ticketData.title} (${seatLabels})`}
+                            phoneNumber={phoneNumber}
                             onSuccess={handlePaymentSuccess}
                             onFail={handlePaymentFail}
                           />

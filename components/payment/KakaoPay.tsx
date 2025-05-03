@@ -4,12 +4,14 @@ import PortOne from '@portone/browser-sdk/v2';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface KakaoPayProps {
   amount: number;
   orderName: string;
   customerName?: string;
   ticketInfo?: string;
+  phoneNumber: string;
   onSuccess?: (paymentId: string) => void;
   onFail?: (error: any) => void;
 }
@@ -19,6 +21,7 @@ export default function KakaoPay({
   orderName,
   customerName = '고객',
   ticketInfo = '',
+  phoneNumber,
   onSuccess,
   onFail
 }: KakaoPayProps) {
@@ -33,7 +36,25 @@ export default function KakaoPay({
     return `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   };
 
+  // 전화번호 유효성 검사 함수
+  const isValidPhoneNumber = (phone: string) => {
+    // 기본적인 한국 전화번호 형식 검사 (숫자만 10-11자리)
+    return /^(\d{10,11}|\d{3}-\d{3,4}-\d{4}|\d{2,3}-\d{3,4}-\d{4})$/.test(phone);
+  };
+
   const handlePayment = async () => {
+    // 전화번호 유효성 검사 추가
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      toast.error("연락처를 입력해주세요.");
+      return;
+    }
+
+    // 선택적: 전화번호 형식 검사
+    if (!isValidPhoneNumber(phoneNumber)) {
+      toast.error("유효한 전화번호 형식이 아닙니다. (예: 010-1234-5678)");
+      return;
+    }
+
     if (!STORE_ID || !CHANNEL_KEY) {
       console.error('PortOne 설정이 누락되었습니다. 환경 변수를 확인해주세요.');
       alert('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
@@ -53,7 +74,8 @@ export default function KakaoPay({
         storeId: STORE_ID,
         paymentId,
         originalAmount: amount,
-        paymentAmount: paymentAmount
+        paymentAmount: paymentAmount,
+        phoneNumber: phoneNumber
       });
       
       await PortOne.requestPayment({
@@ -67,6 +89,7 @@ export default function KakaoPay({
         easyPay: { easyPayProvider: 'EASY_PAY_PROVIDER_KAKAOPAY' },
         customer: {
           fullName: customerName,
+          phoneNumber: phoneNumber
         },
         bypass: { 
           kakaopay: { 
