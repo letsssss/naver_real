@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "tailwind:build": "npx tailwindcss -i ./app/globals.css -o ./app/output.css --watch",
-    "migrate:to:supabase": "node --loader ts-node/esm scripts/migrate-to-supabase.ts"
+    "migrate:to:supabase": "node --loader ts-node/esm scripts/migrate-to-supabase.ts",
+    "setup:solapi": "node scripts/setup-solapi.js"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
@@ -70,6 +71,7 @@
     "react-icons": "^5.5.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
+    "solapi": "^5.4.0",
     "sonner": "^2.0.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
