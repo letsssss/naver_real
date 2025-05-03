@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
+import KakaoPay from "@/components/payment/KakaoPay"
 
 // 티켓 시트 타입 정의
 interface SeatOption {
@@ -68,6 +69,7 @@ export default function TicketCancellationDetail() {
   const [mounted, setMounted] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [manualAuthorId, setManualAuthorId] = useState<string | null>(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("kakaopay")
 
   // 마운트 상태 관리 및 사용자 ID 저장
   useEffect(() => {
@@ -364,8 +366,6 @@ export default function TicketCancellationDetail() {
       return
     }
 
-    setIsSubmitting(true)
-
     // 선택한 좌석 정보 구성
     const selectedSeatLabels = selectedSeats
       .map((seatId) => {
@@ -375,75 +375,119 @@ export default function TicketCancellationDetail() {
       .filter(Boolean)
       .join(", ")
 
-    // 티켓 구매 요청
-    const purchaseTicket = async () => {
-      try {
-        if (!id) {
-          throw new Error("게시글 ID가 없습니다")
-        }
+    // 카카오페이가 아닌 경우에만 API 호출 진행
+    if (selectedPaymentMethod !== "kakaopay") {
+      setIsSubmitting(true)
+      purchaseTicket(selectedSeatLabels)
+    }
+  }
 
-        // 개발 환경에서 인증을 위한 userId 쿼리 파라미터 추가
-        const userId = currentUserId || user?.id;
-        const apiUrl = process.env.NODE_ENV === 'development' && userId
-          ? `/api/ticket-purchase?userId=${userId}`
-          : '/api/ticket-purchase';
-
-        // 인증 토큰을 가져오기 (로컬 스토리지에서)
-        let token = null;
-        if (typeof window !== 'undefined') {
-          token = localStorage.getItem('token') || 
-                  localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
-        }
-
-        // 헤더 설정 (인증 토큰 포함)
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        };
-        
-        // 토큰이 있으면 Authorization 헤더 추가
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-          console.log("인증 토큰 헤더 추가됨");
-        } else {
-          console.log("인증 토큰을 찾을 수 없음");
-        }
-
-        // 티켓 구매 API 호출
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            postId: parseInt(id),
-            quantity: selectedSeats.length,
-            selectedSeats: selectedSeatLabels,
-            phoneNumber: phoneNumber,
-            paymentMethod: '계좌이체'
-          }),
-          credentials: 'include', // 쿠키 포함 (인증 정보)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("구매 요청 실패:", errorData);
-          throw new Error(errorData.message || '구매 요청 중 오류가 발생했습니다.');
-        }
-
-        const data = await response.json();
-        console.log("구매 응답:", data);
-        
-        setIsSuccess(true)
-        setTimeout(() => {
-          router.push("/mypage?tab=purchases")
-        }, 5000)
-      } catch (error) {
-        console.error('구매 처리 오류:', error);
-        toast.error(error instanceof Error ? error.message : '구매 요청 중 오류가 발생했습니다.');
-      } finally {
-        setIsSubmitting(false);
+  // 티켓 구매 API 호출 함수
+  const purchaseTicket = async (paymentId?: string, seatLabels?: string) => {
+    try {
+      if (!id) {
+        throw new Error("게시글 ID가 없습니다")
       }
-    };
 
-    purchaseTicket();
+      // 선택한 좌석 정보 구성 (여기서 필요한 경우 다시 계산)
+      const selectedSeatLabels = seatLabels || selectedSeats
+        .map((seatId) => {
+          const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
+          return seat ? seat.label : ""
+        })
+        .filter(Boolean)
+        .join(", ")
+
+      // 개발 환경에서 인증을 위한 userId 쿼리 파라미터 추가
+      const userId = currentUserId || user?.id;
+      const apiUrl = process.env.NODE_ENV === 'development' && userId
+        ? `/api/ticket-purchase?userId=${userId}`
+        : '/api/ticket-purchase';
+
+      // 인증 토큰을 가져오기 (로컬 스토리지에서)
+      let token = null;
+      if (typeof window !== 'undefined') {
+        token = localStorage.getItem('token') || 
+                localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+      }
+
+      // 헤더 설정 (인증 토큰 포함)
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // 토큰이 있으면 Authorization 헤더 추가
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log("인증 토큰 헤더 추가됨");
+      } else {
+        console.log("인증 토큰을 찾을 수 없음");
+      }
+
+      // 선택한 좌석 가격 계산
+      const totalAmount = selectedSeats.reduce((sum, seatId) => {
+        const seat = ticketData?.seatOptions.find(s => s.id === seatId);
+        return sum + (seat?.price || 0);
+      }, 0);
+
+      // 티켓 구매 API 호출
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          postId: parseInt(id),
+          quantity: selectedSeats.length,
+          selectedSeats: selectedSeatLabels,
+          phoneNumber: phoneNumber,
+          paymentMethod: selectedPaymentMethod,
+          paymentId: paymentId || undefined,
+          amount: totalAmount
+        }),
+        credentials: 'include', // 쿠키 포함 (인증 정보)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("구매 요청 실패:", errorData);
+        throw new Error(errorData.message || '구매 요청 중 오류가 발생했습니다.');
+      }
+
+      const data = await response.json();
+      console.log("구매 응답:", data);
+      
+      setIsSuccess(true)
+      setTimeout(() => {
+        router.push("/mypage?tab=purchases")
+      }, 5000)
+    } catch (error) {
+      console.error('구매 처리 오류:', error);
+      toast.error(error instanceof Error ? error.message : '구매 요청 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // 카카오페이 결제 성공 핸들러
+  const handlePaymentSuccess = (paymentId: string) => {
+    console.log("카카오페이 결제 성공:", paymentId);
+    
+    // 좌석 라벨 정보 생성
+    const seatLabels = selectedSeats
+      .map((seatId) => {
+        const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
+        return seat ? seat.label : ""
+      })
+      .filter(Boolean)
+      .join(", ");
+    
+    purchaseTicket(paymentId, seatLabels);
+  }
+
+  // 카카오페이 결제 실패 핸들러
+  const handlePaymentFail = (error: any) => {
+    console.error("카카오페이 결제 실패:", error);
+    toast.error("결제에 실패했습니다. 다시 시도해주세요.");
+    setIsSubmitting(false);
   }
 
   // 로딩 중 표시
@@ -724,50 +768,37 @@ export default function TicketCancellationDetail() {
                       </div>
                     </div>
 
-                    {/* 티켓 예매 사이트 아이디 필드 - 일시적으로 비활성화
-                    <div>
-                      <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 mb-2">
-                        티켓 예매 사이트 아이디
-                      </label>
-                      <Input
-                        id="accountId"
-                        type="text"
-                        placeholder="아이디를 입력해주세요"
-                        value={accountId}
-                        onChange={(e) => setAccountId(e.target.value)}
-                        required
-                        disabled={isAuthor}
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="accountPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                        구매자 비밀번호
-                      </label>
-                      <Input
-                        id="accountPassword"
-                        type="password"
-                        placeholder="예매 사이트 비밀번호를 입력해주세요"
-                        value={accountPassword}
-                        onChange={(e) => setAccountPassword(e.target.value)}
-                        required
-                      />
-                      <p className="text-sm text-gray-500 mt-1">예매 사이트에서 사용하는 계정 정보를 입력해주세요.</p>
-                    </div>
-                    */}
-
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
                       <div className="space-y-2">
+                        {/* 카카오페이 옵션 */}
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "kakaopay" ? "bg-yellow-50 border-yellow-200" : "border-gray-200 hover:border-gray-300"}`}>
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="kakaopay"
+                              name="paymentMethod"
+                              value="kakaopay"
+                              checked={selectedPaymentMethod === "kakaopay"}
+                              onChange={() => setSelectedPaymentMethod("kakaopay")}
+                              className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-gray-300"
+                            />
+                            <label htmlFor="kakaopay" className="ml-2 block text-sm text-gray-700 font-medium">
+                              카카오페이
+                            </label>
+                          </div>
+                        </div>
+                        
                         {/* 토스페이 옵션 */}
-                        <div className="p-3 border rounded-lg bg-blue-50 border-blue-200">
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "toss" ? "bg-blue-50 border-blue-200" : "border-gray-200 hover:border-gray-300"}`}>
                           <div className="flex items-center">
                             <input
                               type="radio"
                               id="toss"
                               name="paymentMethod"
                               value="toss"
-                              defaultChecked
+                              checked={selectedPaymentMethod === "toss"}
+                              onChange={() => setSelectedPaymentMethod("toss")}
                               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                             />
                             <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
@@ -777,13 +808,15 @@ export default function TicketCancellationDetail() {
                         </div>
                         
                         {/* 판매자 직접 결제 옵션 */}
-                        <div className="p-3 border rounded-lg border-gray-200 hover:border-gray-300">
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "direct" ? "bg-gray-50 border-gray-300" : "border-gray-200 hover:border-gray-300"}`}>
                           <div className="flex items-center">
                             <input
                               type="radio"
                               id="direct"
                               name="paymentMethod"
                               value="direct"
+                              checked={selectedPaymentMethod === "direct"}
+                              onChange={() => setSelectedPaymentMethod("direct")}
                               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                             />
                             <label htmlFor="direct" className="ml-2 block text-sm text-gray-700 font-medium">
@@ -813,13 +846,45 @@ export default function TicketCancellationDetail() {
                     </div>
                   </div>
 
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-[#0061FF] hover:bg-[#0052D6]" 
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
-                  </Button>
+                  {selectedPaymentMethod === "kakaopay" ? (
+                    <div className="mt-6">
+                      {/* 선택한 좌석 가격 합계 계산 */}
+                      {(() => {
+                        const totalAmount = selectedSeats.reduce((sum, seatId) => {
+                          const seat = ticketData?.seatOptions.find(s => s.id === seatId);
+                          return sum + (seat?.price || 0);
+                        }, 0);
+                        
+                        // 선택한 좌석 라벨 계산
+                        const seatLabels = selectedSeats
+                          .map((seatId) => {
+                            const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
+                            return seat ? seat.label : ""
+                          })
+                          .filter(Boolean)
+                          .join(", ");
+                        
+                        return (
+                          <KakaoPay 
+                            amount={totalAmount}
+                            orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
+                            customerName={user?.name || "고객"}
+                            ticketInfo={`${ticketData.title} (${seatLabels})`}
+                            onSuccess={handlePaymentSuccess}
+                            onFail={handlePaymentFail}
+                          />
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <Button 
+                      type="submit" 
+                      className="w-full mt-6 bg-[#0061FF] hover:bg-[#0052D6]" 
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
+                    </Button>
+                  )}
                 </form>
               ) : null}
             </div>
