@@ -12,6 +12,7 @@ export default function KakaopayExamplePage() {
   const [orderName, setOrderName] = useState('테스트 상품');
   const [customerName, setCustomerName] = useState('홍길동');
   const [ticketInfo, setTicketInfo] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; paymentId?: string; error?: any } | null>(null);
   
   const handleSuccess = (paymentId: string) => {
@@ -52,6 +53,7 @@ export default function KakaopayExamplePage() {
                 <p><span className="font-medium">결제 ID:</span> {paymentResult.paymentId}</p>
                 <p><span className="font-medium">상품명:</span> {orderName}</p>
                 <p><span className="font-medium">결제 금액:</span> {amount.toLocaleString()}원</p>
+                <p><span className="font-medium">연락처:</span> {phoneNumber}</p>
               </div>
             ) : (
               <div className="text-red-500">
@@ -101,6 +103,18 @@ export default function KakaopayExamplePage() {
             </div>
             
             <div className="space-y-2">
+              <Label htmlFor="phoneNumber">연락처</Label>
+              <Input 
+                id="phoneNumber" 
+                type="tel" 
+                value={phoneNumber} 
+                onChange={(e) => setPhoneNumber(e.target.value)} 
+                placeholder="010-1234-5678"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="ticketInfo">티켓 정보 (선택)</Label>
               <Input 
                 id="ticketInfo" 
@@ -116,6 +130,7 @@ export default function KakaopayExamplePage() {
               orderName={orderName}
               customerName={customerName}
               ticketInfo={ticketInfo}
+              phoneNumber={phoneNumber}
               onSuccess={handleSuccess}
               onFail={handleFail}
             />
@@ -127,6 +142,7 @@ export default function KakaopayExamplePage() {
         <h2 className="text-lg font-medium mb-2">사용 방법</h2>
         <ol className="list-decimal pl-5 space-y-1">
           <li>결제 정보를 입력합니다.</li>
+          <li>연락처를 필수로 입력합니다.</li>
           <li>"카카오페이로 결제하기" 버튼을 클릭합니다.</li>
           <li>카카오페이 결제창이 열리면 결제를 진행합니다.</li>
           <li>결제 완료 후, 웹훅을 통해 서버에서 결제 정보를 검증합니다.</li>
