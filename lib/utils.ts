@@ -48,3 +48,12 @@ export function safeJsonStringify(obj: any): string {
   );
 }
 
+/**
+ * 숫자를 천 단위로 쉼표를 찍어 포맷팅합니다.
+ * @param num 포맷팅할 숫자
+ * @returns 포맷팅된 문자열
+ */
+export function formatNumber(num: number): string {
+  return num.toLocaleString('ko-KR');
+}
+
