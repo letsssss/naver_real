@@ -195,7 +195,7 @@ export function ChatInterface({
         console.log(`📱 카카오 알림톡 전송 시도: ${otherUserName}님(${otherUserPhone})`);
         
         try {
-          // 카카오 알림 API 호출
+          // 카카오 알림 API 호출 - 필수 파라미터 추가
           const notifyResponse = await fetch('/api/kakao/notify', {
             method: 'POST',
             headers: {
@@ -204,7 +204,7 @@ export function ChatInterface({
             body: JSON.stringify({
               to: otherUserPhone,
               name: otherUserName,
-              message: messageContent.substring(0, 30) + (messageContent.length > 30 ? '...' : '')
+              message: messageContent // 실제 보낸 메시지 내용을 추가
             }),
           });
           

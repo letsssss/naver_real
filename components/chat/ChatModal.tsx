@@ -205,7 +205,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
       if (otherUser?.phone_number) {
         console.log(`📱 카카오 알림톡 전송 시도: ${otherUser.name}님(${otherUser.phone_number})`);
         
-        // 카카오 알림 API 호출
+        // 카카오 알림 API 호출 - 필수 파라미터 추가
         const notifyResponse = await fetch('/api/kakao/notify', {
           method: 'POST',
           headers: {
@@ -214,7 +214,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
           body: JSON.stringify({
             to: otherUser.phone_number,
             name: otherUser.name || '사용자',
-            message: newMessage.substring(0, 30) + (newMessage.length > 30 ? '...' : '')
+            message: newMessage // 보낸 메시지 내용 추가
           }),
         });
         
