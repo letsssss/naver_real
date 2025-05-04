@@ -241,7 +241,12 @@ export function ChatInterface({
   // 메시지 시간 포맷팅
   const formatMessageTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('ko-KR', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Seoul'
+    });
   };
 
   // 스크롤을 맨 아래로 이동하는 함수

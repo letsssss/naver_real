@@ -282,7 +282,12 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
                       <p className="text-sm break-words">{message.text}</p>
                       <div className="flex items-center justify-end mt-1 space-x-1">
                         <span className="text-xs opacity-80">
-                          {new Date(message.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(message.timestamp).toLocaleTimeString('ko-KR', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: true,
+                            timeZone: 'Asia/Seoul' 
+                          })}
                         </span>
                         {message.isMine && (
                           <span className="text-xs">
