@@ -6,6 +6,13 @@ import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
 import { toast } from 'sonner';
 
+// PortOne 응답 타입 확장 정의
+interface PortOneResponse {
+  status: string; // 'DONE', 'PENDING' 등의 상태값
+  paymentId: string;
+  [key: string]: any; // 기타 속성들
+}
+
 interface KakaoPayProps {
   amount: number;
   orderName: string;
@@ -111,8 +118,31 @@ export default function KakaoPay({
       // 결제 응답 처리
       console.log('✅ 결제 응답:', response);
       
-      // 결제가 성공적으로 완료된 경우
-      if (onSuccess) onSuccess(paymentId);
+      // 응답 상태 확인 - 'DONE' 상태일 때만 성공 처리
+      // @ts-ignore - PortOne 타입 정의에 status가 없지만 실제 응답에는 존재함
+      if (response && response.status === 'DONE') {
+        // @ts-ignore
+        console.log("🎉 결제 성공적으로 완료됨:", response.status);
+        // 결제가 성공적으로 완료된 경우에만 성공 콜백 호출
+        if (onSuccess) onSuccess(paymentId);
+      } else {
+        // 'DONE'이 아닌 다른 상태는 모두 실패로 처리
+        // @ts-ignore
+        console.warn("🟡 결제 실패 또는 미완료 상태:", response ? response.status : '상태 없음');
+        toast.warning("결제가 완료되지 않았습니다.");
+        
+        // 명확한 오류 객체 생성하여 실패 콜백 호출
+        const error = {
+          code: 'PAYMENT_NOT_COMPLETED',
+          // @ts-ignore
+          message: `결제가 완료되지 않았습니다. 상태: ${response ? response.status : '알 수 없음'}`,
+          // @ts-ignore
+          paymentStatus: response ? response.status : null,
+          response: response
+        };
+        
+        if (onFail) onFail(error);
+      }
       
     } catch (error: any) {
       console.error('❌ 결제 요청 중 오류 발생:', error);
