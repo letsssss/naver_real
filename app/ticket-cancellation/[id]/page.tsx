@@ -382,6 +382,41 @@ export default function TicketCancellationDetail() {
     }
   }
 
+  // 카카오페이 결제 실패 핸들러
+  const handlePaymentFail = (error: any) => {
+    console.error("카카오페이 결제 중단:", error);
+    
+    // 사용자가 결제를 취소한 경우는 오류 메시지를 표시하지 않음
+    if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
+      console.log("사용자가 결제를 취소했습니다.");
+      toast.info("결제가 취소되었습니다. 신청이 완료되지 않았습니다.");
+    } else {
+      // 실제 오류가 발생한 경우에만 에러 메시지 표시
+      toast.error("결제에 실패했습니다. 다시 시도해주세요.");
+    }
+    
+    // 어떤 경우든 제출 상태를 초기화하고 성공 상태를 false로 설정
+    setIsSubmitting(false);
+    setIsSuccess(false); // 중요: 결제 취소시 성공 상태를 false로 명시적 설정
+  }
+
+  // 카카오페이 결제 성공 핸들러
+  const handlePaymentSuccess = (paymentId: string) => {
+    console.log("카카오페이 결제 성공:", paymentId);
+    
+    // 좌석 라벨 정보 생성
+    const seatLabels = selectedSeats
+      .map((seatId) => {
+        const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
+        return seat ? seat.label : ""
+      })
+      .filter(Boolean)
+      .join(", ");
+    
+    // 성공적인 결제에 대해서만 구매 처리 진행
+    purchaseTicket(paymentId, seatLabels);
+  }
+
   // 티켓 구매 API 호출 함수
   const purchaseTicket = async (paymentId?: string, seatLabels?: string) => {
     try {
@@ -397,6 +432,13 @@ export default function TicketCancellationDetail() {
         })
         .filter(Boolean)
         .join(", ")
+
+      // paymentId가 없는 경우 (결제 취소나 실패한 경우) 구매 처리를 중단
+      if (!paymentId && selectedPaymentMethod === "kakaopay") {
+        console.log("결제 ID가 없어 구매 처리를 중단합니다.");
+        setIsSuccess(false); // 중요: 결제 ID가 없으면 성공 상태를 false로 설정
+        return;
+      }
 
       // 개발 환경에서 인증을 위한 userId 쿼리 파라미터 추가
       const userId = currentUserId || user?.id;
@@ -455,6 +497,7 @@ export default function TicketCancellationDetail() {
       const data = await response.json();
       console.log("구매 응답:", data);
       
+      // 성공 상태 설정 - API 응답이 성공인 경우에만
       setIsSuccess(true)
       setTimeout(() => {
         router.push("/mypage?tab=purchases")
@@ -462,42 +505,11 @@ export default function TicketCancellationDetail() {
     } catch (error) {
       console.error('구매 처리 오류:', error);
       toast.error(error instanceof Error ? error.message : '구매 요청 중 오류가 발생했습니다.');
+      // 오류 발생 시 성공 상태를 false로 유지
+      setIsSuccess(false);
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  // 카카오페이 결제 성공 핸들러
-  const handlePaymentSuccess = (paymentId: string) => {
-    console.log("카카오페이 결제 성공:", paymentId);
-    
-    // 좌석 라벨 정보 생성
-    const seatLabels = selectedSeats
-      .map((seatId) => {
-        const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
-        return seat ? seat.label : ""
-      })
-      .filter(Boolean)
-      .join(", ");
-    
-    purchaseTicket(paymentId, seatLabels);
-  }
-
-  // 카카오페이 결제 실패 핸들러
-  const handlePaymentFail = (error: any) => {
-    console.error("카카오페이 결제 중단:", error);
-    
-    // 사용자가 결제를 취소한 경우는 오류 메시지를 표시하지 않음
-    if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
-      console.log("사용자가 결제를 취소했습니다.");
-      // 취소는 에러로 표시하지 않고 상태만 초기화
-    } else {
-      // 실제 오류가 발생한 경우에만 에러 메시지 표시
-      toast.error("결제에 실패했습니다. 다시 시도해주세요.");
-    }
-    
-    // 어떤 경우든 제출 상태를 초기화
-    setIsSubmitting(false);
   }
 
   // 로딩 중 표시
