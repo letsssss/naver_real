@@ -46,6 +46,8 @@ interface TicketData {
     name: string;
     rating: number;
     profileImage: string;
+    successfulSales?: number;
+    responseRate?: number;
   };
   seatOptions: SeatOption[];
 }
@@ -288,6 +290,35 @@ export default function TicketCancellationDetail() {
         
         console.log("최종 선택된 판매자 ID:", sellerId);
         
+        // 판매자 상세 정보를 API에서 가져오기
+        let sellerDetail = {
+          successfulSales: 0,
+          responseRate: 0
+        };
+        
+        try {
+          if (sellerId) {
+            // 새로운 seller-stats API 사용
+            const sellerResponse = await fetch(`/api/seller-stats?sellerId=${sellerId}`);
+            if (sellerResponse.ok) {
+              const sellerData = await sellerResponse.json();
+              console.log("판매자 통계 정보:", sellerData);
+              
+              if (sellerData.seller) {
+                sellerDetail = {
+                  successfulSales: sellerData.seller.successfulSales || 0,
+                  responseRate: sellerData.seller.responseRate || 0
+                };
+              }
+            } else {
+              console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
+            }
+          }
+        } catch (error) {
+          console.error("판매자 통계 API 호출 오류:", error);
+          // 에러가 발생해도 게시물 데이터는 계속 표시
+        }
+        
         setTicketData({
           id: postData.id,
           title: postData.title || '티켓 제목',
@@ -303,8 +334,10 @@ export default function TicketCancellationDetail() {
           seller: {
             id: sellerId,
             name: postData.author?.name || '판매자 정보 없음',
-            rating: 4.5,
+            rating: postData.author?.rating || 4.5,
             profileImage: postData.author?.profileImage || '',
+            successfulSales: sellerDetail.successfulSales,
+            responseRate: sellerDetail.responseRate
           },
           seatOptions: seatOptions
         });
@@ -748,7 +781,7 @@ export default function TicketCancellationDetail() {
                       </div>
                       {ticketData.seller.id ? (
                         <p className="text-xs text-gray-500">
-                          거래 성사 124건 | 응답률 98%
+                          거래 성사 {ticketData.seller.successfulSales || 0}건 | 응답률 {ticketData.seller.responseRate || 0}%
                         </p>
                       ) : (
                         <p className="text-xs text-gray-500">

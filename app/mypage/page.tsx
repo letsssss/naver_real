@@ -220,6 +220,59 @@ export default function MyPage() {
     router.push("/");
   }
 
+  // 판매자 통계 정보 업데이트 함수 추가
+  useEffect(() => {
+    // 로딩 중이 아니고, 판매 상태가 로드된 경우에만 실행
+    if (!isLoadingSales && user && saleStatus && saleStatus.거래완료 !== undefined) {
+      // 판매자 통계 정보 업데이트
+      if (user.id) {
+        updateSellerStats(String(user.id), saleStatus.거래완료);
+      }
+    }
+  }, [isLoadingSales, user, saleStatus]);
+
+  // 판매자 통계 정보 업데이트 함수
+  const updateSellerStats = async (sellerId: string, completedSales: number) => {
+    try {
+      if (!sellerId) return;
+      
+      // 토큰 가져오기
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn("토큰이 없어 판매자 통계 업데이트를 건너뜁니다");
+        return;
+      }
+      
+      console.log("판매자 통계 업데이트 시도:", { sellerId, completedSales });
+      
+      // seller-stats API 호출
+      const response = await fetch('/api/seller-stats/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sellerId,
+          successfulSales: completedSales,
+          // 응답률은 실제 계산 로직이 필요
+          responseRate: 98 // 하드코딩된 값 (실제 구현시 계산 필요)
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("판매자 통계 업데이트 성공:", result);
+      } else {
+        console.error("판매자 통계 업데이트 실패:", response.status);
+        const errorText = await response.text();
+        console.error("오류 응답:", errorText);
+      }
+    } catch (error) {
+      console.error("판매자 통계 업데이트 오류:", error);
+    }
+  };
+
   // 로딩 중이거나 마운트되지 않은 경우 로딩 표시
   if (!mounted || isLoading) {
     return (
