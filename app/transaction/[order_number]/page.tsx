@@ -316,6 +316,9 @@ export default function TransactionDetail() {
           console.error("구매 확정 에러:", error)
           alert(error instanceof Error ? error.message : "구매 확정에 실패했습니다.")
         }
+      } else {
+        // 사용자가 취소를 누른 경우 아무 작업도 수행하지 않음
+        console.log("사용자가 구매 확정을 취소했습니다.")
       }
     } else if (transaction.currentStep === "confirmed") {
       router.push(`/review/${orderNumber}`)
