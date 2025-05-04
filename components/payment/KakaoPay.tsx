@@ -125,6 +125,16 @@ export default function KakaoPay({
         // 명확한 취소 상태 전달을 위해 오류 객체에 취소 표시 추가
         error.isCancelled = true;
         error.cancelMessage = "사용자가 결제를 취소했습니다.";
+        
+        // 확실한 취소 처리를 위해 취소 시점 저장
+        error.cancelledAt = Date.now();
+
+        // 사용자 취소 시 처리할 콜백 즉시 호출
+        if (onFail) {
+          console.log("💬 취소 콜백 즉시 실행");
+          onFail(error);
+          return; // 추가 처리 방지
+        }
       } else {
         toast.error("결제 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
       }
