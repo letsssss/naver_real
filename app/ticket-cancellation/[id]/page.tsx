@@ -323,6 +323,7 @@ export default function TicketCancellationDetail() {
   // Trigger confetti effect when success page is shown
   useEffect(() => {
     if (isSuccess) {
+      console.log("성공 화면 표시 및 폭죽 효과 활성화");
       confetti({
         particleCount: 100,
         spread: 70,
@@ -386,10 +387,21 @@ export default function TicketCancellationDetail() {
   const handlePaymentFail = (error: any) => {
     console.error("카카오페이 결제 중단:", error);
     
-    // 사용자가 결제를 취소한 경우는 오류 메시지를 표시하지 않음
+    // 사용자가 결제를 취소한 경우
     if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
       console.log("사용자가 결제를 취소했습니다.");
       toast.info("결제가 취소되었습니다. 신청이 완료되지 않았습니다.");
+      
+      // 결제 취소 시 명시적으로 상태 초기화
+      setIsSubmitting(false);
+      
+      // 중요: 결제 취소 시 강제로 isSuccess를 false로 설정
+      // setTimeout으로 상태 업데이트가 다른 비동기 작업보다 나중에 실행되도록 함
+      setTimeout(() => {
+        setIsSuccess(false);
+      }, 0);
+      
+      return; // 여기서 함수 실행을 중단하여 purchaseTicket이 호출되지 않도록 함
     } else {
       // 실제 오류가 발생한 경우에만 에러 메시지 표시
       toast.error("결제에 실패했습니다. 다시 시도해주세요.");
@@ -397,12 +409,21 @@ export default function TicketCancellationDetail() {
     
     // 어떤 경우든 제출 상태를 초기화하고 성공 상태를 false로 설정
     setIsSubmitting(false);
-    setIsSuccess(false); // 중요: 결제 취소시 성공 상태를 false로 명시적 설정
+    setIsSuccess(false);
   }
 
   // 카카오페이 결제 성공 핸들러
   const handlePaymentSuccess = (paymentId: string) => {
     console.log("카카오페이 결제 성공:", paymentId);
+    
+    // paymentId가 없거나 비어있으면 처리하지 않음
+    if (!paymentId || paymentId.trim() === '') {
+      console.error("유효하지 않은 결제 ID:", paymentId);
+      toast.error("유효하지 않은 결제 정보입니다. 다시 시도해주세요.");
+      setIsSubmitting(false);
+      setIsSuccess(false);
+      return;
+    }
     
     // 좌석 라벨 정보 생성
     const seatLabels = selectedSeats
@@ -419,6 +440,17 @@ export default function TicketCancellationDetail() {
 
   // 티켓 구매 API 호출 함수
   const purchaseTicket = async (paymentId?: string, seatLabels?: string) => {
+    // 카카오페이 결제의 경우 paymentId가 필수
+    if (selectedPaymentMethod === "kakaopay") {
+      // paymentId가 없는 경우 (결제 취소나 실패한 경우) 구매 처리를 완전히 중단
+      if (!paymentId) {
+        console.log("결제 ID가 없어 구매 처리를 중단합니다.");
+        setIsSubmitting(false);
+        setIsSuccess(false); // 중요: 결제 ID가 없으면 성공 상태를 false로 설정
+        return; // 함수 실행 중단
+      }
+    }
+    
     try {
       if (!id) {
         throw new Error("게시글 ID가 없습니다")
@@ -433,10 +465,10 @@ export default function TicketCancellationDetail() {
         .filter(Boolean)
         .join(", ")
 
-      // paymentId가 없는 경우 (결제 취소나 실패한 경우) 구매 처리를 중단
+      // 중복 체크: paymentId가 없는 경우 (결제 취소나 실패한 경우) 구매 처리를 중단
       if (!paymentId && selectedPaymentMethod === "kakaopay") {
         console.log("결제 ID가 없어 구매 처리를 중단합니다.");
-        setIsSuccess(false); // 중요: 결제 ID가 없으면 성공 상태를 false로 설정
+        setIsSuccess(false);
         return;
       }
 
@@ -537,7 +569,9 @@ export default function TicketCancellationDetail() {
     );
   }
 
+  // 성공 화면 조건부 렌더링 - 결제 취소 후에도 성공 화면이 표시되는 문제 해결
   if (isSuccess) {
+    console.log("신청 완료 화면 렌더링: 결제가 성공적으로 완료되었습니다.");
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="container mx-auto px-4">

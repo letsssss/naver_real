@@ -119,8 +119,12 @@ export default function KakaoPay({
       
       // 사용자가 결제 창을 닫았거나 취소한 경우
       if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
-        console.log("👤 사용자가 결제를 취소했습니다.");
+        console.log("👤 사용자가 결제를 취소했습니다. 코드:", error.code);
         toast.info("결제가 취소되었습니다. 결제 창을 닫았거나 진행을 중단했습니다.");
+        
+        // 명확한 취소 상태 전달을 위해 오류 객체에 취소 표시 추가
+        error.isCancelled = true;
+        error.cancelMessage = "사용자가 결제를 취소했습니다.";
       } else {
         toast.error("결제 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
       }
