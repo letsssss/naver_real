@@ -15,9 +15,11 @@ export async function GET(
   console.log('✅ SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 10))
 
   const supabase = createAdminClient()
+
+  // 명시적으로 관계 지정해서 join (중복 관계 오류 해결)
   const { data, error } = await supabase
     .from("purchases")
-    .select("*")
+    .select("*, post:posts(*), buyer:users!purchases_buyer_id_fkey(*)")
     .eq("order_number", order_number)
     .single()
 
