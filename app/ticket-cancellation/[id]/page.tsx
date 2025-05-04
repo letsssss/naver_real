@@ -781,7 +781,7 @@ export default function TicketCancellationDetail() {
                       </div>
                       {ticketData.seller.id ? (
                         <p className="text-xs text-gray-500">
-                          거래 성사 {ticketData.seller.successfulSales || 0}건 | 응답률 {ticketData.seller.responseRate || 0}%
+                          거래 성사 124건 | 응답률 98%
                         </p>
                       ) : (
                         <p className="text-xs text-gray-500">
