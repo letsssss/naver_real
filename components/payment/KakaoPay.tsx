@@ -12,6 +12,7 @@ interface KakaoPayProps {
   customerName?: string;
   ticketInfo?: string;
   phoneNumber: string;
+  selectedSeats?: string[];
   onSuccess?: (paymentId: string) => void;
   onFail?: (error: any) => void;
 }
@@ -22,6 +23,7 @@ export default function KakaoPay({
   customerName = '고객',
   ticketInfo = '',
   phoneNumber,
+  selectedSeats = [],
   onSuccess,
   onFail
 }: KakaoPayProps) {
@@ -43,6 +45,12 @@ export default function KakaoPay({
   };
 
   const handlePayment = async () => {
+    // 좌석 선택 여부 확인 추가
+    if (!selectedSeats || selectedSeats.length === 0) {
+      toast.error("좌석을 하나 이상 선택해주세요.");
+      return;
+    }
+
     // 전화번호 유효성 검사 추가
     if (!phoneNumber || phoneNumber.trim() === '') {
       toast.error("연락처를 입력해주세요.");
@@ -75,7 +83,8 @@ export default function KakaoPay({
         paymentId,
         originalAmount: amount,
         paymentAmount: paymentAmount,
-        phoneNumber: phoneNumber
+        phoneNumber: phoneNumber,
+        selectedSeats: selectedSeats
       });
       
       await PortOne.requestPayment({

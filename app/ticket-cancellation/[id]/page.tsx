@@ -871,6 +871,7 @@ export default function TicketCancellationDetail() {
                             customerName={user?.name || "고객"}
                             ticketInfo={`${ticketData.title} (${seatLabels})`}
                             phoneNumber={phoneNumber}
+                            selectedSeats={selectedSeats}
                             onSuccess={handlePaymentSuccess}
                             onFail={handlePaymentFail}
                           />

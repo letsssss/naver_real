@@ -6,6 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+
+// 좌석 옵션 인터페이스
+interface SeatOption {
+  id: string;
+  label: string;
+  price: number;
+}
 
 export default function KakaopayExamplePage() {
   const [amount, setAmount] = useState(1000);
@@ -13,7 +21,16 @@ export default function KakaopayExamplePage() {
   const [customerName, setCustomerName] = useState('홍길동');
   const [ticketInfo, setTicketInfo] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; paymentId?: string; error?: any } | null>(null);
+  
+  // 예제 좌석 옵션
+  const seatOptions: SeatOption[] = [
+    { id: 'A1', label: 'A구역 1열', price: 500 },
+    { id: 'A2', label: 'A구역 2열', price: 450 },
+    { id: 'B1', label: 'B구역 1열', price: 400 },
+    { id: 'B2', label: 'B구역 2열', price: 350 },
+  ];
   
   const handleSuccess = (paymentId: string) => {
     setPaymentResult({
@@ -31,6 +48,23 @@ export default function KakaopayExamplePage() {
   
   const handleReset = () => {
     setPaymentResult(null);
+  };
+  
+  // 좌석 선택 토글 함수
+  const toggleSeat = (seatId: string) => {
+    setSelectedSeats(prev => 
+      prev.includes(seatId) 
+        ? prev.filter(id => id !== seatId) 
+        : [...prev, seatId]
+    );
+  };
+  
+  // 선택된 좌석의 총 가격 계산
+  const calculateTotalPrice = () => {
+    return selectedSeats.reduce((total, seatId) => {
+      const seat = seatOptions.find(s => s.id === seatId);
+      return total + (seat?.price || 0);
+    }, 0);
   };
   
   return (
@@ -52,7 +86,11 @@ export default function KakaopayExamplePage() {
               <div className="space-y-2">
                 <p><span className="font-medium">결제 ID:</span> {paymentResult.paymentId}</p>
                 <p><span className="font-medium">상품명:</span> {orderName}</p>
-                <p><span className="font-medium">결제 금액:</span> {amount.toLocaleString()}원</p>
+                <p><span className="font-medium">선택 좌석:</span> {selectedSeats.map(id => {
+                  const seat = seatOptions.find(s => s.id === id);
+                  return seat?.label;
+                }).join(', ')}</p>
+                <p><span className="font-medium">결제 금액:</span> {calculateTotalPrice().toLocaleString()}원</p>
                 <p><span className="font-medium">연락처:</span> {phoneNumber}</p>
               </div>
             ) : (
@@ -73,15 +111,38 @@ export default function KakaopayExamplePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="amount">결제 금액</Label>
-              <Input 
-                id="amount" 
-                type="number" 
-                min={100} 
-                step={100}
-                value={amount} 
-                onChange={(e) => setAmount(Number(e.target.value))} 
-              />
+              <Label className="font-medium mb-2">좌석 선택 (필수)</Label>
+              <div className="grid grid-cols-2 gap-3 mt-1">
+                {seatOptions.map((seat) => (
+                  <div 
+                    key={seat.id}
+                    className={`border rounded-md p-3 cursor-pointer transition ${
+                      selectedSeats.includes(seat.id) 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => toggleSeat(seat.id)}
+                  >
+                    <div className="flex items-center">
+                      <Checkbox
+                        id={`seat-${seat.id}`}
+                        checked={selectedSeats.includes(seat.id)}
+                        onCheckedChange={() => toggleSeat(seat.id)}
+                      />
+                      <label
+                        htmlFor={`seat-${seat.id}`}
+                        className="text-sm font-medium leading-none ml-2 cursor-pointer"
+                      >
+                        {seat.label}
+                      </label>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1 ml-6">{seat.price.toLocaleString()}원</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                선택된 좌석: {selectedSeats.length}개 (총 {calculateTotalPrice().toLocaleString()}원)
+              </p>
             </div>
             
             <div className="space-y-2">
@@ -126,11 +187,12 @@ export default function KakaopayExamplePage() {
           </CardContent>
           <CardFooter>
             <KakaoPay 
-              amount={amount}
+              amount={calculateTotalPrice() || 1000}
               orderName={orderName}
               customerName={customerName}
               ticketInfo={ticketInfo}
               phoneNumber={phoneNumber}
+              selectedSeats={selectedSeats}
               onSuccess={handleSuccess}
               onFail={handleFail}
             />
@@ -141,6 +203,7 @@ export default function KakaopayExamplePage() {
       <div className="mt-8 p-4 bg-gray-100 rounded-lg">
         <h2 className="text-lg font-medium mb-2">사용 방법</h2>
         <ol className="list-decimal pl-5 space-y-1">
+          <li>좌석을 하나 이상 선택합니다.</li>
           <li>결제 정보를 입력합니다.</li>
           <li>연락처를 필수로 입력합니다.</li>
           <li>"카카오페이로 결제하기" 버튼을 클릭합니다.</li>
