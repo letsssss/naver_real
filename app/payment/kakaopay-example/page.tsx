@@ -40,6 +40,14 @@ export default function KakaopayExamplePage() {
   };
   
   const handleFail = (error: any) => {
+    // 사용자가 결제를 취소한 경우
+    if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
+      console.log("사용자가 결제를 취소했습니다.");
+      // 취소는 결과 화면을 보여주지 않고 상태를 유지함
+      return;
+    }
+    
+    // 실제 오류가 발생한 경우에만 결과 화면 표시
     setPaymentResult({
       success: false,
       error,

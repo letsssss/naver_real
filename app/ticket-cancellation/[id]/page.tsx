@@ -485,8 +485,18 @@ export default function TicketCancellationDetail() {
 
   // 카카오페이 결제 실패 핸들러
   const handlePaymentFail = (error: any) => {
-    console.error("카카오페이 결제 실패:", error);
-    toast.error("결제에 실패했습니다. 다시 시도해주세요.");
+    console.error("카카오페이 결제 중단:", error);
+    
+    // 사용자가 결제를 취소한 경우는 오류 메시지를 표시하지 않음
+    if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
+      console.log("사용자가 결제를 취소했습니다.");
+      // 취소는 에러로 표시하지 않고 상태만 초기화
+    } else {
+      // 실제 오류가 발생한 경우에만 에러 메시지 표시
+      toast.error("결제에 실패했습니다. 다시 시도해주세요.");
+    }
+    
+    // 어떤 경우든 제출 상태를 초기화
     setIsSubmitting(false);
   }
 

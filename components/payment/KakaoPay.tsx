@@ -87,7 +87,7 @@ export default function KakaoPay({
         selectedSeats: selectedSeats
       });
       
-      await PortOne.requestPayment({
+      const response = await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
         orderName, // 공연명 - 날짜 시간 (장소)
@@ -108,12 +108,23 @@ export default function KakaoPay({
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
       
-      console.log('✅ 결제 요청 완료:', paymentId);
+      // 결제 응답 처리
+      console.log('✅ 결제 응답:', response);
+      
+      // 결제가 성공적으로 완료된 경우
       if (onSuccess) onSuccess(paymentId);
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('❌ 결제 요청 중 오류 발생:', error);
+      
+      // 사용자가 결제 창을 닫았거나 취소한 경우
+      if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
+        toast.info("결제가 취소되었습니다.");
+      } else {
+        toast.error("결제 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
+      }
+      
       if (onFail) onFail(error);
-      alert('결제 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setWaitingPayment(false);
     }
