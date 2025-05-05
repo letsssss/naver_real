@@ -155,7 +155,7 @@ export default function TicketCancellationPage() {
         // 평면 구조의 필드들을 author 객체에 맵핑
         const finalAuthor = {
           id: authorId || '',
-          name: post.name || post.displayName || post.display_name || '판매자 정보 없음',
+          name: post.author_name || post.name || post.displayName || post.display_name || '판매자 정보 없음',
           email: post.email || '',
           rating: post.rating || 4.5,
           profileImage: post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
