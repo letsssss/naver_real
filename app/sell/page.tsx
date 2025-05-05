@@ -106,6 +106,22 @@ export default function SellPage() {
     const newSections = [...sections]
     newSections[index].price = formattedValue
     setSections(newSections)
+    
+    // 가격이 1000원 미만인지 확인
+    const priceValue = Number(numericValue)
+    if (numericValue !== '' && priceValue < 1000) {
+      setFormErrors(prev => ({
+        ...prev,
+        [`section_${index}_price`]: '가격은 최소 1000원 이상이어야 합니다'
+      }))
+    } else {
+      // 오류가 있었다면 제거
+      setFormErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[`section_${index}_price`]
+        return newErrors
+      })
+    }
   }
 
   // 날짜 관련 함수 추가
@@ -152,6 +168,12 @@ export default function SellPage() {
       }
       if (!section.price) {
         errors[`section_${index}_price`] = "가격을 입력해주세요"
+      } else {
+        // 가격이 1000원 미만인지 확인
+        const priceValue = Number(section.price.replace(/[^\d]/g, ''))
+        if (priceValue < 1000) {
+          errors[`section_${index}_price`] = "가격은 최소 1000원 이상이어야 합니다"
+        }
       }
     })
 
@@ -186,6 +208,12 @@ export default function SellPage() {
         toast({
           title: "Error",
           description: "모든 구역의 이름과 가격을 입력해주세요",
+          variant: "destructive",
+        })
+      } else if (sections.some((section) => Number(section.price.replace(/[^\d]/g, '')) < 1000)) {
+        toast({
+          title: "Error",
+          description: "모든 구역의 가격은 최소 1,000원 이상이어야 합니다",
           variant: "destructive",
         })
       }
@@ -482,7 +510,7 @@ export default function SellPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <Input
                           type="text"
-                          placeholder="가격"
+                          placeholder="가격 (최소 1,000원)"
                           value={section.price}
                           onChange={(e) => updateSectionPrice(index, e.target.value)}
                           className={formErrors[`section_${index}_price`] ? "border-red-500" : ""}
