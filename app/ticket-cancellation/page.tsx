@@ -156,13 +156,14 @@ export default function TicketCancellationPage() {
         const finalAuthor = {
           id: authorId || '',
           name: post.author_name || post.name || post.displayName || post.display_name || '판매자 정보 없음',
-          email: post.email || '',
+          email: post.author_email || post.email || '',
           rating: post.rating || 4.5,
-          profileImage: post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
+          profileImage: post.author_image || post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
         };
         
         // 디버깅: 작성자 정보 매핑 로그
         console.log(`게시물 ${post.id}의 작성자 정보 매핑:`, finalAuthor);
+        console.log("작성자 이름 추출:", post.author_name, post.name, finalAuthor.name);
         
         // 게시물에 필요한 필드 확인 및 추가
         return {
