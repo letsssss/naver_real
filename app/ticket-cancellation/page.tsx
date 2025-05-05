@@ -138,6 +138,7 @@ export default function TicketCancellationPage() {
       }
       
       const posts = data.posts;
+      console.log("🔥 디버깅: post 전체", JSON.stringify(posts[0], null, 2));
       
       // 작성자 ID 필드명 문제 디버깅
       console.log("=== 데이터 구조 디버깅 ===");
@@ -160,6 +161,8 @@ export default function TicketCancellationPage() {
           rating: post.rating || 4.5,
           profileImage: post.author_image || post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
         };
+        
+        console.log("🧪 최종 author 매핑:", finalAuthor);
         
         // 디버깅: 작성자 정보 매핑 로그
         console.log(`게시물 ${post.id}의 작성자 정보 매핑:`, finalAuthor);
