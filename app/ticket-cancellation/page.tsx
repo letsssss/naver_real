@@ -156,13 +156,14 @@ export default function TicketCancellationPage() {
         // 평면 구조의 필드들을 author 객체에 맵핑
         const finalAuthor = {
           id: authorId || '',
-          name: post.author_name || post.name || post.displayName || post.display_name || '판매자 정보 없음',
-          email: post.author_email || post.email || '',
-          rating: post.rating || 4.5,
-          profileImage: post.author_image || post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
+          name: post.author?.name || post.author_name || post.name || post.displayName || post.display_name || '판매자 정보 없음',
+          email: post.author?.email || post.author_email || post.email || '',
+          rating: post.author?.rating || post.rating || 4.5,
+          profileImage: post.author?.profileImage || post.author_image || post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
         };
         
         console.log("🧪 최종 author 매핑:", finalAuthor);
+        console.log("작성자 정보 출처:", post.author?.name ? "author 객체" : post.author_name ? "author_name 필드" : "기타 필드");
         
         // 디버깅: 작성자 정보 매핑 로그
         console.log(`게시물 ${post.id}의 작성자 정보 매핑:`, finalAuthor);
