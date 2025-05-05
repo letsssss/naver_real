@@ -4,7 +4,7 @@ import React, { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
@@ -28,6 +28,15 @@ export default function LoginPage({
     
     checkSession()
   }, [router, searchParams, supabase.auth])
+
+  // 소셜 로그인 준비중 메시지 표시 함수
+  const handleSocialLogin = (provider: string) => {
+    toast.info(`${provider} 로그인은 현재 준비중입니다`, {
+      position: 'top-center',
+      duration: 3000,
+      icon: '🔧'
+    });
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-white">
@@ -75,21 +84,30 @@ export default function LoginPage({
 
         {/* Social Login */}
         <div className="flex justify-center space-x-12">
-          <button className="flex flex-col items-center group">
+          <button 
+            className="flex flex-col items-center group"
+            onClick={() => handleSocialLogin('네이버')}
+          >
             <div className="w-14 h-14 flex items-center justify-center bg-[#03C75A] rounded-full mb-2 group-hover:opacity-90 transition-opacity">
               <span className="text-white font-bold text-xl">N</span>
             </div>
             <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">네이버</span>
           </button>
 
-          <button className="flex flex-col items-center group">
+          <button 
+            className="flex flex-col items-center group"
+            onClick={() => handleSocialLogin('Google')}
+          >
             <div className="w-14 h-14 flex items-center justify-center border border-gray-300 rounded-full mb-2 group-hover:border-gray-400 transition-colors">
               <Image src="/placeholder.svg" alt="Google" width={28} height={28} />
             </div>
             <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Google</span>
           </button>
 
-          <button className="flex flex-col items-center group">
+          <button 
+            className="flex flex-col items-center group"
+            onClick={() => handleSocialLogin('Apple')}
+          >
             <div className="w-14 h-14 flex items-center justify-center bg-black rounded-full mb-2 group-hover:bg-gray-900 transition-colors">
               <Image src="/placeholder.svg" alt="Apple" width={28} height={28} className="invert" />
             </div>
