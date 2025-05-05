@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import supabase from "@/lib/supabase"
@@ -11,6 +11,86 @@ import supabase from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+
+// 이용약관 내용
+const termsOfService = `🎟️ [이용약관] - 이지티켓
+최종 수정일: 2025년 5월 5일
+
+제1조 (목적)
+이 약관은 "이지티켓"(이하 "회사"라 함)가 운영하는 웹사이트 및 서비스를 이용함에 있어 회사와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+
+제2조 (정의)
+"회사"란 공연 티켓 거래 중개 서비스를 제공하는 "이지티켓" 플랫폼을 의미합니다.
+
+"이용자"란 회사의 웹사이트에 접속하여 이 약관에 동의하고, 회사가 제공하는 서비스를 이용하는 회원 또는 비회원을 말합니다.
+
+"판매자" 및 "구매자"는 플랫폼을 통해 공연 티켓을 양도하거나 양수하려는 자를 의미합니다.
+
+"예매대행"이란 이용자가 특정 공연에 대한 티켓 예매를 제3자에게 위임하는 기능을 의미합니다.
+
+제3조 (약관의 효력 및 변경)
+본 약관은 회사가 웹사이트에 게시하거나, 기타의 방법으로 이용자에게 고지함으로써 효력을 발생합니다.
+
+회사는 관련 법령을 위배하지 않는 범위에서 본 약관을 개정할 수 있으며, 개정 시 적용일자 및 개정사유를 명시하여 현행 약관과 함께 공지합니다.
+
+제4조 (서비스의 제공 및 변경)
+회사는 아래와 같은 서비스를 제공합니다:
+
+티켓 취소표 알림 서비스
+
+예매 대행 요청/수락 중개
+
+티켓 양도 거래 게시판 및 연결
+
+에스크로 결제 시스템 제공
+
+회사는 운영상 또는 기술상 필요에 따라 서비스의 전부 또는 일부를 변경하거나 중단할 수 있습니다.
+
+제5조 (서비스의 성격과 면책)
+회사는 통신판매중개업자로서, 공연 티켓의 거래 당사자가 아니며, 예매 또는 거래에 직접 관여하지 않습니다.
+
+티켓의 진위 여부, 유효성, 관람 가능 여부, 환불 불가 사유 등은 판매자 및 구매자 간의 책임입니다.
+
+회사는 이용자 간 분쟁, 매크로 또는 자동화 프로그램 사용에 따른 문제, 공연장 입장 거부, 법적 분쟁 발생에 대해 일체의 책임을 지지 않습니다.
+
+제6조 (매크로·자동화 도구 사용 금지)
+이용자는 회사가 제공하는 서비스 이용 시 매크로, 봇, 스크립트 등 자동화 도구를 사용해서는 안 됩니다.
+
+위반 시 회사는 서비스 이용 제한, 회원 자격 박탈 등의 조치를 할 수 있으며, 법적 책임은 사용자 본인에게 있습니다.
+
+회사는 매크로 사용 여부를 탐지할 의무가 없으며, 매크로 사용으로 인한 피해에 대해 책임을 지지 않습니다.
+
+제7조 (회원의 의무)
+이용자는 관계 법령, 약관, 이용안내 등 회사가 정한 사항을 준수하여야 합니다.
+
+이용자는 다음 행위를 하여서는 안 됩니다:
+
+타인의 명의 도용
+
+공연 티켓의 허위/중복 등록
+
+서비스 내 외부에서의 무단 거래 유도
+
+정가보다 높은 가격의 지속적 재판매 행위(암표상 행위)
+
+시스템 해킹, 크롤링, 무단 정보수집 등 비정상 접근 행위
+
+제8조 (에스크로 및 거래 보호)
+회사는 안전한 거래를 위하여 에스크로 결제 시스템을 운영할 수 있습니다.
+
+구매자는 티켓을 수령한 후 이상이 없을 경우 거래 확정을 해야 하며, 이 절차 후 판매자에게 대금이 지급됩니다.
+
+회사는 결제 대금을 일정 기간 보관할 수 있으며, 분쟁 발생 시 중립적 입장에서 처리합니다.
+
+제9조 (지적재산권)
+플랫폼의 디자인, 서비스 구성, 콘텐츠 등에 대한 저작권은 회사에 있으며, 무단 도용 시 법적 조치가 취해질 수 있습니다.
+
+제10조 (관할 및 준거법)
+이 약관은 대한민국 법령에 따릅니다.
+
+서비스 이용과 관련된 분쟁 발생 시 회사 소재지를 관할하는 법원을 전속 관할로 합니다.`
 
 // 콘서트 데이터 타입 정의
 interface Concert {
@@ -71,6 +151,8 @@ export default function SellPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
+  const [isTermsAgreed, setIsTermsAgreed] = useState(false)
+  const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -177,6 +259,11 @@ export default function SellPage() {
       }
     })
 
+    // 이용약관 동의 여부 확인
+    if (!isTermsAgreed) {
+      errors.terms = "이용약관에 동의해주세요"
+    }
+
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -214,6 +301,12 @@ export default function SellPage() {
         toast({
           title: "Error",
           description: "모든 구역의 가격은 최소 1,000원 이상이어야 합니다",
+          variant: "destructive",
+        })
+      } else if (!isTermsAgreed) {
+        toast({
+          title: "Error",
+          description: "이용약관에 동의해주세요",
           variant: "destructive",
         })
       }
@@ -551,6 +644,62 @@ export default function SellPage() {
                 />
                 {formErrors.description && <p className="mt-1 text-sm text-red-500">{formErrors.description}</p>}
                 <p className="mt-1 text-xs text-gray-500">※ 티켓 상세설명은 최소 10글자 이상 입력해주세요. 상세한 정보를 제공할수록 구매자의 관심을 끌 수 있습니다.</p>
+              </div>
+
+              {/* 이용약관 동의 섹션 */}
+              <div className="border-t pt-6">
+                <div className="flex items-start space-x-2">
+                  <Checkbox 
+                    id="terms" 
+                    checked={isTermsAgreed}
+                    onCheckedChange={(checked) => setIsTermsAgreed(checked as boolean)}
+                    className={formErrors.terms ? "border-red-500" : ""}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <div className="flex items-center gap-1">
+                      <label
+                        htmlFor="terms"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        <span className="text-red-500">*</span> 이용약관 동의
+                      </label>
+                      <Dialog open={isTermsDialogOpen} onOpenChange={setIsTermsDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" className="text-xs p-0 h-auto text-blue-600 underline">
+                            (전문보기)
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-center mb-4">이용약관</DialogTitle>
+                            <Button 
+                              className="absolute right-4 top-4 rounded-full p-2" 
+                              variant="ghost"
+                              onClick={() => setIsTermsDialogOpen(false)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </DialogHeader>
+                          <div className="text-sm whitespace-pre-line">
+                            {termsOfService}
+                          </div>
+                          <div className="mt-4 flex justify-center">
+                            <Button onClick={() => {
+                              setIsTermsAgreed(true);
+                              setIsTermsDialogOpen(false);
+                            }}>
+                              동의하고 닫기
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    {formErrors.terms && <p className="text-xs text-red-500">{formErrors.terms}</p>}
+                    <p className="text-sm text-gray-500">
+                      판매 등록을 위해서는 이용약관에 동의해야 합니다.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <Button type="submit" className="w-full bg-[#0061FF] hover:bg-[#0052D6] text-white transition-colors">
