@@ -5,6 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import SaleStatusBadge from "./SaleStatusBadge";
 import MessageButton from "./MessageButton";
 import ChatModal from "./chat/ChatModal";
+import { toast } from "sonner";
 
 // 판매 중인 상품 타입 정의
 export type Sale = {
@@ -32,6 +33,8 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   // 채팅 모달 상태 관리 추가
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatRoomId, setChatRoomId] = useState<string | undefined>();
+  // 채팅방 오류 처리를 위한 상태 추가
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // 컴포넌트 마운트 시 또는 상태 변경 시 주문번호 조회
   useEffect(() => {
@@ -138,13 +141,39 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
 
   // 간단한 채팅 모달 열기/닫기 함수
   const openChat = () => {
-    console.log("채팅방 열기 요청 - roomId:", orderNumber || sale.orderNumber);
-    setChatRoomId(orderNumber || sale.orderNumber);
+    const roomId = orderNumber || sale.orderNumber;
+    console.log("채팅방 열기 요청 - roomId:", roomId);
+    
+    if (!roomId) {
+      // 주문번호가 없는 경우 거래 상세 페이지로 이동하도록 안내
+      toast.error("채팅 기능을 사용할 수 없습니다", {
+        description: "거래 상세 보기 버튼을 클릭하여 상세 페이지에서 메시지 기능을 이용해주세요.",
+        duration: 5000
+      });
+      return;
+    }
+    
+    setChatRoomId(roomId);
     setIsChatOpen(true);
   }
   
   const closeChat = () => {
     setIsChatOpen(false);
+    // 채팅방 닫을 때 에러 상태도 초기화
+    setChatError(null);
+  }
+  
+  // 채팅 오류 처리 함수
+  const handleChatError = (error: string) => {
+    console.error("채팅 오류:", error);
+    setChatError(error);
+    setIsChatOpen(false);
+    
+    // 사용자에게 오류 메시지와 대안 제시
+    toast.error("채팅방을 열 수 없습니다", {
+      description: "거래 상세 보기 버튼을 클릭하여 상세 페이지에서 메시지 기능을 이용해주세요.",
+      duration: 5000
+    });
   }
 
   return (
@@ -253,7 +282,8 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       {isChatOpen && chatRoomId && (
         <ChatModal 
           roomId={chatRoomId} 
-          onClose={closeChat} 
+          onClose={closeChat}
+          onError={handleChatError}
         />
       )}
     </div>

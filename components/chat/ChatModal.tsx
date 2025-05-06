@@ -21,9 +21,10 @@ interface Message {
 interface ChatModalProps {
   roomId: string;
   onClose: () => void;
+  onError?: (error: string) => void;
 }
 
-export default function ChatModal({ roomId, onClose }: ChatModalProps) {
+export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
@@ -81,6 +82,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
         if (userError || !user) {
           console.error(`❌ ChatModal - 로그인 오류:`, userError);
           setError('로그인이 필요합니다.');
+          if (onError) onError('로그인이 필요합니다.');
           return;
         }
         setCurrentUser(user);
@@ -96,7 +98,9 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
           
         if (roomError) {
           console.error(`❌ ChatModal - 채팅방 정보 조회 오류:`, roomError);
-          setError(`채팅방 정보를 찾을 수 없습니다 (${roomId})`);
+          const errorMessage = `채팅방 정보를 찾을 수 없습니다 (${roomId})`;
+          setError(errorMessage);
+          if (onError) onError(errorMessage);
           return;
         }
         
@@ -153,7 +157,9 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
         console.log(`✅ ChatModal - 채팅 데이터 로드 완료`);
       } catch (err) {
         console.error(`❌ ChatModal - 전체 오류:`, err);
-        setError('채팅 데이터를 불러오는 중 오류가 발생했습니다.');
+        const errorMessage = '채팅 데이터를 불러오는 중 오류가 발생했습니다.';
+        setError(errorMessage);
+        if (onError) onError(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -161,7 +167,7 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
 
     fetchChatData();
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [roomId]);
+  }, [roomId, onError]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
