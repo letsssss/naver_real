@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import SaleStatusBadge from "./SaleStatusBadge";
 import MessageButton from "./MessageButton";
+import ChatModal from "./chat/ChatModal";
 
 // 판매 중인 상품 타입 정의
 export type Sale = {
@@ -28,6 +29,9 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   // 로컬에서 주문번호 상태 관리
   const [orderNumber, setOrderNumber] = useState<string | undefined>(sale.orderNumber);
+  // 채팅 모달 상태 관리 추가
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatRoomId, setChatRoomId] = useState<string | undefined>();
 
   // 컴포넌트 마운트 시 또는 상태 변경 시 주문번호 조회
   useEffect(() => {
@@ -132,6 +136,47 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
     }
   };
 
+  // 메시지 버튼 클릭 처리
+  const handleMessageClick = async () => {
+    // 이미 주문번호가 있는 경우
+    if (orderNumber || sale.orderNumber) {
+      setChatRoomId(orderNumber || sale.orderNumber);
+      setIsChatOpen(true);
+      return;
+    }
+    
+    // 주문번호가 없는 경우 조회
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(`/api/purchase/from-post/${sale.id}`);
+      
+      if (!response.ok) {
+        throw new Error("주문 정보 조회 실패");
+      }
+      
+      const data = await response.json();
+      
+      if (data.order_number) {
+        setOrderNumber(data.order_number);
+        setChatRoomId(data.order_number);
+        setIsChatOpen(true);
+      } else {
+        alert("채팅방을 찾을 수 없습니다. 거래가 진행 중인지 확인해주세요.");
+      }
+    } catch (error) {
+      console.error("주문 정보 조회 오류:", error);
+      alert("채팅방 정보를 불러오는데 실패했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 채팅 모달 닫기
+  const handleCloseChat = () => {
+    setIsChatOpen(false);
+  };
+
   return (
     <div className="border-b py-4 last:border-b-0">
       <div className="flex justify-between mb-1">
@@ -174,11 +219,11 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
                 </svg>
                 {isLoading ? "로딩 중..." : "거래 상세 보기"}
               </Button>
-              {/* 기존 메시지 버튼을 MessageButton 컴포넌트로 대체 */}
+              {/* 메시지 버튼 클릭 시 모달 표시 */}
               <MessageButton 
                 orderNumber={orderNumber || sale.orderNumber}
                 postId={sale.id}
-                onClick={() => handleTransactionClick(false)}
+                onClick={handleMessageClick}
                 isLoading={isLoading}
                 debug={true}
               />
@@ -234,6 +279,14 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
           </AlertDialog>
         )}
       </div>
+      
+      {/* 채팅 모달 */}
+      {isChatOpen && chatRoomId && (
+        <ChatModal 
+          roomId={chatRoomId} 
+          onClose={handleCloseChat} 
+        />
+      )}
     </div>
   );
 } 
