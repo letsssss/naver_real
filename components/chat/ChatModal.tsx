@@ -74,29 +74,52 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
     const fetchChatData = async () => {
       try {
         setIsLoading(true);
+        console.log(`🔄 ChatModal - 채팅 데이터 불러오기 시작 (roomId: ${roomId})`);
+        
+        // 1. 현재 사용자 정보 확인
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
+          console.error(`❌ ChatModal - 로그인 오류:`, userError);
           setError('로그인이 필요합니다.');
           return;
         }
         setCurrentUser(user);
+        console.log(`👤 ChatModal - 현재 사용자:`, user.id);
 
-        const { data: roomData } = await supabase
+        // 2. 채팅방 정보 확인
+        console.log(`🔍 ChatModal - 채팅방 정보 조회 (roomId: ${roomId})`);
+        const { data: roomData, error: roomError } = await supabase
           .from('rooms')
           .select('*, buyer:buyer_id(*), seller:seller_id(*)')
           .eq('id', roomId)
           .single();
-
+          
+        if (roomError) {
+          console.error(`❌ ChatModal - 채팅방 정보 조회 오류:`, roomError);
+          setError(`채팅방 정보를 찾을 수 없습니다 (${roomId})`);
+          return;
+        }
+        
+        console.log(`✅ ChatModal - 채팅방 정보 조회 성공:`, roomData);
         const otherUserId = roomData.buyer_id === user.id ? roomData.seller_id : roomData.buyer_id;
         const otherUserData = roomData.buyer_id === user.id ? roomData.seller : roomData.buyer;
         setOtherUser(otherUserData);
+        console.log(`👥 ChatModal - 상대방 사용자:`, otherUserData?.id);
 
-        const { data: messagesData } = await supabase
+        // 3. 메시지 목록 조회
+        console.log(`💬 ChatModal - 메시지 목록 조회 (roomId: ${roomId})`);
+        const { data: messagesData, error: messagesError } = await supabase
           .from('messages')
           .select('*')
           .eq('room_id', roomId)
           .order('created_at', { ascending: true });
+          
+        if (messagesError) {
+          console.error(`❌ ChatModal - 메시지 목록 조회 오류:`, messagesError);
+          // 메시지 오류는 치명적이지 않으므로 계속 진행
+        }
 
+        console.log(`📝 ChatModal - ${messagesData?.length || 0}개의 메시지 로드`);
         const formatted = messagesData ? messagesData.map(msg => ({
           id: msg.id,
           text: msg.content,
@@ -107,20 +130,29 @@ export default function ChatModal({ roomId, onClose }: ChatModalProps) {
         })) : [];
         setMessages(formatted);
 
-        await supabase
-          .schema('public')
-          .from('messages')
-          .update({ is_read: true })
-          .eq('room_id', roomId)
-          .eq('receiver_id', user.id)
-          .eq('is_read', false);
-
-        setMessages(prev =>
-          prev.map(msg =>
-            !msg.isMine && !msg.isRead ? { ...msg, isRead: true } : msg
-          )
-        );
+        // 4. 읽지 않은 메시지 읽음 처리
+        try {
+          await supabase
+            .schema('public')
+            .from('messages')
+            .update({ is_read: true })
+            .eq('room_id', roomId)
+            .eq('receiver_id', user.id)
+            .eq('is_read', false);
+            
+          setMessages(prev =>
+            prev.map(msg =>
+              !msg.isMine && !msg.isRead ? { ...msg, isRead: true } : msg
+            )
+          );
+        } catch (readError) {
+          console.error(`⚠️ ChatModal - 읽음 처리 오류:`, readError);
+          // 읽음 처리 실패는 무시하고 진행
+        }
+        
+        console.log(`✅ ChatModal - 채팅 데이터 로드 완료`);
       } catch (err) {
+        console.error(`❌ ChatModal - 전체 오류:`, err);
         setError('채팅 데이터를 불러오는 중 오류가 발생했습니다.');
       } finally {
         setIsLoading(false);

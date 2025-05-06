@@ -136,46 +136,16 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
     }
   };
 
-  // 메시지 버튼 클릭 처리
-  const handleMessageClick = async () => {
-    // 이미 주문번호가 있는 경우
-    if (orderNumber || sale.orderNumber) {
-      setChatRoomId(orderNumber || sale.orderNumber);
-      setIsChatOpen(true);
-      return;
-    }
-    
-    // 주문번호가 없는 경우 조회
-    setIsLoading(true);
-    
-    try {
-      const response = await fetch(`/api/purchase/from-post/${sale.id}`);
-      
-      if (!response.ok) {
-        throw new Error("주문 정보 조회 실패");
-      }
-      
-      const data = await response.json();
-      
-      if (data.order_number) {
-        setOrderNumber(data.order_number);
-        setChatRoomId(data.order_number);
-        setIsChatOpen(true);
-      } else {
-        alert("채팅방을 찾을 수 없습니다. 거래가 진행 중인지 확인해주세요.");
-      }
-    } catch (error) {
-      console.error("주문 정보 조회 오류:", error);
-      alert("채팅방 정보를 불러오는데 실패했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 채팅 모달 닫기
-  const handleCloseChat = () => {
+  // 간단한 채팅 모달 열기/닫기 함수
+  const openChat = () => {
+    console.log("채팅방 열기 요청 - roomId:", orderNumber || sale.orderNumber);
+    setChatRoomId(orderNumber || sale.orderNumber);
+    setIsChatOpen(true);
+  }
+  
+  const closeChat = () => {
     setIsChatOpen(false);
-  };
+  }
 
   return (
     <div className="border-b py-4 last:border-b-0">
@@ -219,11 +189,10 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
                 </svg>
                 {isLoading ? "로딩 중..." : "거래 상세 보기"}
               </Button>
-              {/* 메시지 버튼 클릭 시 모달 표시 */}
+              {/* 간단한 메시지 버튼 - 거래 상세 페이지에서 복사 */}
               <MessageButton 
                 orderNumber={orderNumber || sale.orderNumber}
-                postId={sale.id}
-                onClick={handleMessageClick}
+                onClick={openChat}
                 isLoading={isLoading}
                 debug={true}
               />
@@ -280,11 +249,11 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
         )}
       </div>
       
-      {/* 채팅 모달 */}
+      {/* 채팅 모달 - 간단하게 구현 */}
       {isChatOpen && chatRoomId && (
         <ChatModal 
           roomId={chatRoomId} 
-          onClose={handleCloseChat} 
+          onClose={closeChat} 
         />
       )}
     </div>
