@@ -208,6 +208,31 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
             </AlertDialogContent>
           </AlertDialog>
         )}
+        
+        {/* 취켓팅 진행중 상태인 경우 예매 포기하기 버튼 추가 */}
+        {(sale.status === "취켓팅 진행중" || sale.status === "취켓팅진행중") && (
+          <AlertDialog>
+            <AlertDialogTrigger>
+              <div 
+                className="text-sm bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded cursor-pointer inline-flex items-center justify-center font-medium"
+              >
+                예매 포기하기
+              </div>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>예매 포기하기</AlertDialogTitle>
+                <AlertDialogDescription>
+                  정말 취켓팅을 포기하시겠습니까? 이 작업은 되돌릴 수 없으며, 구매자에게 알림이 전송됩니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete(sale.id)}>예매 포기하기</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
     </div>
   );
