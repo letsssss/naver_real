@@ -12,6 +12,7 @@ export function Footer() {
             <li>대표자명: 김진성</li>
             <li>사업장 주소지: 경상남도 김해시 월산로 82-55</li>
             <li>전화번호: 055-311-0278</li>
+            <li>이메일: easyticket82@gmail.com</li>
           </ul>
         </div>
       </div>
