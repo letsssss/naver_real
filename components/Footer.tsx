@@ -6,6 +6,7 @@ export function Footer() {
       <div className="container mx-auto px-4">
         <Separator className="mb-6" />
         <div className="text-sm text-gray-500">
+          <p className="font-medium text-gray-700 mb-2">입금 완료 후 1 영업일 이내로 예약 확정</p>
           <ul className="space-y-1">
             <li>상호명: 이지티켓</li>
             <li>사업자등록번호: 601-15-58686</li>
