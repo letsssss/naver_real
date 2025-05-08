@@ -978,27 +978,39 @@ export default function TicketCancellationDetail() {
                           .join(", ");
                         
                         return (
-                          <KakaoPay 
-                            amount={totalAmount}
-                            orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
-                            customerName={user?.name || "고객"}
-                            ticketInfo={`${ticketData.title} (${seatLabels})`}
-                            phoneNumber={phoneNumber}
-                            selectedSeats={selectedSeats}
-                            onSuccess={handlePaymentSuccess}
-                            onFail={handlePaymentFail}
-                          />
+                          <>
+                            <div className="bg-amber-50 p-4 rounded-lg mb-4 border border-amber-200">
+                              <p className="text-amber-800 font-medium">입금 완료 후 1 영업일 이내로 예약 확정</p>
+                              <p className="text-amber-800 font-medium">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 해드립니다.</p>
+                            </div>
+                            <KakaoPay 
+                              amount={totalAmount}
+                              orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
+                              customerName={user?.name || "고객"}
+                              ticketInfo={`${ticketData.title} (${seatLabels})`}
+                              phoneNumber={phoneNumber}
+                              selectedSeats={selectedSeats}
+                              onSuccess={handlePaymentSuccess}
+                              onFail={handlePaymentFail}
+                            />
+                          </>
                         );
                       })()}
                     </div>
                   ) : (
-                    <Button 
-                      type="submit" 
-                      className="w-full mt-6 bg-[#0061FF] hover:bg-[#0052D6]" 
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
-                    </Button>
+                    <>
+                      <div className="bg-amber-50 p-4 rounded-lg mt-6 mb-4 border border-amber-200">
+                        <p className="text-amber-800 font-medium">입금 완료 후 1 영업일 이내로 예약 확정</p>
+                        <p className="text-amber-800 font-medium">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 해드립니다.</p>
+                      </div>
+                      <Button 
+                        type="submit" 
+                        className="w-full bg-[#0061FF] hover:bg-[#0052D6]" 
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
+                      </Button>
+                    </>
                   )}
                 </form>
               ) : null}
