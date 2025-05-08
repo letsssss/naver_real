@@ -980,8 +980,8 @@ export default function TicketCancellationDetail() {
                         return (
                           <>
                             <div className="p-3 text-gray-700 mb-4">
-                              <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정</p>
-                              <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 해드립니다.</p>
+                              <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정 됩니다</p>
+                              <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.</p>
                               <p className="text-sm mt-1">상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.</p>
                             </div>
                             <KakaoPay 
@@ -1001,8 +1001,8 @@ export default function TicketCancellationDetail() {
                   ) : (
                     <>
                       <div className="p-3 text-gray-700 mt-6 mb-4">
-                        <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정</p>
-                        <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 해드립니다.</p>
+                        <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정 됩니다</p>
+                        <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.</p>
                         <p className="text-sm mt-1">상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.</p>
                       </div>
                       <Button 
