@@ -1,7 +1,7 @@
 "use client";
 
 import PortOne from '@portone/browser-sdk/v2';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ interface KakaoPayProps {
   selectedSeats?: string[];
   onSuccess?: (paymentId: string) => void;
   onFail?: (error: any) => void;
+  disabled?: boolean;
 }
 
 export default function KakaoPay({
@@ -32,7 +33,8 @@ export default function KakaoPay({
   phoneNumber,
   selectedSeats = [],
   onSuccess,
-  onFail
+  onFail,
+  disabled = false
 }: KakaoPayProps) {
   const [isWaitingPayment, setWaitingPayment] = useState(false);
   
@@ -179,7 +181,7 @@ export default function KakaoPay({
   return (
     <Button 
       onClick={handlePayment} 
-      disabled={isWaitingPayment}
+      disabled={isWaitingPayment || disabled}
       size="lg"
       className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-medium"
     >

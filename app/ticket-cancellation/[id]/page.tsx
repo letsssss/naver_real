@@ -73,6 +73,7 @@ export default function TicketCancellationDetail() {
   const [manualAuthorId, setManualAuthorId] = useState<string | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("kakaopay")
   const [paymentCancelled, setPaymentCancelled] = useState(false)
+  const [termsAgreed, setTermsAgreed] = useState(false)
 
   // 마운트 상태 관리 및 사용자 ID 저장
   useEffect(() => {
@@ -398,6 +399,11 @@ export default function TicketCancellationDetail() {
 
     if (!phoneNumber) {
       toast.error("연락처를 입력해주세요.")
+      return
+    }
+
+    if (!termsAgreed) {
+      toast.error("이용약관에 동의해주세요.")
       return
     }
 
@@ -982,7 +988,20 @@ export default function TicketCancellationDetail() {
                             <div className="p-3 text-gray-700 mb-4">
                               <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정 됩니다</p>
                               <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.</p>
-                              <p className="text-sm mt-1">상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.</p>
+                            </div>
+                            <div className="flex items-start space-x-2 mb-4">
+                              <input
+                                type="checkbox"
+                                id="terms-kakao"
+                                checked={termsAgreed}
+                                onChange={(e) => setTermsAgreed(e.target.checked)}
+                                className="mt-1"
+                                required
+                              />
+                              <label htmlFor="terms-kakao" className="text-sm text-gray-700">
+                                <span className="text-red-500 font-bold mr-1">[필수]</span>
+                                상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.
+                              </label>
                             </div>
                             <KakaoPay 
                               amount={totalAmount}
@@ -993,6 +1012,7 @@ export default function TicketCancellationDetail() {
                               selectedSeats={selectedSeats}
                               onSuccess={handlePaymentSuccess}
                               onFail={handlePaymentFail}
+                              disabled={!termsAgreed}
                             />
                           </>
                         );
@@ -1003,12 +1023,25 @@ export default function TicketCancellationDetail() {
                       <div className="p-3 text-gray-700 mt-6 mb-4">
                         <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정 됩니다</p>
                         <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.</p>
-                        <p className="text-sm mt-1">상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.</p>
+                      </div>
+                      <div className="flex items-start space-x-2 mb-4">
+                        <input
+                          type="checkbox"
+                          id="terms-general"
+                          checked={termsAgreed}
+                          onChange={(e) => setTermsAgreed(e.target.checked)}
+                          className="mt-1"
+                          required
+                        />
+                        <label htmlFor="terms-general" className="text-sm text-gray-700">
+                          <span className="text-red-500 font-bold mr-1">[필수]</span>
+                          상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.
+                        </label>
                       </div>
                       <Button 
                         type="submit" 
                         className="w-full bg-[#0061FF] hover:bg-[#0052D6]" 
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !termsAgreed}
                       >
                         {isSubmitting ? "처리 중..." : "취켓팅 신청하기"}
                       </Button>
