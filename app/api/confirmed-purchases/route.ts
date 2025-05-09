@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/supabase/server';
-import supabase from '@/lib/supabase';
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase.types';
 
 export async function GET(request: NextRequest) {
   try {
-    // lib/supabase/server.ts에서 가져온 함수로 인증된 사용자 확인
-    const user = await getAuthenticatedUser();
+    // API 라우트에 특화된 Supabase 클라이언트 생성
+    const supabase = createRouteHandlerClient<Database>({ cookies });
+
+    // 세션 확인
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     
-    if (!user) {
+    if (!session) {
+      console.error('인증 세션 오류: 세션 없음');
       return NextResponse.json(
         { success: false, error: '인증되지 않은 사용자입니다.' },
         { status: 401 }
       );
     }
 
-    const userId = user.id;
+    const userId = session.user.id;
 
     // Supabase에서 확인된 구매 내역 가져오기
     const { data, error } = await supabase
