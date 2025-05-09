@@ -57,15 +57,15 @@ export async function GET(request: NextRequest) {
     // 콘솔에 디버깅 정보 출력 (개발 시에만 활성화)
     console.log('구매 내역 샘플:', data && data.length > 0 ? JSON.stringify(data[0], null, 2) : '데이터 없음');
 
-    // Supabase 조인 결과 접근 (배열 인덱싱 제거)
+    // Supabase 조인 결과 접근 (배열 인덱싱 사용)
     const mapped = data.map((purchase) => ({
       id: purchase.id,
-      title: purchase.ticket_title || purchase.post?.title || "제목 없음",
-      date: purchase.post?.event_date || '날짜 정보 없음',
-      venue: purchase.post?.event_venue || '장소 정보 없음',
+      title: purchase.ticket_title || purchase.post?.[0]?.title || "제목 없음",
+      date: purchase.post?.[0]?.event_date || '날짜 정보 없음',
+      venue: purchase.post?.[0]?.event_venue || '장소 정보 없음',
       price: purchase.total_price ? `${purchase.total_price.toLocaleString()}원` : '가격 정보 없음',
       status: purchase.status,
-      seller: purchase.seller?.name || "판매자 없음",
+      seller: purchase.seller?.[0]?.name || "판매자 없음",
       completedAt: purchase.updated_at,
       reviewSubmitted: Array.isArray(purchase.ratings) && purchase.ratings.length > 0
     }));
