@@ -1,45 +1,63 @@
+'use client';
+
 import Link from "next/link"
 import { ArrowLeft, CheckCircle2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
-// 임시 데이터 (실제로는 API나 데이터베이스에서 가져와야 합니다)
-const confirmedPurchases = [
-  {
-    id: 5,
-    title: "아이유 콘서트",
-    date: "2024-01-20",
-    venue: "올림픽공원 KSPO DOME",
-    price: "165,000원",
-    status: "거래완료",
-    seller: "iu_fan1",
-    completedAt: "2023-12-25 14:30",
-    ticketInfo: {
-      section: "1층 A구역",
-      row: "10",
-      seat: "15",
-      entryTime: "오후 6:00",
-    },
-    reviewSubmitted: true,
-  },
-  {
-    id: 6,
-    title: "스트레이 키즈 팬미팅",
-    date: "2024-02-05",
-    venue: "고척스카이돔",
-    price: "143,000원",
-    status: "거래완료",
-    seller: "stay_forever",
-    completedAt: "2024-01-10 09:45",
-    ticketInfo: {
-      section: "2층 B구역",
-      row: "5",
-      seat: "22",
-      entryTime: "오후 5:30",
-    },
-    reviewSubmitted: false,
-  },
-]
+// 하드코딩된 데이터 제거
+
+interface Purchase {
+  id: number;
+  title: string;
+  date: string;
+  venue: string;
+  price: string;
+  status: string;
+  seller: string;
+  completedAt: string;
+  reviewSubmitted: boolean;
+}
 
 export default function ConfirmedPurchasesPage() {
+  const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    async function fetchConfirmedPurchases() {
+      try {
+        const response = await fetch('/api/confirmed-purchases')
+        
+        if (!response.ok) {
+          // 인증 오류면 로그인 페이지로 리다이렉트
+          if (response.status === 401) {
+            router.push('/login?redirect=/mypage/confirmed-purchases')
+            return
+          }
+          
+          throw new Error('데이터를 불러오는데 실패했습니다.')
+        }
+        
+        const data = await response.json()
+        // API 응답 구조에 맞게 데이터 접근 방식 수정
+        if (data.success && Array.isArray(data.purchases)) {
+          setPurchases(data.purchases)
+        } else {
+          throw new Error('응답 데이터 형식이 올바르지 않습니다.')
+        }
+      } catch (err) {
+        console.error('구매 내역 로딩 오류:', err)
+        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchConfirmedPurchases()
+  }, [router])
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
@@ -62,9 +80,24 @@ export default function ConfirmedPurchasesPage() {
             구매확정이 완료된 거래입니다. 공연을 즐기고 판매자에게 리뷰를 남겨주세요.
           </p>
 
-          {confirmedPurchases.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="w-8 h-8 border-4 border-t-[#02C39A] border-gray-200 rounded-full animate-spin mx-auto"></div>
+              <p className="mt-4 text-gray-500">거래내역을 불러오는 중입니다...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-red-500">
+              <p>{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-4 text-sm px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                다시 시도하기
+              </button>
+            </div>
+          ) : purchases.length > 0 ? (
             <div className="space-y-6">
-              {confirmedPurchases.map((purchase) => (
+              {purchases.map((purchase) => (
                 <div key={purchase.id} className="border rounded-lg p-5 hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-start">
                     <div>
