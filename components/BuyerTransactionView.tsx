@@ -214,7 +214,7 @@ export default function BuyerTransactionView({ transaction, onAction }: { transa
 
             <div className="mt-10 pt-6 flex flex-col sm:flex-row justify-end gap-4">
               {transaction.currentStep === "confirmed" && (
-                <Link href={`/review/${transaction.id}`}>
+                <Link href={`/review/${transaction.order_number}`}>
                   <Button variant="outline" className="w-full sm:w-auto">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"

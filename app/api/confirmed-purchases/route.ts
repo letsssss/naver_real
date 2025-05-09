@@ -67,7 +67,8 @@ export async function GET(request: NextRequest) {
         seller:seller_id (
           name
         ),
-        ratings(id)
+        ratings(id),
+        order_number
       `)
       .eq("buyer_id", userId)
       .eq("status", "CONFIRMED")
@@ -110,7 +111,8 @@ export async function GET(request: NextRequest) {
         status: purchase.status,
         seller: seller?.name || "판매자 없음",
         completedAt: purchase.updated_at ? formatDate(purchase.updated_at) : '시간 정보 없음',
-        reviewSubmitted: hasReview
+        reviewSubmitted: hasReview,
+        order_number: purchase.order_number || `ORDER-${purchase.id}`
       };
     });
 

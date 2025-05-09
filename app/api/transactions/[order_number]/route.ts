@@ -119,6 +119,7 @@ export async function GET(
     // 클라이언트에 전달할 데이터 포맷팅
     const transactionData = {
       id: purchaseData.id.toString(),
+      order_number: purchaseData.order_number || `ORDER-${purchaseData.id}`,
       type: isBuyer ? 'purchase' : 'sale',
       status: getStatusText(purchaseData.status),
       currentStep: getCurrentStep(purchaseData.status),

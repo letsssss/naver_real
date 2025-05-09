@@ -17,6 +17,7 @@ interface Purchase {
   seller: string;
   completedAt: string;
   reviewSubmitted: boolean;
+  order_number: string;
 }
 
 export default function ConfirmedPurchasesPage() {
@@ -124,8 +125,8 @@ export default function ConfirmedPurchasesPage() {
                   <div className="mt-6 mb-2 flex justify-end">
                     {!purchase.reviewSubmitted ? (
                       <Link
-                        href={`/review/${purchase.id}`}
-                        className="text-sm px-6 py-3 bg-[#FFD600] text-black font-semibold rounded-md hover:bg-[#FFE600] transition-colors shadow-md border border-[#FFD600]"
+                        href={`/review/${purchase.order_number}`}
+                        className="text-sm px-6 py-3 bg-emerald-500 text-white font-semibold rounded-md hover:bg-emerald-600 transition-colors shadow-md border border-emerald-500"
                       >
                         리뷰 작성하기
                       </Link>
