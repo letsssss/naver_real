@@ -118,11 +118,19 @@ export async function GET(
     
     // 디버깅: posts 및 title 값 확인
     console.log('DEBUG - ticket_title 원본:', purchaseData.ticket_title);
-    console.log('DEBUG - posts 배열:', purchaseData.posts);
+    console.log('DEBUG - ticket_title 타입:', typeof purchaseData.ticket_title);
+    console.log('DEBUG - posts 타입:', typeof purchaseData.posts);
+    console.log('DEBUG - posts 내용:', purchaseData.posts);
     console.log('DEBUG - posts[0]?.title:', purchaseData.posts?.[0]?.title);
+    console.log('DEBUG - 배열 여부:', Array.isArray(purchaseData.posts));
     
-    // 간결하게 제목 값 처리
-    const titleValue = purchaseData.ticket_title?.trim() || purchaseData.posts?.[0]?.title?.trim() || "제목 없음";
+    // 더 안전하게 제목 값 처리 - 객체 구조 다양성 고려
+    const titleValue =
+      (typeof purchaseData.ticket_title === 'string' && purchaseData.ticket_title.trim()) ||
+      (Array.isArray(purchaseData.posts) && purchaseData.posts[0]?.title?.trim()) ||
+      (typeof purchaseData.posts?.title === 'string' && purchaseData.posts?.title.trim()) ||  // 객체인 경우도 커버
+      "제목 없음";
+    
     console.log('DEBUG - 최종 선택된 제목:', titleValue);
     
     // 클라이언트에 전달할 데이터 포맷팅
