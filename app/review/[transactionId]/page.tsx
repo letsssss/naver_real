@@ -25,11 +25,13 @@ export default function WriteReview() {
     // 거래 정보 가져오기
     const fetchTransactionData = async () => {
       try {
-        const response = await fetch(`/api/transactions/${params.transactionId}`)
+        // 이제 order_number를 그대로 사용합니다 (transactionId는 order_number 형식임)
+        const orderNumber = params.transactionId
+        const response = await fetch(`/api/transactions/${orderNumber}`)
         
         if (!response.ok) {
           if (response.status === 401) {
-            router.push('/login?redirect=' + encodeURIComponent(`/review/${params.transactionId}`))
+            router.push('/login?redirect=' + encodeURIComponent(`/review/${orderNumber}`))
             return
           }
           throw new Error('데이터를 불러오는데 실패했습니다.')
@@ -41,6 +43,7 @@ export default function WriteReview() {
           // confirmed-purchases API와 동일한 구조로 매핑
           const mappedData = {
             id: data.transaction.id,
+            order_number: orderNumber, // 주문번호 추가 저장
             title: data.transaction.ticket_title || data.transaction.post?.title || "제목 없음",
             date: data.transaction.post?.event_date || '날짜 정보 없음',
             venue: data.transaction.post?.event_venue || '장소 정보 없음',
@@ -86,7 +89,7 @@ export default function WriteReview() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transactionId: Number(params.transactionId),
+          transactionId: Number(purchase.id), // ID 값을 사용 (숫자 형식)
           rating,
           comment: review,
         }),
