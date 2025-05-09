@@ -17,6 +17,7 @@ import MessageButton from "@/components/MessageButton"
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
   id: "",
+  order_number: "",
   type: "sale",
   status: "로딩 중...",
   currentStep: "",
@@ -153,6 +154,7 @@ export default function SellerTransactionDetail() {
         // API 응답을 UI용 데이터로 변환
         const formattedData = {
           id: data.id.toString(),
+          order_number: data.order_number || params.id,
           type: "sale", // 판매자 관점
           status: getStatusText(data.status),
           currentStep: getCurrentStep(data.status),
@@ -330,7 +332,7 @@ export default function SellerTransactionDetail() {
       }
     } else if (transaction.currentStep === "confirmed") {
       // 구매자에 대한 리뷰 작성 페이지로 이동
-      router.push(`/review/${transaction.id}?role=seller`)
+      router.push(`/review/${transaction.order_number}?role=seller`)
     }
   }
 
