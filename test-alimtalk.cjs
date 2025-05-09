@@ -14,7 +14,7 @@ const messageService = new SolapiMessageService(apiKey, apiSecret);
 const receiverPhone = "01050424257"; // 실제 테스트 번호
 
 // 수정된 정확한 템플릿 ID
-const templateId = "KA01TP230126085130773ZHclHN4i674"; // 새 메시지 알림 템플릿 (정확한 ID)
+const templateId = "KA01TP250508063617110QiNaxKtR9hh"; // 새 메시지 알림 템플릿 (정확한 ID)
 
 // 알림톡 발송 함수
 async function sendAlimtalk() {
