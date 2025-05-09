@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
 
-    // Supabase에서 확인된 구매 내역 가져오기
+    // Supabase에서 확인된 구매 내역 가져오기 (개선된 쿼리)
     const { data, error } = await supabase
       .from("purchases")
       .select(`
@@ -32,10 +32,14 @@ export async function GET(request: NextRequest) {
         status,
         updated_at,
         ticket_title,
-        event_date,
-        event_venue,
-        seller:seller_id ( name ),
-        post:post_id ( title ),
+        post:post_id (
+          title,
+          event_date,
+          event_venue
+        ),
+        seller:seller_id (
+          name
+        ),
         ratings(id)
       `)
       .eq("buyer_id", userId)
@@ -50,16 +54,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 배열 인덱싱으로 Supabase 조인 결과 접근
+    // 콘솔에 디버깅 정보 출력 (개발 시에만 활성화)
+    console.log('구매 내역 샘플:', data && data.length > 0 ? JSON.stringify(data[0], null, 2) : '데이터 없음');
+
+    // 배열 인덱싱으로 Supabase 조인 결과 접근 (개선된 매핑)
     const mapped = data.map((purchase) => ({
       id: purchase.id,
       title: purchase.ticket_title || (purchase.post?.[0]?.title ?? "제목 없음"),
-      date: purchase.event_date || '날짜 정보 없음',
-      venue: purchase.event_venue || '장소 정보 없음',
+      date: purchase.post?.[0]?.event_date || purchase.event_date || '날짜 정보 없음',
+      venue: purchase.post?.[0]?.event_venue || purchase.event_venue || '장소 정보 없음',
       price: purchase.total_price ? `${purchase.total_price.toLocaleString()}원` : '가격 정보 없음',
-      status: purchase.status, // DB 값 그대로 사용
+      status: purchase.status,
       seller: purchase.seller?.[0]?.name ?? "판매자 없음",
-      completedAt: purchase.updated_at, // 원본 ISO 형식 그대로
+      completedAt: purchase.updated_at,
       reviewSubmitted: purchase.ratings?.length > 0
     }));
 
