@@ -98,6 +98,9 @@ export async function GET(request: NextRequest) {
         name?: string;
       };
 
+      // reviewSubmitted 값 확실하게 boolean으로 처리 (명시적 변환)
+      const hasReview = Array.isArray(purchase.ratings) ? purchase.ratings.length > 0 : false;
+
       return {
         id: purchase.id,
         title: purchase.ticket_title || post?.title || "제목 없음",
@@ -107,7 +110,7 @@ export async function GET(request: NextRequest) {
         status: purchase.status,
         seller: seller?.name || "판매자 없음",
         completedAt: purchase.updated_at ? formatDate(purchase.updated_at) : '시간 정보 없음',
-        reviewSubmitted: Array.isArray(purchase.ratings) && purchase.ratings.length > 0
+        reviewSubmitted: hasReview
       };
     });
 
