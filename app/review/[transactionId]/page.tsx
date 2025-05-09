@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Star } from "lucide-react"
@@ -17,16 +17,54 @@ export default function WriteReview() {
   const [hoverRating, setHoverRating] = useState(0)
   const [review, setReview] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [purchase, setPurchase] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 임시 거래 데이터
-  const transactionData = {
-    id: params.transactionId,
-    seller: "티켓마스터",
-    sellerId: "seller123",
-    ticketTitle: "세븐틴 'FOLLOW' TO SEOUL",
-    ticketDate: "2024.03.20",
-    ticketSeat: "VIP석 A구역",
-  }
+  useEffect(() => {
+    // 거래 정보 가져오기
+    const fetchTransactionData = async () => {
+      try {
+        const response = await fetch(`/api/transactions/${params.transactionId}`)
+        
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/login?redirect=' + encodeURIComponent(`/review/${params.transactionId}`))
+            return
+          }
+          throw new Error('데이터를 불러오는데 실패했습니다.')
+        }
+        
+        const data = await response.json()
+        // API 응답 구조에 맞게 데이터 매핑
+        if (data.success && data.transaction) {
+          // confirmed-purchases API와 동일한 구조로 매핑
+          const mappedData = {
+            id: data.transaction.id,
+            title: data.transaction.ticket_title || data.transaction.post?.title || "제목 없음",
+            date: data.transaction.post?.event_date || '날짜 정보 없음',
+            venue: data.transaction.post?.event_venue || '장소 정보 없음',
+            price: data.transaction.total_price ? `${data.transaction.total_price.toLocaleString()}원` : '가격 정보 없음',
+            status: data.transaction.status,
+            seller: data.transaction.seller?.[0]?.name || "판매자 없음",
+            completedAt: data.transaction.updated_at,
+            reviewSubmitted: Array.isArray(data.transaction.ratings) && data.transaction.ratings.length > 0,
+            sellerId: data.transaction.seller_id,
+          }
+          setPurchase(mappedData)
+        } else {
+          throw new Error('응답 데이터 형식이 올바르지 않습니다.')
+        }
+      } catch (err) {
+        console.error('거래 정보 로딩 오류:', err)
+        setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchTransactionData()
+  }, [params.transactionId, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,30 +81,70 @@ export default function WriteReview() {
 
     setIsSubmitting(true)
 
-    // 실제 구현에서는 API 호출
     try {
-      // const response = await fetch("/api/reviews", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({
-      //     transactionId: params.transactionId,
-      //     sellerId: transactionData.sellerId,
-      //     rating,
-      //     content: review,
-      //   }),
-      // });
+      const response = await fetch("/api/ratings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: Number(params.transactionId),
+          rating,
+          comment: review,
+        }),
+      });
 
-      // if (!response.ok) throw new Error("리뷰 등록에 실패했습니다.");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "리뷰 등록에 실패했습니다.");
+      }
 
-      // 성공 시 마이페이지로 이동
-      setTimeout(() => {
-        alert("리뷰가 성공적으로 등록되었습니다.")
-        router.push("/mypage")
-      }, 1000)
+      alert("리뷰가 성공적으로 등록되었습니다.")
+      router.push("/mypage/confirmed-purchases")
     } catch (error) {
-      alert("리뷰 등록 중 오류가 발생했습니다. 다시 시도해주세요.")
+      alert(error instanceof Error ? error.message : "리뷰 등록 중 오류가 발생했습니다. 다시 시도해주세요.")
       setIsSubmitting(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center py-12">
+          <div className="w-8 h-8 border-4 border-t-[#FFD600] border-gray-200 rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-500">거래 정보를 불러오는 중입니다...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center py-12 text-red-500">
+          <p>{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 text-sm px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+          >
+            다시 시도하기
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!purchase) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center py-12 text-red-500">
+          <p>해당 거래를 찾을 수 없습니다.</p>
+          <Link href="/mypage/confirmed-purchases">
+            <span className="mt-4 text-sm px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors inline-block">
+              구매 내역으로 돌아가기
+            </span>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -89,13 +167,19 @@ export default function WriteReview() {
                 <h2 className="text-lg font-medium mb-2">거래 정보</h2>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="mb-1">
-                    <span className="font-medium">판매자:</span> {transactionData.seller}
+                    <span className="font-medium">판매자:</span> {purchase.seller}
                   </p>
                   <p className="mb-1">
-                    <span className="font-medium">티켓:</span> {transactionData.ticketTitle}
+                    <span className="font-medium">티켓:</span> {purchase.title}
+                  </p>
+                  <p className="mb-1">
+                    <span className="font-medium">공연일:</span> {purchase.date}
+                  </p>
+                  <p className="mb-1">
+                    <span className="font-medium">공연장:</span> {purchase.venue}
                   </p>
                   <p>
-                    <span className="font-medium">좌석:</span> {transactionData.ticketSeat}
+                    <span className="font-medium">가격:</span> {purchase.price}
                   </p>
                 </div>
               </div>
@@ -139,7 +223,7 @@ export default function WriteReview() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-[#0061FF] hover:bg-[#0052D6] text-white"
+                  className="w-full bg-[#FFD600] hover:bg-[#FFE600] text-black"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? "제출 중..." : "리뷰 등록하기"}
