@@ -41,6 +41,7 @@ export default function WriteReview() {
         
         const data = await response.json()
         console.log("트랜잭션 데이터 응답:", data)
+        console.log("티켓 제목 원본:", data.transaction?.ticket?.title)
         
         // API 응답 구조에 맞게 데이터 매핑
         if (data.success && data.transaction) {
@@ -48,7 +49,7 @@ export default function WriteReview() {
           const mappedData = {
             id: data.transaction.id,
             order_number: orderNumber, // 주문번호 저장
-            title: data.transaction.ticket.title || "제목 없음",
+            title: (data.transaction.ticket.title || "").trim() || "제목 없음",
             date: data.transaction.ticket.date || '날짜 정보 없음',
             venue: data.transaction.ticket.venue || '장소 정보 없음',
             price: data.transaction.price ? `${data.transaction.price.toLocaleString()}원` : '가격 정보 없음',
