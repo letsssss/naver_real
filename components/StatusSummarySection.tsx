@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 interface TransactionStatus {
   취켓팅진행중: number;
@@ -36,7 +37,11 @@ export default function StatusSummarySection({ purchaseStatus, saleStatus }: Sta
           </div>
           <div className="flex flex-col items-center">
             <span className="text-sm text-gray-600 mb-2">거래완료</span>
-            <span className="text-2xl font-bold">{getStatusCount(purchaseStatus, '거래완료')}</span>
+            <Link href="/mypage/confirmed-purchases">
+              <span className="text-2xl font-bold text-[#02C39A] hover:underline cursor-pointer">
+                {getStatusCount(purchaseStatus, '거래완료')}
+              </span>
+            </Link>
           </div>
           <div className="flex flex-col items-center">
             <span className="text-sm text-gray-600 mb-2">거래취소</span>
