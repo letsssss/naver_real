@@ -25,8 +25,10 @@ export default function WriteReview() {
     // 거래 정보 가져오기
     const fetchTransactionData = async () => {
       try {
-        // 이제 order_number를 그대로 사용합니다
+        // order_number 파라미터 사용
         const orderNumber = params.order_number
+        console.log("리뷰 페이지 로딩 - 주문번호:", orderNumber)
+        
         const response = await fetch(`/api/transactions/${orderNumber}`)
         
         if (!response.ok) {
@@ -38,21 +40,23 @@ export default function WriteReview() {
         }
         
         const data = await response.json()
+        console.log("트랜잭션 데이터 응답:", data)
+        
         // API 응답 구조에 맞게 데이터 매핑
         if (data.success && data.transaction) {
           // confirmed-purchases API와 동일한 구조로 매핑
           const mappedData = {
             id: data.transaction.id,
-            order_number: data.transaction.order_number || orderNumber, // 주문번호 저장
-            title: data.transaction.ticket_title || data.transaction.post?.title || "제목 없음",
-            date: data.transaction.post?.event_date || '날짜 정보 없음',
-            venue: data.transaction.post?.event_venue || '장소 정보 없음',
-            price: data.transaction.total_price ? `${data.transaction.total_price.toLocaleString()}원` : '가격 정보 없음',
+            order_number: orderNumber, // 주문번호 저장
+            title: data.transaction.ticket.title || "제목 없음",
+            date: data.transaction.ticket.date || '날짜 정보 없음',
+            venue: data.transaction.ticket.venue || '장소 정보 없음',
+            price: data.transaction.price ? `${data.transaction.price.toLocaleString()}원` : '가격 정보 없음',
             status: data.transaction.status,
-            seller: data.transaction.seller?.[0]?.name || "판매자 없음",
-            completedAt: data.transaction.updated_at,
-            reviewSubmitted: Array.isArray(data.transaction.ratings) && data.transaction.ratings.length > 0,
-            sellerId: data.transaction.seller_id,
+            seller: data.transaction.seller?.name || "판매자 없음",
+            completedAt: data.transaction.stepDates?.confirmed || new Date().toISOString(),
+            reviewSubmitted: false, // 리뷰 작성 페이지이므로 false로 설정
+            sellerId: data.transaction.seller?.id || "",
           }
           setPurchase(mappedData)
         } else {
@@ -85,6 +89,8 @@ export default function WriteReview() {
     setIsSubmitting(true)
 
     try {
+      console.log("리뷰 제출 - 트랜잭션 ID:", purchase.id)
+      
       const response = await fetch("/api/ratings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
