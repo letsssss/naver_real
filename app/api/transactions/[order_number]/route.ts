@@ -116,6 +116,27 @@ export async function GET(
     // 타입 단언을 통해 타입 에러 해결
     const purchaseData = purchase as any;
     
+    // 디버깅: posts 및 title 값 확인
+    console.log('DEBUG - ticket_title 원본:', purchaseData.ticket_title);
+    console.log('DEBUG - posts 배열:', purchaseData.posts);
+    console.log('DEBUG - posts[0]?.title:', purchaseData.posts?.[0]?.title);
+    
+    // 제목 로직 모든 가능성 체크 (값이 있는지, 빈 문자열인지 등)
+    let titleValue = "제목 없음";
+    if (purchaseData.ticket_title && purchaseData.ticket_title.trim()) {
+      titleValue = purchaseData.ticket_title.trim();
+      console.log('DEBUG - ticket_title을 사용합니다:', titleValue);
+    } else if (purchaseData.posts && 
+               Array.isArray(purchaseData.posts) && 
+               purchaseData.posts.length > 0 &&
+               purchaseData.posts[0]?.title && 
+               purchaseData.posts[0]?.title.trim()) {
+      titleValue = purchaseData.posts[0].title.trim();
+      console.log('DEBUG - posts[0].title을 사용합니다:', titleValue);
+    } else {
+      console.log('DEBUG - 기본값 "제목 없음"을 사용합니다');
+    }
+    
     // 클라이언트에 전달할 데이터 포맷팅
     const transactionData = {
       id: purchaseData.id.toString(),
@@ -133,7 +154,7 @@ export async function GET(
           : null,
       },
       ticket: {
-        title: purchaseData.ticket_title?.trim() || purchaseData.posts?.[0]?.title?.trim() || "제목 없음",
+        title: titleValue,
         date: purchaseData.event_date || (purchaseData.posts?.[0]?.event_date || ''),
         time: '',
         venue: purchaseData.event_venue || (purchaseData.posts?.[0]?.event_venue || ''),
