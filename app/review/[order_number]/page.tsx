@@ -42,14 +42,18 @@ export default function WriteReview() {
         const data = await response.json()
         console.log("트랜잭션 데이터 응답:", data)
         console.log("티켓 제목 원본:", data.transaction?.ticket?.title)
+        console.log("트랜잭션 구조:", JSON.stringify(data.transaction, null, 2))
         
         // API 응답 구조에 맞게 데이터 매핑
         if (data.success && data.transaction) {
           // confirmed-purchases API와 동일한 구조로 매핑
+          const ticketTitle = data.transaction?.ticket?.title || "";
+          console.log("제목 변환 전:", ticketTitle, "타입:", typeof ticketTitle, "길이:", ticketTitle.length);
+          
           const mappedData = {
             id: data.transaction.id,
             order_number: orderNumber, // 주문번호 저장
-            title: (data.transaction.ticket.title || "").trim() || "제목 없음",
+            title: ticketTitle.trim() ? ticketTitle.trim() : "제목 없음",
             date: data.transaction.ticket.date || '날짜 정보 없음',
             venue: data.transaction.ticket.venue || '장소 정보 없음',
             price: data.transaction.price ? `${data.transaction.price.toLocaleString()}원` : '가격 정보 없음',
@@ -59,6 +63,7 @@ export default function WriteReview() {
             reviewSubmitted: false, // 리뷰 작성 페이지이므로 false로 설정
             sellerId: data.transaction.seller?.id || "",
           }
+          console.log("매핑 후 제목:", mappedData.title);
           setPurchase(mappedData)
         } else {
           throw new Error('응답 데이터 형식이 올바르지 않습니다.')
