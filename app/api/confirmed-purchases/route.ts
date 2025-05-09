@@ -3,6 +3,33 @@ import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase.types';
 
+// ISO 문자열을 "YYYY-MM-DD HH:mm" 형식으로 변환하는 함수
+function formatDate(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    
+    // 날짜가 유효하지 않은 경우
+    if (isNaN(date.getTime())) {
+      return isoString;
+    }
+    
+    // 년, 월, 일 추출
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    // 시간, 분 추출 (한국 시간으로 변환)
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    // "YYYY-MM-DD HH:mm" 형식으로 반환
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch (error) {
+    console.error('날짜 포맷팅 오류:', error);
+    return isoString; // 오류 발생 시 원본 반환
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     // API 라우트에 특화된 Supabase 클라이언트 생성
@@ -79,7 +106,7 @@ export async function GET(request: NextRequest) {
         price: purchase.total_price ? `${purchase.total_price.toLocaleString()}원` : '가격 정보 없음',
         status: purchase.status,
         seller: seller?.name || "판매자 없음",
-        completedAt: purchase.updated_at,
+        completedAt: purchase.updated_at ? formatDate(purchase.updated_at) : '시간 정보 없음',
         reviewSubmitted: Array.isArray(purchase.ratings) && purchase.ratings.length > 0
       };
     });
