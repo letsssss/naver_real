@@ -178,17 +178,8 @@ export default function WriteReview() {
                   <p className="mb-1">
                     <span className="font-medium">판매자:</span> {purchase.seller}
                   </p>
-                  <p className="mb-1">
-                    <span className="font-medium">티켓:</span> {purchase.title}
-                  </p>
-                  <p className="mb-1">
-                    <span className="font-medium">공연일:</span> {purchase.date}
-                  </p>
-                  <p className="mb-1">
-                    <span className="font-medium">공연장:</span> {purchase.venue}
-                  </p>
                   <p>
-                    <span className="font-medium">가격:</span> {purchase.price}
+                    <span className="font-medium">티켓:</span> {purchase.title}
                   </p>
                 </div>
               </div>
