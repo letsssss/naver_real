@@ -133,7 +133,7 @@ export async function GET(
           : null,
       },
       ticket: {
-        title: purchaseData.ticket_title || (purchaseData.posts?.[0]?.title || ''),
+        title: purchaseData.ticket_title?.trim() || purchaseData.posts?.[0]?.title?.trim() || "제목 없음",
         date: purchaseData.event_date || (purchaseData.posts?.[0]?.event_date || ''),
         time: '',
         venue: purchaseData.event_venue || (purchaseData.posts?.[0]?.event_venue || ''),
