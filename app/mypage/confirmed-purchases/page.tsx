@@ -121,16 +121,18 @@ export default function ConfirmedPurchasesPage() {
 
                   <div className="mt-4 border-t pt-4"></div>
 
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-6 mb-2 flex justify-end">
                     {!purchase.reviewSubmitted ? (
                       <Link
                         href={`/review/${purchase.id}`}
-                        className="text-sm px-4 py-2 bg-[#02C39A] text-white rounded-md hover:bg-[#01A88A] transition-colors"
+                        className="text-sm px-6 py-3 bg-[#02C39A] text-white font-semibold rounded-md hover:bg-[#01A88A] transition-colors shadow-md border border-[#02C39A]"
                       >
                         리뷰 작성하기
                       </Link>
                     ) : (
-                      <span className="text-sm px-4 py-2 bg-gray-100 text-gray-500 rounded-md">리뷰 작성 완료</span>
+                      <span className="text-sm px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-md border border-gray-300 shadow-sm">
+                        리뷰 작성 완료
+                      </span>
                     )}
                   </div>
                 </div>
