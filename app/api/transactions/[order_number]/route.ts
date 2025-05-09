@@ -58,12 +58,12 @@ export async function GET(
             profile_image
           )
         ),
-        buyer:users!buyer_id (
+        buyer:users!purchases_buyer_id_fkey (
           id,
           name,
           profile_image
         ),
-        seller:users!seller_id (
+        seller:users!purchases_seller_id_fkey (
           id,
           name,
           profile_image
@@ -119,7 +119,6 @@ export async function GET(
     // 클라이언트에 전달할 데이터 포맷팅
     const transactionData = {
       id: purchaseData.id.toString(),
-      order_number: purchaseData.order_number || `ORDER-${purchaseData.id}`,
       type: isBuyer ? 'purchase' : 'sale',
       status: getStatusText(purchaseData.status),
       currentStep: getCurrentStep(purchaseData.status),
