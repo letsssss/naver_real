@@ -125,7 +125,7 @@ export default function ConfirmedPurchasesPage() {
                     {!purchase.reviewSubmitted ? (
                       <Link
                         href={`/review/${purchase.id}`}
-                        className="text-sm px-6 py-3 bg-[#02C39A] text-white font-semibold rounded-md hover:bg-[#01A88A] transition-colors shadow-md border border-[#02C39A]"
+                        className="text-sm px-6 py-3 bg-[#FFD600] text-black font-semibold rounded-md hover:bg-[#FFE600] transition-colors shadow-md border border-[#FFD600]"
                       >
                         리뷰 작성하기
                       </Link>
