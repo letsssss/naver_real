@@ -121,21 +121,9 @@ export async function GET(
     console.log('DEBUG - posts 배열:', purchaseData.posts);
     console.log('DEBUG - posts[0]?.title:', purchaseData.posts?.[0]?.title);
     
-    // 제목 로직 모든 가능성 체크 (값이 있는지, 빈 문자열인지 등)
-    let titleValue = "제목 없음";
-    if (purchaseData.ticket_title && purchaseData.ticket_title.trim()) {
-      titleValue = purchaseData.ticket_title.trim();
-      console.log('DEBUG - ticket_title을 사용합니다:', titleValue);
-    } else if (purchaseData.posts && 
-               Array.isArray(purchaseData.posts) && 
-               purchaseData.posts.length > 0 &&
-               purchaseData.posts[0]?.title && 
-               purchaseData.posts[0]?.title.trim()) {
-      titleValue = purchaseData.posts[0].title.trim();
-      console.log('DEBUG - posts[0].title을 사용합니다:', titleValue);
-    } else {
-      console.log('DEBUG - 기본값 "제목 없음"을 사용합니다');
-    }
+    // 간결하게 제목 값 처리
+    const titleValue = purchaseData.ticket_title?.trim() || purchaseData.posts?.[0]?.title?.trim() || "제목 없음";
+    console.log('DEBUG - 최종 선택된 제목:', titleValue);
     
     // 클라이언트에 전달할 데이터 포맷팅
     const transactionData = {
