@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/auth';
 import supabase from '@/lib/supabase';
 
+// Supabase 쿼리 결과를 위한 명시적 타입 정의
+type PurchaseRow = {
+  id: number;
+  total_price: number;
+  status: string;
+  updated_at: string;
+  ticket_title: string | null;
+  event_date: string | null;
+  event_venue: string | null;
+  seller: { name: string } | null;
+  post: { title: string } | null;
+  ratings: { id: string }[];
+};
+
 export async function GET(request: NextRequest) {
   try {
     // 인증된 사용자 가져오기
@@ -43,8 +57,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 타입 단언으로 명시해주고 결과 데이터 가공
-    const mapped = data.map((purchase) => ({
+    // 타입 단언으로 Supabase 결과를 올바른 타입으로 명시
+    const typedData = data as PurchaseRow[];
+
+    // 결과 데이터 가공
+    const mapped = typedData.map((purchase) => ({
       id: purchase.id,
       title: purchase.ticket_title || (purchase.post?.title ?? "제목 없음"),
       date: purchase.event_date || '날짜 정보 없음',
@@ -59,7 +76,7 @@ export async function GET(request: NextRequest) {
         hour: '2-digit',
         minute: '2-digit',
       }).replace(/\//g, '-'),
-      reviewSubmitted: (purchase.ratings?.length ?? 0) > 0
+      reviewSubmitted: purchase.ratings.length > 0
     }));
 
     return NextResponse.json({ success: true, purchases: mapped });
