@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         post:posts(*),
-        seller:users!seller_id(id, name, email)
+        seller:users!purchases_seller_id_fkey(id, name, email)
       `)
       .eq('buyer_id', userId)
       .neq('status', 'CANCELLED')
