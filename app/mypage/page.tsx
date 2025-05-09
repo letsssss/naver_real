@@ -359,7 +359,11 @@ export default function MyPage() {
               </div>
               <div className="flex flex-col items-center">
                 <span className="text-sm text-gray-600 mb-2">거래완료</span>
-                <span className="text-2xl font-bold">{purchaseStatus.거래완료}</span>
+                <Link href="/mypage/confirmed-purchases">
+                  <span className="text-2xl font-bold text-[#02C39A] hover:underline cursor-pointer transition-colors">
+                    {purchaseStatus.거래완료}
+                  </span>
+                </Link>
               </div>
               <div className="flex flex-col items-center">
                 <span className="text-sm text-gray-600 mb-2">거래취소</span>
