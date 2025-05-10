@@ -81,9 +81,9 @@ export async function POST(req: NextRequest) {
       .from('ratings')
       .select('id')
       .eq('transaction_id', transactionId)
-      .single();
+      .maybeSingle();
 
-    if (existingError && !existingError.message.includes('No rows found')) {
+    if (existingError) {
       console.error('기존 평점 조회 오류:', existingError);
       return addCorsHeaders(
         NextResponse.json({ error: '평점 조회 중 오류가 발생했습니다.' }, { status: 500 })
