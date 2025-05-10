@@ -72,7 +72,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
         )
       `)
       .eq("id", sellerId)
-      .single()
+      .maybeSingle()
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "판매자 없음" }, { status: 404 })
