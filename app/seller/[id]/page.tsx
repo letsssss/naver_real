@@ -149,7 +149,7 @@ export default function SellerProfile() {
         if (reviewsData) {
           const formattedReviews = reviewsData.map(review => ({
             id: review.id,
-            reviewer: review.profiles?.name || "익명",
+            reviewer: review.profiles && review.profiles[0]?.name || "익명",
             rating: review.rating,
             date: review.created_at,
             content: review.content,
