@@ -96,6 +96,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 필수 값 체크 추가
+    if (!reviewerId || !purchase?.seller_id || !transactionId) {
+      console.error('필수 값 누락:', { reviewerId, seller_id: purchase?.seller_id, transactionId });
+      return addCorsHeaders(
+        NextResponse.json({ error: '필수 값 누락' }, { status: 400 })
+      );
+    }
+
+    // 삽입 직전 데이터 로깅
+    console.log("리뷰 삽입 데이터 →", {
+      transaction_id: transactionId,
+      reviewer_id: reviewerId,
+      seller_id: purchase.seller_id,
+      rating,
+      comment,
+    });
+
     // 3. 평점 저장
     const { error: insertError } = await supabase.from('ratings').insert({
       transaction_id: transactionId,
