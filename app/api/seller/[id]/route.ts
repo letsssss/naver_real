@@ -66,11 +66,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         rating,
         response_rate,
         description,
-        verifications:seller_verifications!inner(
-          identity_verified,
-          account_verified,
-          phone_verified
-        )
+        seller_verifications(*)
       `)
       .eq('id', sellerId)
       .single()
@@ -93,7 +89,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       rating: rawSellerData.rating,
       response_rate: rawSellerData.response_rate,
       description: rawSellerData.description,
-      verifications: rawSellerData.verifications?.[0] || null
+      verifications: rawSellerData.seller_verifications?.[0] || null
     }
 
     // 판매자의 거래 성공 통계 조회
