@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase"
 
+export const runtime = "nodejs"
+
 // 타입 정의
 interface SellerVerification {
   identity_verified: boolean;
