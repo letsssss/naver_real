@@ -66,7 +66,7 @@ export default function SellerProfile() {
   useEffect(() => {
     const fetchSellerData = async () => {
       try {
-        const response = await fetch(`/api/seller/seller${params.id}`)
+        const response = await fetch(`/api/seller/${params.id}`)
         if (!response.ok) {
           throw new Error("판매자 정보를 불러오는데 실패했습니다.")
         }
