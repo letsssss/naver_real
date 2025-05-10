@@ -55,43 +55,57 @@ export default function SellerProfile() {
   const [seller, setSeller] = useState<SellerData | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [activeListings, setActiveListings] = useState<Ticket[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchSellerData = async () => {
       try {
+        setIsLoading(true)
+        console.log("판매자 정보 요청 시작:", params.id)
         const res = await fetch(`/api/seller/${params.id}`)
+        
+        if (!res.ok) {
+          throw new Error(`판매자 정보를 불러오는데 실패했습니다. 상태 코드: ${res.status}`)
+        }
+        
         const result = await res.json()
+        console.log("판매자 API 응답:", result)
 
         if (result.seller) {
           const s = result.seller
           setSeller({
             id: s.id,
-            name: s.name,
-            joinDate: new Date(s.created_at).toISOString().split("T")[0],
-            profileImage: s.avatar_url || "/placeholder.svg",
+            name: s.username || s.name || "판매자",
+            joinDate: s.joinDate || (s.created_at ? new Date(s.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
+            profileImage: s.profileImage || s.avatar_url || "/placeholder.svg",
             rating: s.rating ?? 0,
             reviewCount: result.reviews?.length ?? 0,
-            responseRate: s.response_rate ?? 0,
+            responseRate: s.responseRate ?? s.response_rate ?? 0,
             responseTime: "응답 시간 비공개",
-            successfulSales: s.successful_sales ?? 0,
-            verificationBadges: [
-              s.verifications?.identity_verified && "본인인증",
-              s.verifications?.account_verified && "계좌인증",
-              s.verifications?.phone_verified && "휴대폰인증"
+            successfulSales: s.successfulSales ?? 0,
+            verificationBadges: s.verificationBadges || [
+              (s.verifications?.identity_verified || s.seller_verifications?.[0]?.identity_verified) && "본인인증",
+              (s.verifications?.account_verified || s.seller_verifications?.[0]?.account_verified) && "계좌인증",
+              (s.verifications?.phone_verified || s.seller_verifications?.[0]?.phone_verified) && "휴대폰인증"
             ].filter(Boolean) as string[],
             description: s.description ?? "",
-            proxyTicketingSuccessRate: s.proxy_ticketing_success ?? 0,
-            cancellationTicketingSuccessRate: s.cancellation_ticketing_success ?? 0,
-            totalProxyTicketings: s.proxy_ticketing_total ?? 0,
-            totalCancellationTicketings: s.cancellation_ticketing_total ?? 0
+            proxyTicketingSuccessRate: s.proxyTicketingSuccessRate ?? 0,
+            cancellationTicketingSuccessRate: s.cancellationTicketingSuccessRate ?? 0,
+            totalProxyTicketings: s.totalProxyTicketings ?? 0,
+            totalCancellationTicketings: s.totalCancellationTicketings ?? 0
           })
+        } else {
+          setError("판매자 정보를 찾을 수 없습니다.")
         }
 
         if (result.reviews) setReviews(result.reviews)
         if (result.activeListings) setActiveListings(result.activeListings)
-
       } catch (err) {
         console.error("❌ 판매자 정보 불러오기 실패:", err)
+        setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.")
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -106,7 +120,18 @@ export default function SellerProfile() {
     ))
   }
 
-  if (!seller) return <div className="p-10 text-center text-gray-500">판매자 정보를 불러오는 중입니다...</div>
+  if (isLoading) return <div className="p-10 text-center text-gray-500">판매자 정보를 불러오는 중입니다...</div>
+  
+  if (error) return (
+    <div className="p-10 text-center">
+      <p className="text-red-500 mb-4">{error}</p>
+      <Link href="/" className="text-blue-500 hover:underline">
+        홈으로 돌아가기
+      </Link>
+    </div>
+  )
+
+  if (!seller) return <div className="p-10 text-center text-gray-500">판매자 정보를 찾을 수 없습니다.</div>
 
   return (
     <div className="min-h-screen bg-gray-50">
