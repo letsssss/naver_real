@@ -8,101 +8,207 @@ import { useParams } from "next/navigation"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { createBrowserClient } from "@/lib/supabase"
 
-// 임시 판매자 데이터
-const sellerData = {
-  id: "seller123",
-  username: "티켓마스터",
-  joinDate: "2022-05-15",
+// 임시 기본값 데이터 (데이터 로드 전에 사용)
+const defaultSellerData = {
+  id: "",
+  username: "로딩 중...",
+  joinDate: "",
   profileImage: "/placeholder.svg?height=200&width=200",
-  rating: 4.8,
-  reviewCount: 56,
-  responseRate: 98,
-  responseTime: "평균 30분 이내",
-  successfulSales: 124,
-  verificationBadges: ["본인인증", "계좌인증", "휴대폰인증"],
-  description: "안녕하세요! 항상 정확하고 빠른 거래를 약속드립니다. 궁금한 점이 있으시면 언제든지 문의해주세요.",
-  // 추가된 성공확률 정보
-  proxyTicketingSuccessRate: 98.5,
-  cancellationTicketingSuccessRate: 97.2,
-  totalProxyTicketings: 87,
-  totalCancellationTicketings: 63,
+  rating: 0,
+  reviewCount: 0,
+  responseRate: 0,
+  successfulSales: 0,
+  verificationBadges: [],
+  description: "",
+  proxyTicketingSuccessRate: 0,
+  cancellationTicketingSuccessRate: 0,
+  totalProxyTicketings: 0,
+  totalCancellationTicketings: 0,
 }
-
-// 임시 리뷰 데이터
-const reviewsData = [
-  {
-    id: 1,
-    reviewer: "콘서트러버",
-    rating: 5,
-    date: "2024-02-15",
-    content: "정말 빠른 응답과 친절한 대응 감사합니다. 티켓도 약속한 시간에 정확히 전달해주셨어요!",
-    ticketInfo: "세븐틴 콘서트 - VIP석",
-    helpful: 12,
-  },
-  {
-    id: 2,
-    reviewer: "음악팬",
-    rating: 5,
-    date: "2024-01-20",
-    content: "두 번째 거래인데 역시 믿을 수 있는 판매자입니다. 다음에도 또 거래하고 싶어요.",
-    ticketInfo: "아이유 콘서트 - R석",
-    helpful: 8,
-  },
-  {
-    id: 3,
-    reviewer: "공연매니아",
-    rating: 4,
-    date: "2023-12-05",
-    content: "전반적으로 만족스러운 거래였습니다. 티켓 상태도 좋았고 설명대로였어요.",
-    ticketInfo: "뮤지컬 라이온킹 - S석",
-    helpful: 5,
-  },
-]
-
-// 임시 판매 중인 티켓 데이터
-const activeListingsData = [
-  {
-    id: 1,
-    title: "세븐틴 'FOLLOW' TO SEOUL",
-    date: "2024.03.20",
-    time: "19:00",
-    venue: "잠실종합운동장 주경기장",
-    price: 110000,
-    image: "/placeholder.svg?height=150&width=300",
-  },
-  {
-    id: 2,
-    title: "아이유 콘서트",
-    date: "2024.05.01",
-    time: "18:00",
-    venue: "올림픽공원 체조경기장",
-    price: 99000,
-    image: "/placeholder.svg?height=150&width=300",
-  },
-]
 
 export default function SellerProfile() {
   const params = useParams()
+  const sellerId = params.id as string
   const [activeTab, setActiveTab] = useState("reviews")
-  const [seller, setSeller] = useState(sellerData)
-  const [reviews, setReviews] = useState(reviewsData)
-  const [activeListings, setActiveListings] = useState(activeListingsData)
+  
+  // 상태 관리
+  const [seller, setSeller] = useState(defaultSellerData)
+  const [reviews, setReviews] = useState<any[]>([])
+  const [activeListings, setActiveListings] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 실제 구현에서는 여기서 판매자 ID를 기반으로 데이터를 가져옵니다
+  // Supabase 클라이언트 생성
+  const supabase = createBrowserClient()
+
   useEffect(() => {
-    // API 호출 예시:
-    // const fetchSellerData = async () => {
-    //   const response = await fetch(`/api/sellers/${params.id}`);
-    //   const data = await response.json();
-    //   setSeller(data);
-    // };
-    // fetchSellerData();
-    console.log("판매자 ID:", params.id)
-  }, [params.id])
+    const fetchSellerData = async () => {
+      if (!sellerId) return
+      
+      try {
+        setIsLoading(true)
+        console.log("판매자 정보 요청 시작:", sellerId)
+        
+        // 1. 프로필 정보 조회
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, name, email, profile_image, created_at, rating, response_rate, description")
+          .eq("id", sellerId)
+          .maybeSingle()
 
-  const handleHelpfulClick = (reviewId: number) => {
-    setReviews(reviews.map((review) => (review.id === reviewId ? { ...review, helpful: review.helpful + 1 } : review)))
+        if (profileError || !profileData) {
+          console.error("프로필 조회 오류:", profileError)
+          setError("판매자 정보를 찾을 수 없습니다.")
+          setIsLoading(false)
+          return
+        }
+
+        // 2. 인증 정보 조회
+        const { data: verification, error: verificationError } = await supabase
+          .from("seller_verifications")
+          .select("is_identity_verified, is_account_verified, is_kakao_verified")
+          .eq("seller_id", sellerId)
+          .maybeSingle()
+
+        if (verificationError) {
+          console.error("인증 정보 조회 오류:", verificationError)
+        }
+
+        // 3. 판매자 통계 정보 조회 (있을 경우)
+        const { data: statsData } = await supabase
+          .from("seller_stats")
+          .select("successful_sales, proxy_ticketing_success, proxy_ticketing_total, cancellation_ticketing_success, cancellation_ticketing_total")
+          .eq("seller_id", sellerId)
+          .maybeSingle()
+
+        // 4. 리뷰 조회
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from("reviews")
+          .select(`
+            id,
+            rating,
+            content,
+            created_at,
+            ticket_info,
+            profiles(name)
+          `)
+          .eq("seller_id", sellerId)
+          .order("created_at", { ascending: false })
+
+        if (reviewsError) {
+          console.error("리뷰 조회 오류:", reviewsError)
+        }
+
+        // 5. 판매 중인 티켓 조회
+        const { data: listingsData, error: listingsError } = await supabase
+          .from("posts")
+          .select("id, title, event_date, event_time, event_venue, ticket_price, image_url")
+          .eq("author_id", sellerId)
+          .eq("status", "active")
+
+        if (listingsError) {
+          console.error("티켓 조회 오류:", listingsError)
+        }
+
+        // 판매자 정보 변환
+        const verificationBadges = [
+          verification?.is_identity_verified && "본인인증",
+          verification?.is_account_verified && "계좌인증", 
+          verification?.is_kakao_verified && "카카오인증"
+        ].filter(Boolean) as string[]
+
+        // 성공률 계산 (통계 데이터가 있는 경우)
+        const proxySuccess = statsData?.proxy_ticketing_success || 0
+        const proxyTotal = statsData?.proxy_ticketing_total || 0
+        const proxyRate = proxyTotal > 0 ? (proxySuccess / proxyTotal) * 100 : 0
+
+        const cancelSuccess = statsData?.cancellation_ticketing_success || 0
+        const cancelTotal = statsData?.cancellation_ticketing_total || 0
+        const cancelRate = cancelTotal > 0 ? (cancelSuccess / cancelTotal) * 100 : 0
+
+        setSeller({
+          id: profileData.id,
+          username: profileData.name || "판매자",
+          joinDate: profileData.created_at,
+          profileImage: profileData.profile_image || "/placeholder.svg?height=200&width=200",
+          rating: profileData.rating || 0,
+          reviewCount: reviewsData?.length || 0,
+          responseRate: profileData.response_rate || 0,
+          successfulSales: statsData?.successful_sales || 0,
+          verificationBadges,
+          description: profileData.description || "",
+          proxyTicketingSuccessRate: parseFloat(proxyRate.toFixed(1)),
+          cancellationTicketingSuccessRate: parseFloat(cancelRate.toFixed(1)),
+          totalProxyTicketings: proxyTotal,
+          totalCancellationTicketings: cancelTotal,
+        })
+
+        // 리뷰 데이터 변환
+        if (reviewsData) {
+          const formattedReviews = reviewsData.map(review => ({
+            id: review.id,
+            reviewer: review.profiles?.name || "익명",
+            rating: review.rating,
+            date: review.created_at,
+            content: review.content,
+            ticketInfo: review.ticket_info || "티켓 정보 없음",
+          }))
+          setReviews(formattedReviews)
+        }
+
+        // 티켓 데이터 변환
+        if (listingsData) {
+          const formattedListings = listingsData.map(ticket => ({
+            id: ticket.id,
+            title: ticket.title,
+            date: ticket.event_date,
+            time: ticket.event_time,
+            venue: ticket.event_venue,
+            price: ticket.ticket_price,
+            image: ticket.image_url || "/placeholder.svg?height=150&width=300",
+          }))
+          setActiveListings(formattedListings)
+        }
+
+        setIsLoading(false)
+      } catch (err) {
+        console.error("데이터 로딩 중 오류:", err)
+        setError("판매자 정보를 불러오는데 실패했습니다.")
+        setIsLoading(false)
+      }
+    }
+
+    if (sellerId) {
+      fetchSellerData()
+    }
+  }, [sellerId, supabase])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">판매자 정보를 불러오는 중입니다...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-lg shadow-md max-w-md">
+          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-4">오류가 발생했습니다</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <Link href="/" className="text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md transition">
+            홈으로 돌아가기
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -202,7 +308,7 @@ export default function SellerProfile() {
 
               <div>
                 <h2 className="text-lg font-medium mb-2">판매자 소개</h2>
-                <p className="text-gray-700">{seller.description}</p>
+                <p className="text-gray-700">{seller.description || "소개글이 없습니다."}</p>
               </div>
             </div>
           </div>
@@ -255,13 +361,6 @@ export default function SellerProfile() {
                         <span className="text-sm text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
                       </div>
                       <p className="text-gray-700 mb-3">{review.content}</p>
-                      <button
-                        className="flex items-center text-sm text-gray-500 hover:text-gray-700"
-                        onClick={() => handleHelpfulClick(review.id)}
-                      >
-                        <ThumbsUp className="h-4 w-4 mr-1" />
-                        도움이 됐어요 ({review.helpful})
-                      </button>
                     </div>
                   ))}
                 </div>
