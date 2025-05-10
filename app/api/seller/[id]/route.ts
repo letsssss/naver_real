@@ -5,9 +5,9 @@ export const runtime = "nodejs"
 
 // 타입 정의
 interface SellerVerification {
-  identity_verified: boolean;
-  account_verified: boolean;
-  phone_verified: boolean;
+  is_identity_verified: boolean;
+  is_account_verified: boolean;
+  is_kakao_verified: boolean;
 }
 
 interface SellerProfile {
@@ -69,14 +69,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     // 판매자 인증 정보 별도 조회
     const { data: verification } = await supabase
       .from("seller_verifications")
-      .select("identity_verified, account_verified, phone_verified")
+      .select("is_identity_verified, is_account_verified, is_kakao_verified")
       .eq("seller_id", sellerId)
       .maybeSingle()
 
     const verificationBadges = [
-      verification?.identity_verified && "본인인증",
-      verification?.account_verified && "계좌인증",
-      verification?.phone_verified && "휴대폰인증",
+      verification?.is_identity_verified && "본인인증",
+      verification?.is_account_verified && "계좌인증",
+      verification?.is_kakao_verified && "카카오인증",
     ].filter(Boolean)
 
     const seller = {
