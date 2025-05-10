@@ -56,21 +56,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     // 판매자 정보 가져오기
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select(`
-        id,
-        name,
-        email,
-        profile_image,
-        created_at,
-        rating,
-        response_rate,
-        description,
-        seller_verifications(
-          identity_verified,
-          account_verified,
-          phone_verified
-        )
-      `)
+      .select("id, name, email, profile_image, created_at, rating, response_rate, description")
       .eq("id", sellerId)
       .maybeSingle()
 
@@ -78,10 +64,17 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       return NextResponse.json({ error: "판매자 없음" }, { status: 404 })
     }
 
+    // 판매자 인증 정보 별도 조회
+    const { data: verification } = await supabase
+      .from("seller_verifications")
+      .select("identity_verified, account_verified, phone_verified")
+      .eq("seller_id", sellerId)
+      .maybeSingle()
+
     const verificationBadges = [
-      profile.seller_verifications?.[0]?.identity_verified && "본인인증",
-      profile.seller_verifications?.[0]?.account_verified && "계좌인증",
-      profile.seller_verifications?.[0]?.phone_verified && "휴대폰인증",
+      verification?.identity_verified && "본인인증",
+      verification?.account_verified && "계좌인증",
+      verification?.phone_verified && "휴대폰인증",
     ].filter(Boolean)
 
     const seller = {
