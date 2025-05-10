@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/supabase/server'; // 사용자 인증 함수
 import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import type { Database } from '@/types/supabase.types';
 
 // CORS 헤더 추가 유틸리티 함수
 function addCorsHeaders(response: NextResponse) {
@@ -20,20 +21,19 @@ const ratingSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    // 인증된 사용자 정보 가져오기
-    const user = await getAuthenticatedUser();
-    
-    if (!user) {
+    // 인증된 사용자 정보 가져오기 (createRouteHandlerClient 방식으로 통일)
+    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session || !session.user) {
       return addCorsHeaders(
         NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
       );
     }
 
-    // Supabase 클라이언트 생성
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    const reviewerId = session.user.id;
 
     // 요청 본문 파싱
     const body = await req.json();
@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
     }
 
     const { transactionId, rating, comment } = parsed.data;
-    const reviewerId = user.id;
 
     // 1. 거래 내역 확인 (본인의 거래인지, 상태는 CONFIRMED인지)
     const { data: purchase, error: purchaseError } = await supabase
