@@ -3,135 +3,107 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { ArrowLeft, Star, ThumbsUp, Calendar, MapPin, Clock } from "lucide-react"
 import { useParams } from "next/navigation"
-import {
-  ArrowLeft, Star, ThumbsUp, Calendar, MapPin, Clock
-} from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 
-interface SellerData {
-  id: string
-  name: string
-  joinDate: string
-  profileImage: string
-  rating: number
-  reviewCount: number
-  responseRate: number
-  responseTime: string
-  successfulSales: number
-  verificationBadges: string[]
-  description: string
-  proxyTicketingSuccessRate: number
-  cancellationTicketingSuccessRate: number
-  totalProxyTicketings: number
-  totalCancellationTicketings: number
+// 임시 판매자 데이터
+const sellerData = {
+  id: "seller123",
+  username: "티켓마스터",
+  joinDate: "2022-05-15",
+  profileImage: "/placeholder.svg?height=200&width=200",
+  rating: 4.8,
+  reviewCount: 56,
+  responseRate: 98,
+  responseTime: "평균 30분 이내",
+  successfulSales: 124,
+  verificationBadges: ["본인인증", "계좌인증", "휴대폰인증"],
+  description: "안녕하세요! 항상 정확하고 빠른 거래를 약속드립니다. 궁금한 점이 있으시면 언제든지 문의해주세요.",
+  // 추가된 성공확률 정보
+  proxyTicketingSuccessRate: 98.5,
+  cancellationTicketingSuccessRate: 97.2,
+  totalProxyTicketings: 87,
+  totalCancellationTicketings: 63,
 }
 
-interface Review {
-  id: number
-  reviewer: string
-  rating: number
-  date: string
-  content: string
-  ticketInfo: string
-  helpful: number
-}
+// 임시 리뷰 데이터
+const reviewsData = [
+  {
+    id: 1,
+    reviewer: "콘서트러버",
+    rating: 5,
+    date: "2024-02-15",
+    content: "정말 빠른 응답과 친절한 대응 감사합니다. 티켓도 약속한 시간에 정확히 전달해주셨어요!",
+    ticketInfo: "세븐틴 콘서트 - VIP석",
+    helpful: 12,
+  },
+  {
+    id: 2,
+    reviewer: "음악팬",
+    rating: 5,
+    date: "2024-01-20",
+    content: "두 번째 거래인데 역시 믿을 수 있는 판매자입니다. 다음에도 또 거래하고 싶어요.",
+    ticketInfo: "아이유 콘서트 - R석",
+    helpful: 8,
+  },
+  {
+    id: 3,
+    reviewer: "공연매니아",
+    rating: 4,
+    date: "2023-12-05",
+    content: "전반적으로 만족스러운 거래였습니다. 티켓 상태도 좋았고 설명대로였어요.",
+    ticketInfo: "뮤지컬 라이온킹 - S석",
+    helpful: 5,
+  },
+]
 
-interface Ticket {
-  id: number
-  title: string
-  date: string
-  time: string
-  venue: string
-  price: number
-  image: string
-}
+// 임시 판매 중인 티켓 데이터
+const activeListingsData = [
+  {
+    id: 1,
+    title: "세븐틴 'FOLLOW' TO SEOUL",
+    date: "2024.03.20",
+    time: "19:00",
+    venue: "잠실종합운동장 주경기장",
+    price: 110000,
+    image: "/placeholder.svg?height=150&width=300",
+  },
+  {
+    id: 2,
+    title: "아이유 콘서트",
+    date: "2024.05.01",
+    time: "18:00",
+    venue: "올림픽공원 체조경기장",
+    price: 99000,
+    image: "/placeholder.svg?height=150&width=300",
+  },
+]
 
 export default function SellerProfile() {
   const params = useParams()
   const [activeTab, setActiveTab] = useState("reviews")
-  const [seller, setSeller] = useState<SellerData | null>(null)
-  const [reviews, setReviews] = useState<Review[]>([])
-  const [activeListings, setActiveListings] = useState<Ticket[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [seller, setSeller] = useState(sellerData)
+  const [reviews, setReviews] = useState(reviewsData)
+  const [activeListings, setActiveListings] = useState(activeListingsData)
 
+  // 실제 구현에서는 여기서 판매자 ID를 기반으로 데이터를 가져옵니다
   useEffect(() => {
-    const fetchSellerData = async () => {
-      try {
-        setIsLoading(true)
-        console.log("판매자 정보 요청 시작:", params.id)
-        const res = await fetch(`/api/seller/${params.id}`)
-        
-        if (!res.ok) {
-          throw new Error(`판매자 정보를 불러오는데 실패했습니다. 상태 코드: ${res.status}`)
-        }
-        
-        const result = await res.json()
-        console.log("판매자 API 응답:", result)
-
-        if (result.seller) {
-          const s = result.seller
-          setSeller({
-            id: s.id,
-            name: s.username || s.name || "판매자",
-            joinDate: s.joinDate || (s.created_at ? new Date(s.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
-            profileImage: s.profileImage || s.avatar_url || "/placeholder.svg",
-            rating: s.rating ?? 0,
-            reviewCount: result.reviews?.length ?? 0,
-            responseRate: s.responseRate ?? s.response_rate ?? 0,
-            responseTime: "응답 시간 비공개",
-            successfulSales: s.successfulSales ?? 0,
-            verificationBadges: s.verificationBadges || [
-              (s.verifications?.identity_verified || s.seller_verifications?.[0]?.identity_verified) && "본인인증",
-              (s.verifications?.account_verified || s.seller_verifications?.[0]?.account_verified) && "계좌인증",
-              (s.verifications?.phone_verified || s.seller_verifications?.[0]?.phone_verified) && "휴대폰인증"
-            ].filter(Boolean) as string[],
-            description: s.description ?? "",
-            proxyTicketingSuccessRate: s.proxyTicketingSuccessRate ?? 0,
-            cancellationTicketingSuccessRate: s.cancellationTicketingSuccessRate ?? 0,
-            totalProxyTicketings: s.totalProxyTicketings ?? 0,
-            totalCancellationTicketings: s.totalCancellationTicketings ?? 0
-          })
-        } else {
-          setError("판매자 정보를 찾을 수 없습니다.")
-        }
-
-        if (result.reviews) setReviews(result.reviews)
-        if (result.activeListings) setActiveListings(result.activeListings)
-      } catch (err) {
-        console.error("❌ 판매자 정보 불러오기 실패:", err)
-        setError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (params?.id) {
-      fetchSellerData()
-    }
+    // API 호출 예시:
+    // const fetchSellerData = async () => {
+    //   const response = await fetch(`/api/sellers/${params.id}`);
+    //   const data = await response.json();
+    //   setSeller(data);
+    // };
+    // fetchSellerData();
+    console.log("판매자 ID:", params.id)
   }, [params.id])
 
   const handleHelpfulClick = (reviewId: number) => {
-    setReviews(reviews.map((review) =>
-      review.id === reviewId ? { ...review, helpful: review.helpful + 1 } : review
-    ))
+    setReviews(reviews.map((review) => (review.id === reviewId ? { ...review, helpful: review.helpful + 1 } : review)))
   }
-
-  if (isLoading) return <div className="p-10 text-center text-gray-500">판매자 정보를 불러오는 중입니다...</div>
-  
-  if (error) return (
-    <div className="p-10 text-center">
-      <p className="text-red-500 mb-4">{error}</p>
-      <Link href="/" className="text-blue-500 hover:underline">
-        홈으로 돌아가기
-      </Link>
-    </div>
-  )
-
-  if (!seller) return <div className="p-10 text-center text-gray-500">판매자 정보를 찾을 수 없습니다.</div>
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,29 +118,30 @@ export default function SellerProfile() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          {/* 판매자 프로필 */}
+          {/* 판매자 프로필 카드 */}
           <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8">
             <div className="p-6">
               <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
                   <Image
                     src={seller.profileImage || "/placeholder.svg"}
-                    alt={seller.name}
+                    alt={seller.username}
                     fill
                     className="object-cover"
                   />
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h1 className="text-2xl font-bold">{seller.name}</h1>
+                    <h1 className="text-2xl font-bold">{seller.username}</h1>
                     <div className="flex items-center text-yellow-500">
                       <Star className="h-5 w-5 fill-current" />
                       <span className="ml-1 font-medium">{seller.rating}</span>
+                      <span className="text-gray-500 text-sm ml-1">({seller.reviewCount})</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {seller.verificationBadges.map((badge: string) => (
-                      <Badge key={badge} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {seller.verificationBadges.map((badge) => (
+                      <Badge key={badge} className="bg-blue-50 text-blue-700 border-blue-200">
                         ✓ {badge}
                       </Badge>
                     ))}
@@ -176,7 +149,7 @@ export default function SellerProfile() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div>
                       <p className="text-gray-500">가입일</p>
-                      <p className="font-medium">{seller.joinDate}</p>
+                      <p className="font-medium">{new Date(seller.joinDate).toLocaleDateString()}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">응답률</p>
@@ -190,16 +163,13 @@ export default function SellerProfile() {
                 </div>
               </div>
 
-              {/* 티켓팅 성공률 */}
               <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl">
                 <h2 className="text-lg font-medium mb-4">티켓팅 성공 확률</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white rounded-lg p-4 shadow-sm">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-medium text-blue-800">대리티켓팅</h3>
-                      <span className="text-xl font-bold text-blue-600">
-                        {seller.proxyTicketingSuccessRate}%
-                      </span>
+                      <span className="text-xl font-bold text-blue-600">{seller.proxyTicketingSuccessRate}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
@@ -207,9 +177,7 @@ export default function SellerProfile() {
                         style={{ width: `${seller.proxyTicketingSuccessRate}%` }}
                       ></div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      총 {seller.totalProxyTicketings}건 진행
-                    </p>
+                    <p className="text-sm text-gray-500 mt-2">총 {seller.totalProxyTicketings}건 진행</p>
                   </div>
 
                   <div className="bg-white rounded-lg p-4 shadow-sm">
@@ -225,9 +193,7 @@ export default function SellerProfile() {
                         style={{ width: `${seller.cancellationTicketingSuccessRate}%` }}
                       ></div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      총 {seller.totalCancellationTicketings}건 진행
-                    </p>
+                    <p className="text-sm text-gray-500 mt-2">총 {seller.totalCancellationTicketings}건 진행</p>
                   </div>
                 </div>
               </div>
@@ -236,12 +202,12 @@ export default function SellerProfile() {
 
               <div>
                 <h2 className="text-lg font-medium mb-2">판매자 소개</h2>
-                <p className="text-gray-700">{seller.description || "소개글이 없습니다."}</p>
+                <p className="text-gray-700">{seller.description}</p>
               </div>
             </div>
           </div>
 
-          {/* 탭 (리뷰/판매티켓) */}
+          {/* 탭 섹션 */}
           <Tabs
             defaultValue="reviews"
             onValueChange={setActiveTab}
@@ -250,19 +216,22 @@ export default function SellerProfile() {
             <TabsList className="w-full justify-start p-0 bg-transparent border-b rounded-none h-auto">
               <TabsTrigger
                 value="reviews"
-                className={`px-6 py-4 rounded-none border-b-2 ${activeTab === "reviews" ? "border-blue-600 text-blue-600" : "border-transparent"}`}
+                className={`px-6 py-4 rounded-none border-b-2 ${
+                  activeTab === "reviews" ? "border-blue-600 text-blue-600" : "border-transparent"
+                }`}
               >
                 리뷰 ({reviews.length})
               </TabsTrigger>
               <TabsTrigger
                 value="listings"
-                className={`px-6 py-4 rounded-none border-b-2 ${activeTab === "listings" ? "border-blue-600 text-blue-600" : "border-transparent"}`}
+                className={`px-6 py-4 rounded-none border-b-2 ${
+                  activeTab === "listings" ? "border-blue-600 text-blue-600" : "border-transparent"
+                }`}
               >
                 판매 중인 티켓 ({activeListings.length})
               </TabsTrigger>
             </TabsList>
 
-            {/* 리뷰 탭 */}
             <TabsContent value="reviews" className="p-6">
               {reviews.length > 0 ? (
                 <div className="space-y-6">
@@ -283,7 +252,7 @@ export default function SellerProfile() {
                           </div>
                           <p className="text-sm text-gray-500">{review.ticketInfo}</p>
                         </div>
-                        <span className="text-sm text-gray-500">{review.date}</span>
+                        <span className="text-sm text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
                       </div>
                       <p className="text-gray-700 mb-3">{review.content}</p>
                       <button
@@ -303,7 +272,6 @@ export default function SellerProfile() {
               )}
             </TabsContent>
 
-            {/* 티켓 탭 */}
             <TabsContent value="listings" className="p-6">
               {activeListings.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
