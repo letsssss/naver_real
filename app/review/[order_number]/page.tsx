@@ -182,10 +182,10 @@ export default function WriteReview() {
                 <h2 className="text-lg font-medium mb-2">거래 정보</h2>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="mb-1">
-                    <span className="font-medium">판매자:</span> {purchase.seller}
+                    <span className="font-medium">티켓:</span> {purchase.title}
                   </p>
                   <p>
-                    <span className="font-medium">티켓:</span> {purchase.title}
+                    <span className="font-medium">판매자:</span> {purchase.seller}
                   </p>
                 </div>
               </div>
