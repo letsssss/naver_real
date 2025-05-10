@@ -63,7 +63,7 @@ export default function SellerProfile() {
       try {
         setIsLoading(true)
         console.log("판매자 정보 요청 시작:", params.id)
-        const res = await fetch(`/api/seller/${params.id}`)
+        const res = await fetch(`/api/seller/seller${params.id}`)
         
         if (!res.ok) {
           throw new Error(`판매자 정보를 불러오는데 실패했습니다. 상태 코드: ${res.status}`)
