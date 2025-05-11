@@ -49,15 +49,17 @@ export default function ConfirmedPurchasesPage() {
         const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
         
         // 백엔드에서 가져온 리뷰 작성 완료 상태와 로컬 스토리지의 상태를 합쳐서 최신 상태 유지
-        const updatedPurchases = data.purchases.map((purchase: Purchase) => {
+        const updatedPurchases = data.purchases.map((purchase: any) => {
           // 백엔드에서 이미 reviewSubmitted가 true인 경우 또는
           // 로컬 스토리지에 해당 주문번호가 리뷰 완료로 표시된 경우 true로 설정
-          const isReviewSubmitted = purchase.reviewSubmitted || 
+          const isReviewSubmitted = 
+            purchase.reviewSubmitted || // 혹시 백엔드가 camelCase로 주는 경우 대비
+            purchase.review_submitted || // 실제 백엔드 필드명
             (purchase.order_number && reviewCompletedOrders[purchase.order_number]);
           
           return {
             ...purchase,
-            reviewSubmitted: isReviewSubmitted
+            reviewSubmitted: isReviewSubmitted // camelCase로 통일
           };
         });
         

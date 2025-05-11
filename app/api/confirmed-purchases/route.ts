@@ -50,68 +50,98 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id;
 
-    // Supabase에서 확인된 구매 내역 가져오기 (개선된 쿼리)
-    const { data, error } = await supabase
-      .from("purchases")
-      .select(`
-        id,
-        total_price,
-        status,
-        updated_at,
-        ticket_title,
-        post:post_id (
-          title,
-          event_date,
-          event_venue
-        ),
-        seller:seller_id (
-          name
-        ),
-        ratings(id),
-        order_number
-      `)
-      .eq("buyer_id", userId)
-      .eq("status", "CONFIRMED")
-      .order("updated_at", { ascending: false });
+    // 개선된 쿼리: EXISTS 서브쿼리를 사용하여 리뷰 제출 여부 직접 확인
+    const { data, error } = await supabase.rpc('get_confirmed_purchases_with_review_status', {
+      user_id: userId
+    });
 
     if (error) {
       console.error('구매 내역 조회 오류:', error);
-      return NextResponse.json(
-        { success: false, error: '구매 내역을 가져오는 중 오류가 발생했습니다.' },
-        { status: 500 }
-      );
+      
+      // 저장 프로시저가 없는 경우 대체 쿼리로 시도
+      console.log('저장 프로시저 실패, 직접 쿼리로 시도합니다.');
+      
+      // 기존 방식으로 다시 시도
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("purchases")
+        .select(`
+          id,
+          total_price,
+          status,
+          updated_at,
+          ticket_title,
+          post:post_id (
+            title,
+            event_date,
+            event_venue
+          ),
+          seller:seller_id (
+            name
+          ),
+          ratings(id),
+          order_number
+        `)
+        .eq("buyer_id", userId)
+        .eq("status", "CONFIRMED")
+        .order("updated_at", { ascending: false });
+      
+      if (fallbackError) {
+        console.error('대체 쿼리 실패:', fallbackError);
+        return NextResponse.json(
+          { success: false, error: '구매 내역을 가져오는 중 오류가 발생했습니다.' },
+          { status: 500 }
+        );
+      }
+      
+      // 대체 쿼리의 데이터 사용
+      const mapped = fallbackData.map((purchase) => {
+        // 타입 단언으로 post 타입 명시
+        const post = purchase.post as {
+          title?: string;
+          event_date?: string;
+          event_venue?: string;
+        };
+        
+        // 타입 단언으로 seller 타입 명시
+        const seller = purchase.seller as {
+          name?: string;
+        };
+
+        // reviewSubmitted 값 확실하게 boolean으로 처리 (명시적 변환)
+        const hasReview = Array.isArray(purchase.ratings) ? purchase.ratings.length > 0 : false;
+
+        return {
+          id: purchase.id,
+          title: purchase.ticket_title || post?.title || "제목 없음",
+          date: post?.event_date || '날짜 정보 없음',
+          venue: post?.event_venue || '장소 정보 없음',
+          price: purchase.total_price ? `${purchase.total_price.toLocaleString()}원` : '가격 정보 없음',
+          status: purchase.status,
+          seller: seller?.name || "판매자 없음",
+          completedAt: purchase.updated_at ? formatDate(purchase.updated_at) : '시간 정보 없음',
+          reviewSubmitted: hasReview,
+          order_number: purchase.order_number || `ORDER-${purchase.id}`
+        };
+      });
+      
+      return NextResponse.json({ success: true, purchases: mapped });
     }
 
     // 콘솔에 디버깅 정보 출력 (개발 시에만 활성화)
     console.log('구매 내역 샘플:', data && data.length > 0 ? JSON.stringify(data[0], null, 2) : '데이터 없음');
 
-    // Supabase 조인 결과 접근 (타입 단언 사용)
+    // RPC 결과 매핑
     const mapped = data.map((purchase) => {
-      // 타입 단언으로 post 타입 명시
-      const post = purchase.post as {
-        title?: string;
-        event_date?: string;
-        event_venue?: string;
-      };
-      
-      // 타입 단언으로 seller 타입 명시
-      const seller = purchase.seller as {
-        name?: string;
-      };
-
-      // reviewSubmitted 값 확실하게 boolean으로 처리 (명시적 변환)
-      const hasReview = Array.isArray(purchase.ratings) ? purchase.ratings.length > 0 : false;
-
       return {
         id: purchase.id,
-        title: purchase.ticket_title || post?.title || "제목 없음",
-        date: post?.event_date || '날짜 정보 없음',
-        venue: post?.event_venue || '장소 정보 없음',
+        title: purchase.ticket_title || purchase.post_title || "제목 없음",
+        date: purchase.event_date || '날짜 정보 없음',
+        venue: purchase.event_venue || '장소 정보 없음',
         price: purchase.total_price ? `${purchase.total_price.toLocaleString()}원` : '가격 정보 없음',
         status: purchase.status,
-        seller: seller?.name || "판매자 없음",
+        seller: purchase.seller_name || "판매자 없음",
         completedAt: purchase.updated_at ? formatDate(purchase.updated_at) : '시간 정보 없음',
-        reviewSubmitted: hasReview,
+        reviewSubmitted: purchase.review_submitted, // 서버에서 직접 계산된 리뷰 제출 여부
         order_number: purchase.order_number || `ORDER-${purchase.id}`
       };
     });
