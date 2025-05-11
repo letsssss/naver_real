@@ -71,7 +71,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       .select(`
         id,
         rating,
-        content,
+        comment,
         created_at,
         ticket_info,
         helpful_count,
@@ -85,7 +85,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       reviewer: r.profiles[0]?.name || "익명",
       rating: r.rating,
       date: new Date(r.created_at).toISOString().split("T")[0],
-      content: r.content,
+      content: r.comment,
       ticketInfo: r.ticket_info,
       helpful: r.helpful_count,
     }))

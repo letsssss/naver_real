@@ -89,7 +89,7 @@ export default function SellerProfile() {
           .select(`
             id,
             rating,
-            content,
+            comment,
             created_at,
             ticket_info,
             profiles(name)
@@ -152,7 +152,7 @@ export default function SellerProfile() {
             reviewer: review.profiles && review.profiles[0]?.name || "익명",
             rating: review.rating,
             date: review.created_at,
-            content: review.content,
+            content: review.comment,
             ticketInfo: review.ticket_info || "티켓 정보 없음",
           }))
           setReviews(formattedReviews)
