@@ -1,7 +1,11 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { createBrowserClient } from "@/lib/supabase"
 
 // 이 데이터는 실제로는 API나 데이터베이스에서 가져와야 합니다.
 const ticketData = {
@@ -65,9 +69,61 @@ const ticketData = {
       status: "판매중",
     },
   ],
+  sellerId: "seller123" // 판매자 ID 추가
 }
 
 export default function TicketDetail({ params }: { params: { id: string } }) {
+  // Supabase 클라이언트
+  const supabase = createBrowserClient()
+  
+  // 판매자 정보 상태
+  const [seller, setSeller] = useState({
+    id: "",
+    username: "",
+    profileImage: "",
+    responseRate: 0,
+    successfulSales: 0,
+    rating: 0, // 평균 별점
+  })
+
+  useEffect(() => {
+    const fetchSellerSummary = async () => {
+      const sellerId = ticketData.sellerId // 실제로는 API에서 가져온 데이터에서 판매자 ID를 사용
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("id, name, profile_image, response_rate")
+        .eq("id", sellerId)
+        .maybeSingle()
+
+      const { data: statsData } = await supabase
+        .from("seller_stats")
+        .select("successful_sales")
+        .eq("seller_id", sellerId)
+        .maybeSingle()
+
+      const { data: ratingData } = await supabase
+        .from("ratings")
+        .select("rating")
+        .eq("seller_id", sellerId)
+
+      const avgRating = ratingData && ratingData.length > 0
+        ? ratingData.reduce((sum, r) => sum + r.rating, 0) / ratingData.length
+        : 0
+
+      setSeller({
+        id: profileData?.id || "",
+        username: profileData?.name || "티켓마스터",
+        profileImage: profileData?.profile_image || "/placeholder.svg",
+        responseRate: profileData?.response_rate || 98,
+        successfulSales: statsData?.successful_sales || 124,
+        rating: parseFloat(avgRating.toFixed(1)), // 평균 별점 추가
+      })
+    }
+
+    fetchSellerSummary()
+  }, [supabase])
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
@@ -93,8 +149,8 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
                 <div className="flex items-center gap-3">
                   <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-100">
                     <Image
-                      src="/placeholder.svg"
-                      alt="판매자 프로필"
+                      src={seller.profileImage}
+                      alt={seller.username}
                       fill
                       className="object-cover"
                     />
@@ -103,21 +159,21 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-gray-500">판매자:</p>
-                      <span className="font-medium text-blue-600">티켓마스터</span>
+                      <span className="font-medium text-blue-600">{seller.username}</span>
                       <div className="flex items-center text-yellow-500">
                         <Star className="h-4 w-4 fill-current" />
-                        <span className="ml-1 font-medium">4.8</span>
+                        <span className="ml-1 font-medium">{seller.rating}</span>
                       </div>
                     </div>
                     
                     <p className="text-sm text-gray-600 mt-1">
-                      계약 성사 124건 | 응답률 98%
+                      계약 성사 {seller.successfulSales}건 | 응답률 {seller.responseRate}%
                     </p>
                   </div>
                 </div>
                 
                 <Link 
-                  href="/seller/seller123" 
+                  href={`/seller/${seller.id}`} 
                   className="block text-center mt-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50 transition"
                 >
                   프로필 보기
