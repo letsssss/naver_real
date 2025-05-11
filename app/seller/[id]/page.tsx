@@ -154,13 +154,27 @@ export default function SellerProfile() {
         const proxyCancelled = proxyRateView?.cancelled_count || 0;
         const totalProxyTicketings = proxyConfirmed + proxyCancelled;
 
+        // 6. 평균 별점 및 리뷰 수 조회 (뷰 기반)
+        const { data: avgData, error: avgError } = await supabase
+          .from("seller_avg_rating")
+          .select("avg_rating, review_count")
+          .eq("seller_id", sellerId)
+          .maybeSingle()
+
+        if (avgError) {
+          console.error("별점 평균 조회 오류:", avgError)
+        }
+
+        const avgRating = avgData?.avg_rating || 0
+        const reviewCount = avgData?.review_count || 0
+
         setSeller({
           id: profileData.id,
           username: profileData.name || "판매자",
           joinDate: profileData.created_at,
           profileImage: profileData.profile_image || "/placeholder.svg?height=200&width=200",
-          rating: profileData.rating || 0,
-          reviewCount: reviewsData?.length || 0,
+          rating: avgRating,
+          reviewCount: reviewCount,
           responseRate: profileData.response_rate || 0,
           successfulSales: statsData?.successful_sales || 0,
           verificationBadges,
