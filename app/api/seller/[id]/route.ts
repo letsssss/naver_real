@@ -103,7 +103,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       id: post.id,
       title: post.title,
       date: new Date(post.event_date).toISOString().split("T")[0],
-      time: post.event_time || "정보 없음", // event_time이 없으므로 기본값 추가
+      time: "정보 없음", // event_time 필드는 더 이상 없으므로 기본값 사용
       venue: post.event_venue,
       price: post.ticket_price,
       image: post.image_url || "/placeholder.svg",
