@@ -85,7 +85,7 @@ export default function SellerProfile() {
 
         // 4. 리뷰 조회
         const { data: reviewsData, error: reviewsError } = await supabase
-          .from("reviews")
+          .from("ratings")
           .select(`
             id,
             rating,

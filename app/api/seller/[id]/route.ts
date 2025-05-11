@@ -67,7 +67,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
     // 리뷰 조회
     const { data: reviews } = await supabase
-      .from("reviews")
+      .from("ratings")
       .select(`
         id,
         rating,
