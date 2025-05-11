@@ -46,6 +46,7 @@ interface TicketData {
     id?: string;
     name: string;
     rating: number;
+    reviewCount: number;
     profileImage: string;
     successfulSales?: number;
     responseRate?: number;
@@ -339,6 +340,16 @@ export default function TicketCancellationDetail() {
           // 에러가 발생해도 게시물 데이터는 계속 표시
         }
         
+        // ✅ 1. Supabase에서 별점과 리뷰 수 가져오기
+        const { data: avgRatingData, error: ratingError } = await supabase
+          .from("seller_avg_rating")
+          .select("avg_rating, review_count")
+          .eq("seller_id", sellerId)
+          .maybeSingle()
+
+        const avgRating = avgRatingData?.avg_rating || 0
+        const reviewCount = avgRatingData?.review_count || 0
+        
         // 취켓팅 통계 기본값 (API에서 가져오지 못한 경우)
         let totalCancellationTicketings = 0;
         
@@ -364,6 +375,7 @@ export default function TicketCancellationDetail() {
           // 오류 발생 시 기본값 유지
         }
         
+        // ✅ 2. 기존 setTicketData에 값 반영
         setTicketData({
           id: postData.id,
           title: postData.title || '티켓 제목',
@@ -379,7 +391,8 @@ export default function TicketCancellationDetail() {
           seller: {
             id: sellerId,
             name: postData.author?.name || '판매자 정보 없음',
-            rating: postData.author?.rating || 4.5,
+            rating: avgRating,
+            reviewCount: reviewCount,
             profileImage: postData.author?.profileImage || '',
             successfulSales: sellerDetail.successfulSales,
             responseRate: sellerDetail.responseRate,
@@ -823,6 +836,7 @@ export default function TicketCancellationDetail() {
                         <div className="flex items-center text-yellow-500">
                           <Star className="h-4 w-4 fill-current" />
                           <span className="ml-1 font-medium">{ticketData.seller.rating}</span>
+                          <span className="ml-1 text-gray-500 text-sm">({ticketData.seller.reviewCount})</span>
                         </div>
                       </div>
                       
