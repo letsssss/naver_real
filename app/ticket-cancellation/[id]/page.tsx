@@ -300,6 +300,9 @@ export default function TicketCancellationDetail() {
           responseRate: 0
         };
         
+        // Supabase 클라이언트 생성 (모든 요청에서 공통으로 사용)
+        const supabase = createBrowserClient();
+        
         try {
           if (sellerId) {
             // 새로운 seller-stats API 사용
@@ -317,9 +320,6 @@ export default function TicketCancellationDetail() {
             } else {
               console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
             }
-            
-            // Supabase 클라이언트 생성
-            const supabase = createBrowserClient();
             
             // cancellation_ticketing_stats_view에서 데이터 가져오기
             const { data: cancelStats } = await supabase
@@ -352,9 +352,6 @@ export default function TicketCancellationDetail() {
         
         // 취켓팅 통계 기본값 (API에서 가져오지 못한 경우)
         let totalCancellationTicketings = 0;
-        
-        // Supabase 클라이언트 생성 (이미 위에서 생성되지 않은 경우)
-        const supabase = createBrowserClient();
         
         try {
           // cancellation_ticketing_stats_view에서 데이터 가져오기
