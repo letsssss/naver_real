@@ -112,6 +112,15 @@ export default function WriteReview() {
         throw new Error(errorData.error || "리뷰 등록에 실패했습니다.");
       }
 
+      // 리뷰 작성 완료 상태 로컬 스토리지에 저장
+      // 구매 주문번호와 함께 리뷰 작성 완료 상태를 저장
+      const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
+      reviewCompletedOrders[purchase.order_number] = true;
+      localStorage.setItem('reviewCompletedOrders', JSON.stringify(reviewCompletedOrders));
+      
+      // 리뷰 작성 완료 플래그 설정 (confirmed-purchases 페이지로 돌아갈 때 상태 갱신 트리거)
+      localStorage.setItem('reviewJustCompleted', 'true');
+
       alert("리뷰가 성공적으로 등록되었습니다.")
       router.push("/mypage/confirmed-purchases")
     } catch (error) {
