@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Star } from "lucide-react"
+import { ArrowLeft, Star, CheckCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,13 +20,17 @@ export default function WriteReview() {
   const [purchase, setPurchase] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false)
 
   useEffect(() => {
     // 거래 정보 가져오기
     const fetchTransactionData = async () => {
       try {
         // order_number 파라미터 사용
-        const orderNumber = params.order_number
+        const orderNumber = Array.isArray(params.order_number) 
+          ? params.order_number[0] 
+          : params.order_number.toString()
+          
         console.log("리뷰 페이지 로딩 - 주문번호:", orderNumber)
         
         const response = await fetch(`/api/transactions/${orderNumber}`)
@@ -41,11 +45,22 @@ export default function WriteReview() {
         
         const data = await response.json()
         console.log("트랜잭션 데이터 응답:", data)
-        console.log("티켓 제목 원본:", data.transaction?.ticket?.title)
-        console.log("트랜잭션 구조:", JSON.stringify(data.transaction, null, 2))
         
         // API 응답 구조에 맞게 데이터 매핑
         if (data.success && data.transaction) {
+          // 리뷰 작성 여부 확인
+          const hasReview = data.transaction.review != null || data.transaction.ratings?.length > 0;
+          
+          if (hasReview) {
+            console.log("이미 리뷰가 작성된 거래입니다.");
+            setAlreadyReviewed(true);
+            
+            // 로컬 스토리지에도 리뷰 작성 완료 상태 저장
+            const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
+            reviewCompletedOrders[orderNumber] = true;
+            localStorage.setItem('reviewCompletedOrders', JSON.stringify(reviewCompletedOrders));
+          }
+          
           // confirmed-purchases API와 동일한 구조로 매핑
           const ticketTitle = data.transaction?.ticket?.title || "";
           console.log("제목 변환 전:", ticketTitle, "타입:", typeof ticketTitle, "길이:", ticketTitle.length);
@@ -60,7 +75,7 @@ export default function WriteReview() {
             status: data.transaction.status,
             seller: data.transaction.seller?.name || "판매자 없음",
             completedAt: data.transaction.stepDates?.confirmed || new Date().toISOString(),
-            reviewSubmitted: false, // 리뷰 작성 페이지이므로 false로 설정
+            reviewSubmitted: hasReview, // 리뷰 작성 여부 설정
             sellerId: data.transaction.seller?.id || "",
           }
           console.log("매핑 후 제목:", mappedData.title);
@@ -109,6 +124,23 @@ export default function WriteReview() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // 이미 리뷰가 작성된 경우 (409 Conflict)
+        if (response.status === 409) {
+          setAlreadyReviewed(true);
+          
+          // 로컬 스토리지에도 리뷰 작성 완료 상태 저장
+          const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
+          reviewCompletedOrders[purchase.order_number] = true;
+          localStorage.setItem('reviewCompletedOrders', JSON.stringify(reviewCompletedOrders));
+          
+          // 리뷰 완료 메시지 표시 후 리다이렉트
+          alert("이미 이 거래에 대한 리뷰를 작성하셨습니다.");
+          localStorage.setItem('reviewJustCompleted', 'true');
+          router.push("/mypage/confirmed-purchases");
+          return;
+        }
+        
         throw new Error(errorData.error || "리뷰 등록에 실패했습니다.");
       }
 
@@ -167,6 +199,51 @@ export default function WriteReview() {
             </span>
           </Link>
         </div>
+      </div>
+    )
+  }
+  
+  // 이미 리뷰가 작성된 경우 별도의 UI 표시
+  if (alreadyReviewed) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow">
+          <div className="container mx-auto px-4 py-6">
+            <Link href="/mypage/confirmed-purchases" className="flex items-center text-gray-600 hover:text-gray-900">
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              <span>구매 내역으로 돌아가기</span>
+            </Link>
+            <h1 className="text-2xl font-bold mt-4">리뷰 작성 완료</h1>
+          </div>
+        </header>
+
+        <main className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <div className="p-8 text-center">
+                <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
+                <h2 className="text-xl font-semibold mb-2">이미 리뷰를 작성한 거래입니다</h2>
+                <p className="text-gray-600 mb-6">
+                  해당 거래에 대한 리뷰가 이미 작성되었습니다. 
+                  한 거래당 하나의 리뷰만 작성할 수 있습니다.
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                  <p className="mb-1">
+                    <span className="font-medium">티켓:</span> {purchase.title}
+                  </p>
+                  <p>
+                    <span className="font-medium">판매자:</span> {purchase.seller}
+                  </p>
+                </div>
+                <Link href="/mypage/confirmed-purchases">
+                  <span className="px-6 py-3 bg-[#02C39A] text-white font-semibold rounded-md hover:bg-[#029e7b] transition-colors inline-block">
+                    구매 내역으로 돌아가기
+                  </span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }

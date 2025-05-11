@@ -202,7 +202,7 @@ export default function ConfirmedPurchasesPage() {
                         리뷰 작성하기
                       </Link>
                     ) : (
-                      <span className="text-sm px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-md border border-gray-300 shadow-sm">
+                      <span className="text-sm px-6 py-3 bg-gray-200 text-gray-700 font-medium rounded-md border border-gray-300 shadow-sm cursor-not-allowed">
                         리뷰 작성 완료
                       </span>
                     )}
