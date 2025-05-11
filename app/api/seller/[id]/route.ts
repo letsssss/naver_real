@@ -1,82 +1,51 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase"
 
-export const runtime = "nodejs"
-
-// 타입 정의
-interface SellerVerification {
-  is_identity_verified: boolean;
-  is_account_verified: boolean;
-  is_kakao_verified: boolean;
-}
-
-interface SellerProfile {
-  id: string;
-  name: string;
-  email: string;
-  avatar_url: string | null;
-  created_at: string;
-  rating: number | null;
-  response_rate: number | null;
-  description: string | null;
-  verifications: SellerVerification | null;
-}
-
-interface SellerStats {
-  successful_sales: number;
-  proxy_ticketing_success: number;
-  proxy_ticketing_total: number;
-  cancellation_ticketing_success: number;
-  cancellation_ticketing_total: number;
-}
-
-interface Review {
-  id: number;
-  rating: number;
-  content: string;
-  created_at: string;
-  reviewer: { name: string } | null;
-  ticket_info: string;
-  helpful_count: number;
-}
-
-interface Listing {
-  id: number;
-  title: string;
-  event_date: string;
-  event_time: string;
-  event_venue: string;
-  ticket_price: number;
-  image_url: string | null;
-}
-
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const supabase = createAdminClient()
   const sellerId = params.id
+  
+  console.log("[✅ API 진입] sellerId:", sellerId);
+  console.log("[🔑 확인] SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 10) + "...");
+  console.log("[🔑 확인] SERVICE_ROLE_KEY 존재여부:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "존재함" : "없음");
 
   try {
     // 판매자 정보 가져오기
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, name, email, profile_image, created_at, rating, response_rate, description")
+      .select(`
+        id,
+        name,
+        email,
+        profile_image,
+        created_at,
+        rating,
+        response_rate,
+        description,
+        seller_verifications!inner(
+          identity_verified,
+          account_verified,
+          phone_verified
+        )
+      `)
       .eq("id", sellerId)
-      .maybeSingle()
+      .single()
+    
+    console.log("📦 profile 조회 결과:", profile);
+    console.log("❗ profileError:", profileError);
 
     if (profileError || !profile) {
+      console.log("❌ 판매자 없음 - 404 반환");
       return NextResponse.json({ error: "판매자 없음" }, { status: 404 })
     }
 
-    // 판매자 인증 정보 별도 조회
-    const { data: verification } = await supabase
-      .from("seller_verifications")
-      .select("is_identity_verified, is_account_verified, is_kakao_verified")
-      .eq("seller_id", sellerId)
-      .maybeSingle()
+    // 디버깅: seller_verifications 확인
+    console.log("🔍 seller_verifications:", profile.seller_verifications);
 
     const verificationBadges = [
-      verification?.is_identity_verified && "본인인증",
-      verification?.is_account_verified && "계좌인증",
-      verification?.is_kakao_verified && "카카오인증",
+      profile.seller_verifications[0]?.identity_verified && "본인인증",
+      profile.seller_verifications[0]?.account_verified && "계좌인증",
+      profile.seller_verifications[0]?.phone_verified && "휴대폰인증",
     ].filter(Boolean)
 
     const seller = {
@@ -140,13 +109,16 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       image: post.image_url || "/placeholder.svg",
     }))
 
+    // 추가 디버깅: 반환되는 데이터 구조 확인
+    console.log("✅ API 응답 성공");
+
     return NextResponse.json({
       seller,
       reviews: formattedReviews,
       activeListings: formattedListings,
     })
   } catch (err) {
-    console.error("판매자 API 오류:", err)
+    console.error("❌ 판매자 API 오류:", err)
     return NextResponse.json({ error: "서버 오류" }, { status: 500 })
   }
 } 
