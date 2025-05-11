@@ -131,19 +131,28 @@ export default function SellerProfile() {
         // seller_stats 말고 view를 직접 호출하려면 (선택사항)
         const { data: cancellationRateView } = await supabase
           .from("cancellation_ticketing_stats_view")
-          .select("cancellation_ticketing_rate")
+          .select("confirmed_count, cancelled_count, cancellation_ticketing_rate")
           .eq("seller_id", sellerId)
           .maybeSingle();
         
         const { data: proxyRateView } = await supabase
           .from("proxy_ticketing_stats_view")
-          .select("proxy_ticketing_rate")
+          .select("confirmed_count, cancelled_count, proxy_ticketing_rate")
           .eq("seller_id", sellerId)
           .maybeSingle();
         
         // View에서 가져온 값이 있으면 우선 사용하고, 없으면 계산된 값 사용
         const finalCancelRate = cancellationRateView?.cancellation_ticketing_rate || cancelRate;
         const finalProxyRate = proxyRateView?.proxy_ticketing_rate || proxyRate;
+        
+        // 확정 건수 + 취소 건수 = 총 진행 건수 계산
+        const cancelConfirmed = cancellationRateView?.confirmed_count || 0;
+        const cancelCancelled = cancellationRateView?.cancelled_count || 0;
+        const totalCancellationTicketings = cancelConfirmed + cancelCancelled;
+        
+        const proxyConfirmed = proxyRateView?.confirmed_count || 0;
+        const proxyCancelled = proxyRateView?.cancelled_count || 0;
+        const totalProxyTicketings = proxyConfirmed + proxyCancelled;
 
         setSeller({
           id: profileData.id,
@@ -158,8 +167,8 @@ export default function SellerProfile() {
           description: profileData.description || "",
           proxyTicketingSuccessRate: parseFloat(finalProxyRate.toFixed(1)),
           cancellationTicketingSuccessRate: parseFloat(finalCancelRate.toFixed(1)),
-          totalProxyTicketings: proxyTotal,
-          totalCancellationTicketings: cancelTotal,
+          totalProxyTicketings: totalProxyTicketings > 0 ? totalProxyTicketings : proxyTotal,
+          totalCancellationTicketings: totalCancellationTicketings > 0 ? totalCancellationTicketings : cancelTotal,
         })
 
         // 리뷰 데이터 변환
