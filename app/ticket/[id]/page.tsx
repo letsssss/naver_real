@@ -84,6 +84,7 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
     responseRate: 0,
     successfulSales: 0,
     rating: 0, // 평균 별점
+    reviewCount: 0, // 리뷰 수 추가
   })
 
   useEffect(() => {
@@ -102,14 +103,12 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
         .eq("seller_id", sellerId)
         .maybeSingle()
 
-      const { data: ratingData } = await supabase
-        .from("ratings")
-        .select("rating")
+      // 기존 ratings 직접 조회 및 계산 코드 대신 seller_rating_stats_view 사용
+      const { data: ratingStats } = await supabase
+        .from("seller_rating_stats_view")
+        .select("avg_rating, review_count")
         .eq("seller_id", sellerId)
-
-      const avgRating = ratingData && ratingData.length > 0
-        ? ratingData.reduce((sum, r) => sum + r.rating, 0) / ratingData.length
-        : 0
+        .maybeSingle();
 
       setSeller({
         id: profileData?.id || "",
@@ -117,7 +116,8 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
         profileImage: profileData?.profile_image || "/placeholder.svg",
         responseRate: profileData?.response_rate || 98,
         successfulSales: statsData?.successful_sales || 124,
-        rating: parseFloat(avgRating.toFixed(1)), // 평균 별점 추가
+        rating: ratingStats?.avg_rating || 0,
+        reviewCount: ratingStats?.review_count || 0,
       })
     }
 
@@ -163,6 +163,7 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
                       <div className="flex items-center text-yellow-500">
                         <Star className="h-4 w-4 fill-current" />
                         <span className="ml-1 font-medium">{seller.rating}</span>
+                        <span className="text-gray-500 text-xs ml-1">({seller.reviewCount})</span>
                       </div>
                     </div>
                     
