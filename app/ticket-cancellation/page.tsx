@@ -8,6 +8,7 @@ import Image from "next/image"
 import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, RefreshCw, TicketX } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { createBrowserClient } from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -102,19 +103,14 @@ export default function TicketCancellationPage() {
   // 취켓팅 가능 티켓 가져오기
   const fetchCancellationTickets = async () => {
     try {
-      setLoading(true)
-      setError("")
-      console.log("취켓팅 가능 티켓 불러오기 시작...")
-      
-      // API 호출을 available-posts로 변경
-      let apiUrl = '/api/available-posts'
-      console.log("API 호출 (구매 가능한 게시물):", apiUrl)
-      
-      // 캐시 방지를 위한 타임스탬프 추가
+      setLoading(true);
+      setError("");
+
+      let apiUrl = '/api/available-posts';
       const timestamp = Date.now();
       apiUrl = `${apiUrl}?t=${timestamp}`;
-      
-      let response = await fetch(apiUrl, {
+
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -123,69 +119,53 @@ export default function TicketCancellationPage() {
         },
         cache: 'no-store',
         next: { revalidate: 0 }
-      })
-      
-      console.log("API 응답 상태:", response.status)
-      let data = await response.json()
-      console.log("전체 게시물 수:", data.posts?.length || 0)
-      console.log("데이터 소스:", data.source || "알 수 없음");
-      
-      if (!data.posts || data.posts.length === 0) {
-        console.log("게시물이 없습니다. API 응답:", data);
+      });
+
+      const data = await response.json();
+      const posts = data.posts || [];
+
+      if (posts.length === 0) {
         setTickets([]);
-        setLoading(false);
         return;
       }
-      
-      const posts = data.posts;
-      console.log("🔥 디버깅: post 전체", JSON.stringify(posts[0], null, 2));
-      
-      // 작성자 ID 필드명 문제 디버깅
-      console.log("=== 데이터 구조 디버깅 ===");
-      if (posts && posts.length > 0) {
-        const firstPost = posts[0];
-        console.log("첫 번째 게시물:", firstPost);
-        console.log("게시물 키:", Object.keys(firstPost).join(', '));
-      }
-      
-      // 게시물에 직접 작성자 정보 추가 (API 호출 없이 처리)
+
+      // 1. 작성자 ID 추출
+      const sellerIds = [...new Set(posts.map((post: any) => post.author?.id).filter(Boolean))];
+
+      // 2. 평균 별점 뷰에서 조회
+      const supabase = createBrowserClient();
+      const { data: avgRatings } = await supabase
+        .from("seller_avg_rating")
+        .select("seller_id, avg_rating")
+        .in("seller_id", sellerIds);
+
+      const avgRatingMap = new Map(avgRatings?.map(r => [r.seller_id, r.avg_rating]));
+
+      // 3. 게시물에 작성자 정보 연결
       const enrichedPosts = posts.map((post: any) => {
-        // 가능한 authorId 필드 확인
-        const authorId = post.authorId || post.author_id || post.userId || post.user_id || post.id;
-        
-        // 평면 구조의 필드들을 author 객체에 맵핑
-        const finalAuthor = {
-          id: authorId || '',
-          name: post.author?.name || post.author_name || post.name || post.displayName || post.display_name || '판매자 정보 없음',
-          email: post.author?.email || post.author_email || post.email || '',
-          rating: post.author?.rating || post.rating || 4.5,
-          profileImage: post.author?.profileImage || post.author_image || post.profile_image || post.profileImage || post.avatar_url || post.avatarUrl || ''
+        const authorId = post.author?.id || post.author_id || post.userId;
+        const avgRating = avgRatingMap.get(authorId) ?? 0;
+
+        const author = {
+          id: authorId || "",
+          name: post.author?.name || post.author_name || post.name || "판매자 정보 없음",
+          email: post.author?.email || post.author_email || post.email || "",
+          rating: avgRating,
+          profileImage: post.author?.profileImage || post.profile_image || post.avatar_url || ""
         };
-        
-        console.log("🧪 최종 author 매핑:", finalAuthor);
-        console.log("작성자 정보 출처:", post.author?.name ? "author 객체" : post.author_name ? "author_name 필드" : "기타 필드");
-        
-        // 디버깅: 작성자 정보 매핑 로그
-        console.log(`게시물 ${post.id}의 작성자 정보 매핑:`, finalAuthor);
-        console.log("작성자 이름 추출:", post.author_name, post.name, finalAuthor.name);
-        
-        // 게시물에 필요한 필드 확인 및 추가
-        return {
-          ...post,
-          author: finalAuthor
-        };
+
+        return { ...post, author };
       });
-      
-      console.log("작성자 정보가 포함된 게시물 처리 완료:", enrichedPosts.length);
+
       setTickets(enrichedPosts);
     } catch (err) {
-      console.error("취켓팅 티켓 불러오기 오류:", err)
-      setError("데이터를 불러오는데 실패했습니다.")
+      console.error("취켓팅 티켓 불러오기 오류:", err);
+      setError("데이터를 불러오는데 실패했습니다.");
       setTickets([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
