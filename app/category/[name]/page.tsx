@@ -5,6 +5,15 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import TicketList from "@/components/ticket-list"
 
+// 카테고리 이름 매핑 (URL에 사용되는 값 -> 화면에 표시할 값)
+const categoryDisplayNames: Record<string, string> = {
+  "concert": "콘서트",
+  "콘서트": "콘서트",  // 한글 URL 호환성 유지
+  "뮤지컬-연극": "뮤지컬/연극",
+  "스포츠": "스포츠",
+  "전시-행사": "전시/행사"
+};
+
 const tickets = [
   {
     id: 1,
@@ -42,6 +51,9 @@ const tickets = [
 ]
 
 export default function CategoryPage({ params }: { params: { name: string } }) {
+  // URL 디코딩 및 매핑 적용
+  const displayName = categoryDisplayNames[params.name] || decodeURIComponent(params.name);
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
@@ -50,7 +62,7 @@ export default function CategoryPage({ params }: { params: { name: string } }) {
             <ArrowLeft className="h-5 w-5 mr-2" />
             <span>홈으로 돌아가기</span>
           </Link>
-          <h1 className="text-3xl font-bold mt-4 capitalize">{params.name}</h1>
+          <h1 className="text-3xl font-bold mt-4 capitalize">{displayName}</h1>
         </div>
       </header>
 
@@ -70,7 +82,7 @@ export default function CategoryPage({ params }: { params: { name: string } }) {
           </Button>
         </div>
 
-        {params.name.toLowerCase() === "콘서트" ? (
+        {params.name.toLowerCase() === "콘서트" || params.name.toLowerCase() === "concert" ? (
           <TicketList />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
