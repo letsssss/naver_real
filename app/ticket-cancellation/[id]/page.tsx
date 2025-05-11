@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import KakaoPay from "@/components/payment/KakaoPay"
+import { createBrowserClient } from "@/lib/supabase"
 
 // 티켓 시트 타입 정의
 interface SeatOption {
@@ -315,10 +316,52 @@ export default function TicketCancellationDetail() {
             } else {
               console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
             }
+            
+            // Supabase 클라이언트 생성
+            const supabase = createBrowserClient();
+            
+            // cancellation_ticketing_stats_view에서 데이터 가져오기
+            const { data: cancelStats } = await supabase
+              .from("cancellation_ticketing_stats_view")
+              .select("confirmed_count, cancelled_count")
+              .eq("seller_id", sellerId)
+              .maybeSingle();
+              
+            // 총 건수 계산
+            const confirmed = cancelStats?.confirmed_count || 0;
+            const cancelled = cancelStats?.cancelled_count || 0;
+            const total = confirmed + cancelled;
+            
+            console.log("취켓팅 통계:", { confirmed, cancelled, total });
           }
         } catch (error) {
           console.error("판매자 통계 API 호출 오류:", error);
           // 에러가 발생해도 게시물 데이터는 계속 표시
+        }
+        
+        // 취켓팅 통계 기본값 (API에서 가져오지 못한 경우)
+        let totalCancellationTicketings = 0;
+        
+        // Supabase 클라이언트 생성 (이미 위에서 생성되지 않은 경우)
+        const supabase = createBrowserClient();
+        
+        try {
+          // cancellation_ticketing_stats_view에서 데이터 가져오기
+          const { data: cancelStats } = await supabase
+            .from("cancellation_ticketing_stats_view")
+            .select("confirmed_count, cancelled_count")
+            .eq("seller_id", sellerId)
+            .maybeSingle();
+            
+          // 총 건수 계산
+          const confirmed = cancelStats?.confirmed_count || 0;
+          const cancelled = cancelStats?.cancelled_count || 0;
+          totalCancellationTicketings = confirmed + cancelled;
+          
+          console.log("취켓팅 통계 (개별 호출):", { confirmed, cancelled, total: totalCancellationTicketings });
+        } catch (error) {
+          console.error("취켓팅 통계 조회 오류:", error);
+          // 오류 발생 시 기본값 유지
         }
         
         setTicketData({
@@ -340,7 +383,7 @@ export default function TicketCancellationDetail() {
             profileImage: postData.author?.profileImage || '',
             successfulSales: sellerDetail.successfulSales,
             responseRate: sellerDetail.responseRate,
-            totalCancellationTicketings: 124
+            totalCancellationTicketings: totalCancellationTicketings || 0
           },
           seatOptions: seatOptions
         });
