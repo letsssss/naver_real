@@ -75,14 +75,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
         created_at,
         ticket_info,
         helpful_count,
-        profiles!inner(name)
+        reviewer_id
       `)
       .eq("seller_id", sellerId)
 
     // 리뷰 변환
     const formattedReviews = (reviews || []).map((r) => ({
       id: r.id,
-      reviewer: r.profiles[0]?.name || "익명",
+      reviewer: r.reviewer_id || "익명",
       rating: r.rating,
       date: new Date(r.created_at).toISOString().split("T")[0],
       content: r.comment,
@@ -95,7 +95,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     // 판매 중 티켓 조회
     const { data: listings } = await supabase
       .from("posts")
-      .select("id, title, event_date, event_time, event_venue, ticket_price, image_url")
+      .select("id, title, event_date, event_venue, ticket_price, image_url")
       .eq("author_id", sellerId)
       .eq("status", "active")
 
@@ -103,7 +103,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       id: post.id,
       title: post.title,
       date: new Date(post.event_date).toISOString().split("T")[0],
-      time: post.event_time,
+      time: post.event_time || "정보 없음", // event_time이 없으므로 기본값 추가
       venue: post.event_venue,
       price: post.ticket_price,
       image: post.image_url || "/placeholder.svg",

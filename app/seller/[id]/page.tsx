@@ -92,7 +92,7 @@ export default function SellerProfile() {
             comment,
             created_at,
             ticket_info,
-            profiles(name)
+            reviewer_id
           `)
           .eq("seller_id", sellerId)
           .order("created_at", { ascending: false })
@@ -104,7 +104,7 @@ export default function SellerProfile() {
         // 5. 판매 중인 티켓 조회
         const { data: listingsData, error: listingsError } = await supabase
           .from("posts")
-          .select("id, title, event_date, event_time, event_venue, ticket_price, image_url")
+          .select("id, title, event_date, event_venue, ticket_price, image_url")
           .eq("author_id", sellerId)
           .eq("status", "active")
 
@@ -149,7 +149,7 @@ export default function SellerProfile() {
         if (reviewsData) {
           const formattedReviews = reviewsData.map(review => ({
             id: review.id,
-            reviewer: review.profiles && review.profiles[0]?.name || "익명",
+            reviewer: review.reviewer_id,
             rating: review.rating,
             date: review.created_at,
             content: review.comment,
@@ -164,7 +164,6 @@ export default function SellerProfile() {
             id: ticket.id,
             title: ticket.title,
             date: ticket.event_date,
-            time: ticket.event_time,
             venue: ticket.event_venue,
             price: ticket.ticket_price,
             image: ticket.image_url || "/placeholder.svg?height=150&width=300",
@@ -391,10 +390,6 @@ export default function SellerProfile() {
                             <div className="flex items-center">
                               <Calendar className="h-4 w-4 mr-1" />
                               <span>{ticket.date}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <Clock className="h-4 w-4 mr-1" />
-                              <span>{ticket.time}</span>
                             </div>
                             <div className="flex items-center">
                               <MapPin className="h-4 w-4 mr-1" />
