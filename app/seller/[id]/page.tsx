@@ -127,6 +127,23 @@ export default function SellerProfile() {
         const cancelSuccess = statsData?.cancellation_ticketing_success || 0
         const cancelTotal = statsData?.cancellation_ticketing_total || 0
         const cancelRate = cancelTotal > 0 ? (cancelSuccess / cancelTotal) * 100 : 0
+        
+        // seller_stats 말고 view를 직접 호출하려면 (선택사항)
+        const { data: cancellationRateView } = await supabase
+          .from("cancellation_ticketing_stats_view")
+          .select("cancellation_ticketing_rate")
+          .eq("seller_id", sellerId)
+          .maybeSingle();
+        
+        const { data: proxyRateView } = await supabase
+          .from("proxy_ticketing_stats_view")
+          .select("proxy_ticketing_rate")
+          .eq("seller_id", sellerId)
+          .maybeSingle();
+        
+        // View에서 가져온 값이 있으면 우선 사용하고, 없으면 계산된 값 사용
+        const finalCancelRate = cancellationRateView?.cancellation_ticketing_rate || cancelRate;
+        const finalProxyRate = proxyRateView?.proxy_ticketing_rate || proxyRate;
 
         setSeller({
           id: profileData.id,
@@ -139,8 +156,8 @@ export default function SellerProfile() {
           successfulSales: statsData?.successful_sales || 0,
           verificationBadges,
           description: profileData.description || "",
-          proxyTicketingSuccessRate: parseFloat(proxyRate.toFixed(1)),
-          cancellationTicketingSuccessRate: parseFloat(cancelRate.toFixed(1)),
+          proxyTicketingSuccessRate: parseFloat(finalProxyRate.toFixed(1)),
+          cancellationTicketingSuccessRate: parseFloat(finalCancelRate.toFixed(1)),
           totalProxyTicketings: proxyTotal,
           totalCancellationTicketings: cancelTotal,
         })
