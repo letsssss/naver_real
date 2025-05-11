@@ -48,6 +48,7 @@ interface TicketData {
     profileImage: string;
     successfulSales?: number;
     responseRate?: number;
+    totalCancellationTicketings?: number;
   };
   seatOptions: SeatOption[];
 }
@@ -338,7 +339,8 @@ export default function TicketCancellationDetail() {
             rating: postData.author?.rating || 4.5,
             profileImage: postData.author?.profileImage || '',
             successfulSales: sellerDetail.successfulSales,
-            responseRate: sellerDetail.responseRate
+            responseRate: sellerDetail.responseRate,
+            totalCancellationTicketings: 124
           },
           seatOptions: seatOptions
         });
@@ -755,9 +757,10 @@ export default function TicketCancellationDetail() {
 
                 {/* 판매자 정보 섹션 추가 */}
                 <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-semibold mb-2">판매자 정보</h3>
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+                  <h3 className="text-sm font-semibold mb-3">판매자 정보</h3>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-100">
                       <Image
                         src={ticketData.seller.profileImage || "/placeholder.svg"}
                         alt={ticketData.seller.name}
@@ -765,48 +768,45 @@ export default function TicketCancellationDetail() {
                         className="object-cover"
                       />
                     </div>
+                    
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-                        <span>판매자:</span>
+                      <div className="flex items-center gap-2">
+                        <p className="text-gray-500">판매자:</p>
                         {ticketData.seller.id ? (
-                          <Link 
-                            href={`/seller/${ticketData.seller.id}`} 
-                            className="text-blue-600 hover:underline flex items-center"
-                          >
-                            {ticketData.seller.name}
-                            <div className="flex items-center ml-2 text-yellow-500">
-                              <Star className="h-3 w-3 fill-current" />
-                              <span className="text-xs ml-0.5">{ticketData.seller.rating}</span>
-                            </div>
-                          </Link>
+                          <span className="font-medium text-blue-600">{ticketData.seller.name}</span>
                         ) : (
-                          <span className="text-gray-500">
-                            {ticketData.seller.name}
-                          </span>
+                          <span className="text-gray-500">{ticketData.seller.name}</span>
                         )}
+                        <div className="flex items-center text-yellow-500">
+                          <Star className="h-4 w-4 fill-current" />
+                          <span className="ml-1 font-medium">{ticketData.seller.rating}</span>
+                        </div>
                       </div>
+                      
                       {ticketData.seller.id ? (
-                        <p className="text-xs text-gray-500">
-                          거래 성사 124건 | 응답률 98%
+                        <p className="text-sm text-gray-600 mt-1">
+                          계약 성사 {ticketData.seller.totalCancellationTicketings}건 | 응답률 {ticketData.seller.responseRate || 98}%
                         </p>
                       ) : (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm text-gray-600 mt-1">
                           판매자 상세 정보를 확인할 수 없습니다
                         </p>
                       )}
                     </div>
-                    {ticketData.seller.id ? (
-                      <Link href={`/seller/${ticketData.seller.id}`}>
-                        <Button variant="outline">
-                          프로필 보기
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button variant="outline" disabled className="opacity-50 cursor-not-allowed">
-                        프로필 없음
-                      </Button>
-                    )}
                   </div>
+                  
+                  {ticketData.seller.id ? (
+                    <Link 
+                      href={`/seller/${ticketData.seller.id}`} 
+                      className="block text-center mt-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50 transition"
+                    >
+                      프로필 보기
+                    </Link>
+                  ) : (
+                    <div className="block text-center mt-3 py-2 bg-gray-100 border border-gray-200 rounded text-sm text-gray-400 cursor-not-allowed">
+                      프로필 없음
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

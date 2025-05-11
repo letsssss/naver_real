@@ -87,27 +87,40 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
             <p className="mt-4 text-gray-500">{ticketData.description}</p>
             <div className="mt-8 border-t pt-6">
               <h2 className="text-xl font-semibold mb-4">판매자 정보</h2>
-              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-200">
-                  <Image src="/placeholder.svg" alt="판매자 프로필" fill className="object-cover" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Link href="/seller/seller123" className="font-medium hover:text-blue-600">
-                      티켓마스터
-                    </Link>
-                    <div className="flex items-center text-yellow-500">
-                      <Star className="h-4 w-4 fill-current" />
-                      <span className="ml-1 text-sm">4.8</span>
-                      <span className="text-gray-500 text-xs ml-1">(56)</span>
-                    </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium mb-3">판매자 정보</h3>
+                
+                <div className="flex items-center gap-3">
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gray-100">
+                    <Image
+                      src="/placeholder.svg"
+                      alt="판매자 프로필"
+                      fill
+                      className="object-cover"
+                    />
                   </div>
-                  <p className="text-sm text-gray-500">거래 성사 124건 | 응답률 98%</p>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-gray-500">판매자:</p>
+                      <span className="font-medium text-blue-600">티켓마스터</span>
+                      <div className="flex items-center text-yellow-500">
+                        <Star className="h-4 w-4 fill-current" />
+                        <span className="ml-1 font-medium">4.8</span>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mt-1">
+                      계약 성사 124건 | 응답률 98%
+                    </p>
+                  </div>
                 </div>
-                <Link href="/seller/seller123">
-                  <Button variant="outline" className="text-xs px-3 h-8">
-                    프로필 보기
-                  </Button>
+                
+                <Link 
+                  href="/seller/seller123" 
+                  className="block text-center mt-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50 transition"
+                >
+                  프로필 보기
                 </Link>
               </div>
             </div>
