@@ -902,8 +902,16 @@ export default function TicketCancellationDetail() {
                   <AlertCircle className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
                   <div>
                     <p className="text-blue-700 font-medium">취켓팅 서비스 안내</p>
-                    <p className="text-sm text-blue-600">
+                    <p className="text-sm text-blue-600 mb-2">
                       취소표를 대신 잡아드리는 서비스입니다.
+                    </p>
+                    <p className="text-sm text-blue-600 mb-2">
+                      이지티켓은 판매자와 구매자가 직접 거래하는 C2C 중개 플랫폼입니다. 
+                      운영자는 티켓 예매에 개입하지 않으며, ID/PW 등 개인정보를 요구하거나 수집하지 않습니다.
+                      결제는 에스크로 방식으로 안전하게 보호됩니다.
+                    </p>
+                    <p className="text-sm text-blue-600">
+                      입금 완료 후 1 영업일 이내로 예약 확정 됩니다. 예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.
                     </p>
                   </div>
                 </div>
