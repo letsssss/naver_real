@@ -903,7 +903,7 @@ export default function TicketCancellationDetail() {
                   <div>
                     <p className="text-blue-700 font-medium">취켓팅 서비스 안내</p>
                     <p className="text-sm text-blue-600">
-                      취소표를 대신 잡아드리는 서비스입니다. 본인 계정으로 들어가서 잡아드립니다!
+                      취소표를 대신 잡아드리는 서비스입니다.
                     </p>
                   </div>
                 </div>
