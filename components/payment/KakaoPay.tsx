@@ -91,17 +91,16 @@ export default function KakaoPay({
 
       console.log('✅ 결제 응답:', response);
 
-      // 🛡 결제 성공 조건: 안전하게 여러 가지 경우를 처리
-      // 1. status가 'DONE'인 경우 (일반적인 성공 케이스)
-      // 2. 또는 paymentId가 있고 transactionType이 'PAYMENT'인 경우 (카카오페이 응답 패턴)
-      // 3. 또는 success가 true인 경우 (일부 PG사 응답 패턴)
-      const isSuccessful = response && (
-        (response as any).status === 'DONE' || 
-        (response.paymentId && response.transactionType === 'PAYMENT') ||
-        (response as any).success === true
-      );
+      // 🛡️ 결제 성공 조건: 모든 조건을 AND로 확인 (더 엄격하게)
+      // 안전하게 결제 완료 여부를 판단하기 위해 모든 조건 필요
+      const isSuccess =
+        response &&
+        response.paymentId &&
+        response.transactionType === 'PAYMENT' &&
+        (response as any).status === 'DONE' &&
+        (response as any).success === true;
 
-      if (isSuccessful) {
+      if (isSuccess) {
         console.log('🎉 결제 성공:', {
           paymentId: response.paymentId,
           status: (response as any).status,
@@ -120,10 +119,10 @@ export default function KakaoPay({
         // 디버깅을 위한 전체 응답 로깅
         console.log("📌 응답 객체 전체 확인:", JSON.stringify(response, null, 2));
         
-        toast.warning("결제 상태를 확인할 수 없습니다. 관리자에게 문의해주세요.");
+        toast.warning("결제가 완료되지 않았습니다.");
         if (onFail) onFail({
-          code: 'PAYMENT_STATUS_UNCLEAR',
-          message: `결제 상태 불확실: paymentId=${response?.paymentId}, status=${(response as any)?.status}, transactionType=${response?.transactionType}`,
+          code: 'NOT_SUCCESS',
+          message: '결제가 완료되지 않았습니다.',
           response
         });
       }
