@@ -17,6 +17,7 @@ interface KGInicisProps {
   amount: number;
   orderName: string;
   customerName?: string;
+  customerEmail?: string;
   ticketInfo?: string;
   phoneNumber: string;
   selectedSeats?: string[];
@@ -29,6 +30,7 @@ export default function KGInicis({
   amount,
   orderName,
   customerName = '고객',
+  customerEmail = 'guest@easyticket82.com',
   ticketInfo = '',
   phoneNumber,
   selectedSeats = [],
@@ -108,7 +110,8 @@ export default function KGInicis({
         payMethod: 'CARD', // 신용카드 결제로 변경
         customer: {
           fullName: customerName,
-          phoneNumber: phoneNumber
+          phoneNumber: phoneNumber,
+          email: customerEmail
         },
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });

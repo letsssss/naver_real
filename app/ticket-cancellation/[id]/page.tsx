@@ -1141,6 +1141,7 @@ export default function TicketCancellationDetail() {
                               amount={totalAmount}
                               orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
                               customerName={user?.name || "고객"}
+                              customerEmail={user?.email || "guest@easyticket82.com"}
                               ticketInfo={`${ticketData.title} (${seatLabels})`}
                               phoneNumber={phoneNumber}
                               selectedSeats={selectedSeats}
