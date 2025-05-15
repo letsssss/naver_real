@@ -1091,6 +1091,8 @@ export default function TicketCancellationDetail() {
                               ticketInfo={`${ticketData.title} (${seatLabels})`}
                               phoneNumber={phoneNumber}
                               selectedSeats={selectedSeats}
+                              userId={String(currentUserId || user?.id || "")}
+                              postId={String(id)}
                               onSuccess={handlePaymentSuccess}
                               onFail={handlePaymentFail}
                               disabled={!termsAgreed}
@@ -1145,6 +1147,8 @@ export default function TicketCancellationDetail() {
                               ticketInfo={`${ticketData.title} (${seatLabels})`}
                               phoneNumber={phoneNumber}
                               selectedSeats={selectedSeats}
+                              userId={String(currentUserId || user?.id || "")}
+                              postId={String(id)}
                               onSuccess={handlePaymentSuccess}
                               onFail={handlePaymentFail}
                               disabled={!termsAgreed}
