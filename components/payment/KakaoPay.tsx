@@ -152,7 +152,8 @@ export default function KakaoPay({
           message: `결제 상태가 명확하지 않습니다. success: ${response?.success}, status: ${response?.status || '상태 없음'}`,
           // @ts-ignore
           paymentStatus: response?.status,
-          paymentSuccess: response?.success,
+          // 타입 오류 해결을 위해 any로 변환
+          paymentSuccess: (response as any)?.success,
           response: response,
           paymentId: paymentId
         };

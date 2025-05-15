@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 interface PortOneResponse {
   status: string; // 'DONE', 'PENDING' 등의 상태값
   paymentId: string;
+  success?: boolean; // 결제 성공 여부(PortOne SDK에서는 정의되지 않았지만 실제로 반환됨)
   [key: string]: any; // 기타 속성들
 }
 
@@ -151,7 +152,8 @@ export default function KGInicis({
           message: `결제 상태가 명확하지 않습니다. success: ${response?.success}, status: ${response?.status || '상태 없음'}`,
           // @ts-ignore
           paymentStatus: response?.status,
-          paymentSuccess: response?.success,
+          // 타입 오류 해결을 위해 any로 변환
+          paymentSuccess: (response as any)?.success,
           response: response,
           paymentId: paymentId
         };
