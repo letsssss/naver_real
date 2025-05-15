@@ -127,19 +127,20 @@ export default function KGInicis({
 
       console.log('✅ 결제 응답:', response);
 
-      // 🛡️ 결제 성공 조건: 모든 조건을 AND로 확인 (더 엄격하게)
-      // 안전하게 결제 완료 여부를 판단하기 위해 모든 조건 필요
+      // 🛡️ 결제 성공 조건: KG이니시스 문서 기반으로 수정
+      // 결제 성공 확인을 더 엄격하게 처리 (status, code 모두 확인)
       const isSuccess =
         response &&
         response.paymentId &&
-        response.transactionType === 'PAYMENT' &&
-        (response as any).status === 'DONE' &&
+        (response as any).status === 'DONE' && 
+        (response as any).code !== 'FAILURE_TYPE_PG' &&
         (response as any).success === true;
 
       if (isSuccess) {
         console.log('🎉 결제 성공:', {
           paymentId: response.paymentId,
           status: (response as any).status,
+          code: (response as any).code,
           transactionType: response.transactionType,
           success: (response as any).success
         });
@@ -148,6 +149,7 @@ export default function KGInicis({
         console.warn('⚠️ 결제 실패 또는 미완료:', {
           paymentId: response?.paymentId,
           status: (response as any)?.status,
+          code: (response as any)?.code,
           transactionType: response?.transactionType,
           success: (response as any)?.success
         });
@@ -157,7 +159,7 @@ export default function KGInicis({
         
         toast.warning("결제가 완료되지 않았습니다.");
         if (onFail) onFail({
-          code: 'NOT_SUCCESS',
+          code: (response as any)?.code || 'NOT_SUCCESS',
           message: '결제가 완료되지 않았습니다.',
           response
         });

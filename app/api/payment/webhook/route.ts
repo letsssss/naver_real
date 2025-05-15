@@ -14,20 +14,34 @@ export async function POST(req: NextRequest) {
     const {
       paymentId,
       status,
+      code,
       txId,
       transactionType,
     } = body;
 
     // 필수 값 검증
-    if (!paymentId || !transactionType) {
-      console.error('⚠️ Webhook 필수 항목 누락:', { paymentId, transactionType });
-      return NextResponse.json({ success: false, message: '필수 항목 누락' }, { status: 400 });
+    if (!paymentId) {
+      console.error('⚠️ Webhook paymentId 누락:', body);
+      return NextResponse.json({ success: false, message: 'paymentId 필수 항목 누락' }, { status: 400 });
     }
 
-    // 상태 판단: PortOne에서 DONE / FAILED 로 내려주기도 함
-    const finalStatus = status === 'DONE' || transactionType === 'PAYMENT' ? 'DONE' : 'FAILED';
+    // 상태 판단 로직 개선: KG이니시스 기준으로 정확하게 판단
+    let finalStatus = 'UNKNOWN';
 
-    console.log(`🔄 결제 상태 업데이트: ${paymentId} → ${finalStatus} (txId: ${txId})`);
+    // 상태 판단: 명확한 우선순위로 검사
+    if (status === 'DONE' && code !== 'FAILURE_TYPE_PG' && transactionType === 'PAYMENT') {
+      finalStatus = 'DONE'; // 결제 성공
+    } else if (status === 'FAILED' || code === 'FAILURE_TYPE_PG') {
+      finalStatus = 'FAILED'; // 결제 실패
+    } else if (status === 'CANCELLED' || transactionType === 'CANCEL') {
+      finalStatus = 'CANCELLED'; // 결제 취소
+    } else if (transactionType === 'PAYMENT') {
+      // 추가 검증이 필요한 경우 - Webhook에서는 status가 모호할 수 있음
+      console.log('⚠️ 모호한 상태, API 추가 검증 필요:', { status, code, transactionType });
+      finalStatus = 'PENDING';
+    }
+
+    console.log(`🔄 결제 상태 업데이트: ${paymentId} → ${finalStatus} (txId: ${txId}, code: ${code})`);
 
     // DB 업데이트
     const { data, error } = await supabase
@@ -35,6 +49,7 @@ export async function POST(req: NextRequest) {
       .update({ 
         status: finalStatus,
         transaction_id: txId,
+        code: code,
         updated_at: new Date().toISOString()
       })
       .eq('id', paymentId)
