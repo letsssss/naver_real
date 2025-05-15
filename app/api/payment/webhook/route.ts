@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`🔄 결제 상태 업데이트: ${paymentId} → ${finalStatus} (txId: ${txId}, code: ${code})`);
 
-    // DB 업데이트
+    // DB 업데이트 - payment_id 필드로 레코드 검색하도록 수정
     const { data, error } = await supabase
       .from('payments')
       .update({ 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         code: code,
         updated_at: new Date().toISOString()
       })
-      .eq('id', paymentId)
+      .eq('payment_id', paymentId) // 'id' → 'payment_id'로 변경: 실제 테이블 구조에 맞춤
       .select();
 
     if (error) {
