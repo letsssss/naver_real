@@ -97,6 +97,7 @@ export default function KGInicis({
         selectedSeats: selectedSeats
       });
       
+      // PortOne 결제 요청을 간소화하여 필수 속성만 포함
       const response = await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
@@ -105,20 +106,9 @@ export default function KGInicis({
         currency: 'CURRENCY_KRW',
         channelKey: INICIS_CHANNEL_KEY,
         payMethod: 'CARD', // 신용카드 결제로 변경
-        card: {
-          cardCompany: 'CARD_COMPANY_NONE', // 모든 카드사 허용
-          installmentMonth: 0, // 일시불
-          useCardpoint: false,
-          useAppCard: false
-        },
         customer: {
           fullName: customerName,
           phoneNumber: phoneNumber
-        },
-        bypass: { 
-          inicis: { 
-            merchantId: INICIS_MID // 추가: KG이니시스 상점 아이디
-          } 
         },
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
