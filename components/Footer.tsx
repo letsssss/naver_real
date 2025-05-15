@@ -15,6 +15,7 @@ export function Footer() {
             <li>사업장 주소지: 경상남도 김해시 월산로 82-55, 1205동 304호(부곡동, 월산마을 부영아파트)</li>
             <li>전화번호: 055-311-0278, 070-8065-1536</li>
             <li>이메일: easyticket82@gmail.com</li>
+            <li>간이과세자</li>
           </ul>
         </div>
       </div>
