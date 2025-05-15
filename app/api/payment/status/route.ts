@@ -18,11 +18,12 @@ export async function GET(req: NextRequest) {
 
     const supabase = createClient();
     
-    // Supabase에서 payment_id로 결제 상태 조회
+    // ⭐️ 중요: payment_id -> id 필드로 수정 (웹훅과 일치시킴)
+    // Supabase에서 id 필드로 결제 상태 조회 (payment_id 아님!)
     const { data, error } = await supabase
       .from('payments')
       .select('status, transaction_id, code, updated_at')
-      .eq('payment_id', payment_id)
+      .eq('id', payment_id) // payment_id -> id로 변경
       .single();
 
     if (error) {
