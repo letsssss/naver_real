@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import KakaoPay from "@/components/payment/KakaoPay"
+import KGInicis from "@/components/payment/KGInicis"
 import { createBrowserClient } from "@/lib/supabase"
 
 // 티켓 시트 타입 정의
@@ -1084,6 +1085,59 @@ export default function TicketCancellationDetail() {
                               </label>
                             </div>
                             <KakaoPay 
+                              amount={totalAmount}
+                              orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
+                              customerName={user?.name || "고객"}
+                              ticketInfo={`${ticketData.title} (${seatLabels})`}
+                              phoneNumber={phoneNumber}
+                              selectedSeats={selectedSeats}
+                              onSuccess={handlePaymentSuccess}
+                              onFail={handlePaymentFail}
+                              disabled={!termsAgreed}
+                            />
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : selectedPaymentMethod === "card" ? (
+                    <div className="mt-6">
+                      {/* 선택한 좌석 가격 합계 계산 */}
+                      {(() => {
+                        const totalAmount = selectedSeats.reduce((sum, seatId) => {
+                          const seat = ticketData?.seatOptions.find(s => s.id === seatId);
+                          return sum + (seat?.price || 0);
+                        }, 0);
+                        
+                        // 선택한 좌석 라벨 계산
+                        const seatLabels = selectedSeats
+                          .map((seatId) => {
+                            const seat = ticketData?.seatOptions.find((s) => s.id === seatId)
+                            return seat ? seat.label : ""
+                          })
+                          .filter(Boolean)
+                          .join(", ");
+                        
+                        return (
+                          <>
+                            <div className="p-3 text-gray-700 mb-4">
+                              <p className="text-sm">입금 완료 후 1 영업일 이내로 예약 확정 됩니다</p>
+                              <p className="text-sm">예약 확정 이후, 3일 이내 티켓을 확보하지 못할경우 전액 환불 신청이 가능합니다.</p>
+                            </div>
+                            <div className="flex items-start space-x-2 mb-4">
+                              <input
+                                type="checkbox"
+                                id="terms-card"
+                                checked={termsAgreed}
+                                onChange={(e) => setTermsAgreed(e.target.checked)}
+                                className="mt-1"
+                                required
+                              />
+                              <label htmlFor="terms-card" className="text-sm text-gray-700">
+                                <span className="text-red-500 font-bold mr-1">[필수]</span>
+                                상품 결제 후 변심에 의한 취소가 불가하며, 재판매가 가능함을 확인하고 동의합니다.
+                              </label>
+                            </div>
+                            <KGInicis 
                               amount={totalAmount}
                               orderName={`[취켓팅] ${ticketData.title} - ${ticketData.date}`}
                               customerName={user?.name || "고객"}
