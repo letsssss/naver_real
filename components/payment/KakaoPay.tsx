@@ -37,10 +37,8 @@ export default function KakaoPay({
   const STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID || '';
   const CHANNEL_KEY = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || '';
 
-  // 결제 시도를 DB에 기록하는 함수
   const initiatePayment = async () => {
     try {
-      // ✅ 변경: 직접 만든 API 사용
       const paymentId = `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       
       const response = await fetch("/api/payment/init", {
@@ -70,7 +68,6 @@ export default function KakaoPay({
     }
   };
 
-  // ✅ 결제 상태 폴링 함수
   const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
     console.log(`🔍 결제 상태 확인 시작: ${paymentId}`);
     let attempts = 0;
@@ -81,19 +78,14 @@ export default function KakaoPay({
         const data = await response.json();
         
         console.log(`📊 결제 상태 폴링 (${attempts + 1}/${maxAttempts}):`, data);
+        console.log(`💡 현재 상태: ${data?.status}`);
         
-        // 명시적으로 status 값 로깅
-        console.log(`💡 현재 확인된 상태: ${data?.status}, success: ${data?.success}`);
-        
-        if (data.success && data.status === 'DONE') {
-          console.log('✅ 결제 성공 확인됨!');
+        if (data.status === 'DONE') {
           return 'DONE';
-        } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED')) {
-          console.log('❌ 결제 실패/취소 확인됨:', data.status);
+        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
           return data.status;
         }
         
-        // 1.5초 대기
         await new Promise(resolve => setTimeout(resolve, 1500));
         attempts++;
       } catch (error) {
@@ -102,7 +94,6 @@ export default function KakaoPay({
       }
     }
     
-    console.log('⚠️ 폴링 시간 초과: 결제 상태 확인 불가');
     return null;
   };
 
@@ -134,7 +125,6 @@ export default function KakaoPay({
 
     setWaitingPayment(true);
     
-    // 서버에서 paymentId 생성 (DB에 결제 시도 기록)
     const paymentId = await initiatePayment();
     if (!paymentId) {
       setWaitingPayment(false);
@@ -146,7 +136,6 @@ export default function KakaoPay({
     try {
       console.log('🔄 카카오페이 결제 요청:', { STORE_ID, paymentId, amount, paymentAmount });
       
-      // PortOne SDK로 결제창 호출
       const response = await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
@@ -168,19 +157,15 @@ export default function KakaoPay({
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
 
-      console.log('✅ PortOne 응답 (결제 흐름만 판단):', response);
+      console.log('✅ PortOne 응답:', response);
 
-      // ✅ 변경: SDK 응답만으로 판단하지 않고 폴링 상태 확인
       toast.info("결제 상태 확인 중입니다...");
       const finalStatus = await pollPaymentStatus(paymentId);
       
       if (finalStatus === 'DONE') {
-        console.log('🎉 백엔드 결제 검증 성공:', { paymentId, finalStatus });
         toast.success("결제가 완료되었습니다!");
         if (onSuccess) onSuccess(paymentId);
       } else {
-        console.warn('⚠️ 백엔드 결제 검증 실패 또는 시간 초과:', { paymentId, finalStatus });
-        
         toast.warning(finalStatus === 'CANCELLED' 
           ? "결제가 취소되었습니다." 
           : "결제가 완료되지 않았습니다.");
@@ -228,7 +213,7 @@ export default function KakaoPay({
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor"/>
             <path d="M12.5 7H11V13L16.2 16.2L17 14.9L12.5 12.2V7Z" fill="currentColor"/>
           </svg>

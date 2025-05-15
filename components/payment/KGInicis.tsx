@@ -39,12 +39,10 @@ export default function KGInicis({
   const STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID || '';
   const INICIS_CHANNEL_KEY = 'channel-key-0d84a866-ae26-4afa-9649-2ae0bb1f938b';
 
-  // 결제 시도를 DB에 기록하는 함수
   const initiatePayment = async () => {
     try {
-      // ✅ 변경: 직접 만든 API 사용
       const paymentId = `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      
+
       const response = await fetch("/api/payment/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,30 +70,24 @@ export default function KGInicis({
     }
   };
 
-  // ✅ 결제 상태 폴링 함수
   const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
     console.log(`🔍 결제 상태 확인 시작: ${paymentId}`);
     let attempts = 0;
-    
+
     while (attempts < maxAttempts) {
       try {
         const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
         const data = await response.json();
-        
+
         console.log(`📊 결제 상태 폴링 (${attempts + 1}/${maxAttempts}):`, data);
-        
-        // 명시적으로 status 값 로깅
-        console.log(`💡 현재 확인된 상태: ${data?.status}, success: ${data?.success}`);
-        
-        if (data.success && data.status === 'DONE') {
-          console.log('✅ 결제 성공 확인됨!');
+        console.log(`💡 현재 상태: ${data?.status}`);
+
+        if (data.status === 'DONE') {
           return 'DONE';
-        } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED')) {
-          console.log('❌ 결제 실패/취소 확인됨:', data.status);
+        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
           return data.status;
         }
-        
-        // 1.5초 대기
+
         await new Promise(resolve => setTimeout(resolve, 1500));
         attempts++;
       } catch (error) {
@@ -103,8 +95,7 @@ export default function KGInicis({
         attempts++;
       }
     }
-    
-    console.log('⚠️ 폴링 시간 초과: 결제 상태 확인 불가');
+
     return null;
   };
 
@@ -135,20 +126,18 @@ export default function KGInicis({
     }
 
     setWaitingPayment(true);
-    
-    // 서버에서 paymentId 생성 (DB에 결제 시도 기록)
+
     const paymentId = await initiatePayment();
     if (!paymentId) {
       setWaitingPayment(false);
       return;
     }
-    
+
     const paymentAmount = amount <= 0 ? 110 : amount;
 
     try {
       console.log('🔄 KG이니시스 결제 요청:', { STORE_ID, paymentId, amount, paymentAmount });
 
-      // PortOne SDK로 결제창 호출
       const response = await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
@@ -165,27 +154,23 @@ export default function KGInicis({
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
 
-      console.log('✅ PortOne 응답 (결제 흐름만 판단):', response);
+      console.log('✅ PortOne 응답:', response);
 
-      // ✅ 변경: SDK 응답만으로 판단하지 않고 폴링 상태 확인
       toast.info("결제 상태 확인 중입니다...");
       const finalStatus = await pollPaymentStatus(paymentId);
-      
+
       if (finalStatus === 'DONE') {
-        console.log('🎉 백엔드 결제 검증 성공:', { paymentId, finalStatus });
         toast.success("결제가 완료되었습니다!");
         if (onSuccess) onSuccess(paymentId);
       } else {
-        console.warn('⚠️ 백엔드 결제 검증 실패 또는 시간 초과:', { paymentId, finalStatus });
-        
-        toast.warning(finalStatus === 'CANCELLED' 
-          ? "결제가 취소되었습니다." 
+        toast.warning(finalStatus === 'CANCELLED'
+          ? "결제가 취소되었습니다."
           : "결제가 완료되지 않았습니다.");
-        
+
         if (onFail) onFail({
           code: finalStatus || 'TIMEOUT',
-          message: finalStatus === 'CANCELLED' 
-            ? '결제가 취소되었습니다.' 
+          message: finalStatus === 'CANCELLED'
+            ? '결제가 취소되었습니다.'
             : '결제 확인 시간이 초과되었습니다.',
           isCancelled: finalStatus === 'CANCELLED'
         });
@@ -225,7 +210,7 @@ export default function KGInicis({
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M20 4H4C2.89 4 2.01 4.89 2.01 6L2 18C2 19.11 2.89 20 4 20H20C21.11 20 22 19.11 22 18V6C22 4.89 21.11 4 20 4ZM20 18H4V12H20V18ZM20 8H4V6H20V8Z" fill="currentColor" />
           </svg>
           <span>신용카드로 결제하기</span>
