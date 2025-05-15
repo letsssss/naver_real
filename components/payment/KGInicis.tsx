@@ -120,23 +120,34 @@ export default function KGInicis({
       // 결제 응답 처리
       console.log('✅ 결제 응답:', response);
       
-      // PortOne 권장 방식으로 변경: success 속성으로 결제 성공 여부 판단
-      // @ts-ignore - PortOne 타입 정의에 success가 없지만 실제 응답에는 존재함
-      if (response && (response.success === true || response.status === 'DONE')) {
-        // @ts-ignore
-        console.log("🎉 결제 성공적으로 완료됨! success:", response.success, "status:", response.status || '상태 없음');
+      // 성공 판단 조건 변경: paymentId가 있고 transactionType이 PAYMENT인 경우 성공으로 처리
+      // success나 status 속성이 없을 수 있으므로 paymentId와 transactionType으로 판단
+      if (response && response.paymentId && (
+          // 기존 조건 유지 (하위 호환성)
+          (response as any).success === true || 
+          (response as any).status === 'DONE' ||
+          // 새로운 조건 추가 (KG이니시스 응답 구조에 맞춤)
+          response.transactionType === 'PAYMENT'
+        )) {
+        console.log("🎉 결제 성공적으로 완료됨!", {
+          paymentId: response.paymentId,
+          txId: response.txId,
+          transactionType: response.transactionType,
+          success: (response as any).success,
+          status: (response as any).status
+        });
         
         // 결제가 성공적으로 완료된 경우에만 성공 콜백 호출
         if (onSuccess) onSuccess(paymentId);
       } else {
-        // success가 false이거나 없는 경우 실패로 처리
-        // @ts-ignore
-        console.warn("🟡 결제 실패 또는 미완료 상태:", 
-          // @ts-ignore
-          "success:", response?.success, 
-          // @ts-ignore
-          "status:", response?.status || '상태 없음'
-        );
+        // 필요한 필드가 없거나 transactionType이 PAYMENT가 아닌 경우 실패로 처리
+        console.warn("🟡 결제 실패 또는 미완료 상태:", {
+          paymentId: response?.paymentId,
+          txId: response?.txId,
+          transactionType: response?.transactionType,
+          success: (response as any)?.success, 
+          status: (response as any)?.status
+        });
         
         // 결제는 되었는데 프론트에서 success 감지 못한 경우 로깅 (디버깅용)
         if (response) {
@@ -148,12 +159,10 @@ export default function KGInicis({
         // 명확한 오류 객체 생성하여 실패 콜백 호출
         const error = {
           code: 'PAYMENT_STATUS_UNCLEAR',
-          // @ts-ignore
-          message: `결제 상태가 명확하지 않습니다. success: ${response?.success}, status: ${response?.status || '상태 없음'}`,
-          // @ts-ignore
-          paymentStatus: response?.status,
-          // 타입 오류 해결을 위해 any로 변환
+          message: `결제 상태가 명확하지 않습니다. transactionType: ${response?.transactionType || '없음'}, paymentId: ${response?.paymentId || '없음'}`,
+          paymentStatus: (response as any)?.status,
           paymentSuccess: (response as any)?.success,
+          transactionType: response?.transactionType,
           response: response,
           paymentId: paymentId
         };
