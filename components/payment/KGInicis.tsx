@@ -42,14 +42,17 @@ export default function KGInicis({
   // 결제 시도를 DB에 기록하는 함수
   const initiatePayment = async () => {
     try {
-      const response = await fetch("/api/payment/initiate", {
+      // ✅ 변경: 직접 만든 API 사용
+      const paymentId = `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      
+      const response = await fetch("/api/payment/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          paymentId,
           userId,
           postId,
           amount,
-          phoneNumber,
           selectedSeats
         }),
       });
@@ -67,6 +70,39 @@ export default function KGInicis({
       toast.error('결제 초기화 중 오류가 발생했습니다.');
       return null;
     }
+  };
+
+  // ✅ 새로 추가: 결제 상태 폴링 함수
+  const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
+    console.log(`🔍 결제 상태 확인 시작: ${paymentId}`);
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
+        const data = await response.json();
+        
+        console.log(`📊 결제 상태 폴링 (${attempts + 1}/${maxAttempts}):`, data);
+        
+        if (data.success && data.status === 'DONE') {
+          console.log('✅ 결제 성공 확인됨!');
+          return 'DONE';
+        } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED')) {
+          console.log('❌ 결제 실패/취소 확인됨:', data.status);
+          return data.status;
+        }
+        
+        // 1.5초 대기
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        attempts++;
+      } catch (error) {
+        console.error('폴링 중 오류:', error);
+        attempts++;
+      }
+    }
+    
+    console.log('⚠️ 폴링 시간 초과: 결제 상태 확인 불가');
+    return null;
   };
 
   const isValidPhoneNumber = (phone: string) => {
@@ -109,6 +145,7 @@ export default function KGInicis({
     try {
       console.log('🔄 KG이니시스 결제 요청:', { STORE_ID, paymentId, amount, paymentAmount });
 
+      // PortOne SDK로 결제창 호출
       const response = await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
@@ -125,43 +162,29 @@ export default function KGInicis({
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
 
-      console.log('✅ 결제 응답:', response);
+      console.log('✅ PortOne 응답 (결제 흐름만 판단):', response);
 
-      // 🛡️ 결제 성공 조건: KG이니시스 문서 기반으로 수정
-      // 결제 성공 확인을 더 엄격하게 처리 (status, code 모두 확인)
-      const isSuccess =
-        response &&
-        response.paymentId &&
-        (response as any).status === 'DONE' && 
-        (response as any).code !== 'FAILURE_TYPE_PG' &&
-        (response as any).success === true;
-
-      if (isSuccess) {
-        console.log('🎉 결제 성공:', {
-          paymentId: response.paymentId,
-          status: (response as any).status,
-          code: (response as any).code,
-          transactionType: response.transactionType,
-          success: (response as any).success
-        });
-        if (onSuccess) onSuccess(response.paymentId || paymentId);
+      // ✅ 변경: SDK 응답만으로 판단하지 않고 폴링 상태 확인
+      toast.info("결제 상태 확인 중입니다...");
+      const finalStatus = await pollPaymentStatus(paymentId);
+      
+      if (finalStatus === 'DONE') {
+        console.log('🎉 백엔드 결제 검증 성공:', { paymentId, finalStatus });
+        toast.success("결제가 완료되었습니다!");
+        if (onSuccess) onSuccess(paymentId);
       } else {
-        console.warn('⚠️ 결제 실패 또는 미완료:', {
-          paymentId: response?.paymentId,
-          status: (response as any)?.status,
-          code: (response as any)?.code,
-          transactionType: response?.transactionType,
-          success: (response as any)?.success
-        });
+        console.warn('⚠️ 백엔드 결제 검증 실패 또는 시간 초과:', { paymentId, finalStatus });
         
-        // 디버깅을 위한 전체 응답 로깅
-        console.log("📌 응답 객체 전체 확인:", JSON.stringify(response, null, 2));
+        toast.warning(finalStatus === 'CANCELLED' 
+          ? "결제가 취소되었습니다." 
+          : "결제가 완료되지 않았습니다.");
         
-        toast.warning("결제가 완료되지 않았습니다.");
         if (onFail) onFail({
-          code: (response as any)?.code || 'NOT_SUCCESS',
-          message: '결제가 완료되지 않았습니다.',
-          response
+          code: finalStatus || 'TIMEOUT',
+          message: finalStatus === 'CANCELLED' 
+            ? '결제가 취소되었습니다.' 
+            : '결제 확인 시간이 초과되었습니다.',
+          isCancelled: finalStatus === 'CANCELLED'
         });
       }
 
