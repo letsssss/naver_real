@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import KakaoPay from '@/components/payment/KakaoPay';
+import KGInicis from '@/components/payment/KGInicis';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,10 +15,11 @@ interface SeatOption {
   price: number;
 }
 
-export default function KakaopayExamplePage() {
+export default function InicisExamplePage() {
   const [amount, setAmount] = useState(1000);
   const [orderName, setOrderName] = useState('테스트 상품');
   const [customerName, setCustomerName] = useState('홍길동');
+  const [customerEmail, setCustomerEmail] = useState('example@easyticket82.com');
   const [ticketInfo, setTicketInfo] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
@@ -81,7 +82,7 @@ export default function KakaopayExamplePage() {
   
   return (
     <div className="container max-w-3xl py-12">
-      <h1 className="text-3xl font-bold mb-8">카카오페이 결제 예제</h1>
+      <h1 className="text-3xl font-bold mb-8">KG이니시스 신용카드 결제 예제</h1>
       
       {paymentResult ? (
         <Card>
@@ -104,6 +105,7 @@ export default function KakaopayExamplePage() {
                 }).join(', ')}</p>
                 <p><span className="font-medium">결제 금액:</span> {calculateTotalPrice().toLocaleString()}원</p>
                 <p><span className="font-medium">연락처:</span> {phoneNumber}</p>
+                <p><span className="font-medium">이메일:</span> {customerEmail}</p>
               </div>
             ) : (
               <div className="text-red-500">
@@ -119,7 +121,7 @@ export default function KakaopayExamplePage() {
         <Card>
           <CardHeader>
             <CardTitle>결제 정보 입력</CardTitle>
-            <CardDescription>카카오페이로 결제할 정보를 입력해주세요.</CardDescription>
+            <CardDescription>KG이니시스 신용카드로 결제할 정보를 입력해주세요.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -176,6 +178,16 @@ export default function KakaopayExamplePage() {
             </div>
             
             <div className="space-y-2">
+              <Label htmlFor="customerEmail">이메일</Label>
+              <Input 
+                id="customerEmail" 
+                type="email" 
+                value={customerEmail} 
+                onChange={(e) => setCustomerEmail(e.target.value)} 
+              />
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="phoneNumber">연락처</Label>
               <Input 
                 id="phoneNumber" 
@@ -198,10 +210,11 @@ export default function KakaopayExamplePage() {
             </div>
           </CardContent>
           <CardFooter>
-            <KakaoPay 
+            <KGInicis 
               amount={calculateTotalPrice() || 1000}
               orderName={orderName}
               customerName={customerName}
+              customerEmail={customerEmail}
               ticketInfo={ticketInfo}
               phoneNumber={phoneNumber}
               selectedSeats={selectedSeats}
@@ -219,9 +232,9 @@ export default function KakaopayExamplePage() {
         <ol className="list-decimal pl-5 space-y-1">
           <li>좌석을 하나 이상 선택합니다.</li>
           <li>결제 정보를 입력합니다.</li>
-          <li>연락처를 필수로 입력합니다.</li>
-          <li>"카카오페이로 결제하기" 버튼을 클릭합니다.</li>
-          <li>카카오페이 결제창이 열리면 결제를 진행합니다.</li>
+          <li>연락처와 이메일을 필수로 입력합니다.</li>
+          <li>"신용카드로 결제하기" 버튼을 클릭합니다.</li>
+          <li>KG이니시스 결제창이 열리면 결제를 진행합니다.</li>
           <li>결제 완료 후, 웹훅을 통해 서버에서 결제 정보를 검증합니다.</li>
           <li>실제 환경에서는 검증 후 DB에 주문 정보를 저장합니다.</li>
         </ol>
