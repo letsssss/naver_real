@@ -6,7 +6,10 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     const payment_id = searchParams.get('payment_id');
 
+    console.log(`🔍 결제 상태 조회 요청: payment_id=${payment_id}`);
+
     if (!payment_id) {
+      console.warn('❌ payment_id 파라미터 누락');
       return NextResponse.json({ 
         success: false, 
         message: 'payment_id 파라미터가 필요합니다' 
@@ -23,7 +26,7 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error('결제 상태 조회 오류:', error);
+      console.error('❌ 결제 상태 조회 오류:', error);
       return NextResponse.json({
         success: false,
         message: '결제 정보 조회 실패',
@@ -32,12 +35,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (!data) {
+      console.warn(`⚠️ 결제 정보 없음: payment_id=${payment_id}`);
       return NextResponse.json({
         success: false,
         message: '해당 결제 정보를 찾을 수 없습니다',
         status: 'NOT_FOUND'
       }, { status: 404 });
     }
+
+    console.log(`✅ 조회된 결제 상태: payment_id=${payment_id}, status=${data?.status}, updated_at=${data?.updated_at}`);
 
     return NextResponse.json({
       success: true,
@@ -48,7 +54,7 @@ export async function GET(req: NextRequest) {
       updated_at: data.updated_at
     });
   } catch (err: any) {
-    console.error('결제 상태 조회 중 오류:', err);
+    console.error('❌ 결제 상태 조회 중 오류:', err);
     return NextResponse.json({
       success: false,
       message: '서버 오류',
