@@ -6,92 +6,64 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
     const body = await req.json();
+    
+    // 주의: PortOne 에서는 snake_case 필드명을 사용합니다 (payment_id, tx_id 등)
+    console.log("📌 Webhook 수신 데이터:", JSON.stringify(body, null, 2));
+    
+    // 다양한 필드명 호환성 처리
+    const paymentId = body.payment_id || body.paymentId;
+    const transaction_id = body.tx_id || body.txId;
+    const transaction_type = body.transaction_type || body.transactionType;
+    const status = body.status || 'DONE'; // 기본값 설정
 
-    console.log('📥 Webhook 요청 수신:', JSON.stringify(body, null, 2));
-
-    // ✅ PortOne은 snake_case로 필드를 보냅니다
-    const {
-      payment_id,  // snake_case 형태로 데이터가 전송됨
-      tx_id,
-      status,
-      code,
-      transaction_type
-    } = body;
-
-    // 변환: 코드의 일관성을 위해 camelCase로 변환하여 사용
-    const paymentId = payment_id;
-    const txId = tx_id;
-    const transactionType = transaction_type;
-
-    // 필수 값 검증
     if (!paymentId) {
-      console.error('⚠️ Webhook payment_id 누락:', body);
-      return NextResponse.json({ success: false, message: 'payment_id 필수 항목 누락' }, { status: 400 });
+      console.error("❌ Webhook: paymentId 없음");
+      return NextResponse.json({ 
+        success: false, 
+        message: "paymentId가 필요합니다" 
+      }, { status: 400 });
     }
 
-    // 상태 판단 로직 개선: KG이니시스 기준으로 정확하게 판단
-    let finalStatus = 'UNKNOWN';
+    console.log(`📢 Webhook: payment_id=${paymentId}, status=${status}, tx_id=${transaction_id}, type=${transaction_type}`);
+    
+    const supabase = createClient();
 
-    // 상태 판단: 명확한 우선순위로 검사
-    if (status === 'DONE' && code !== 'FAILURE_TYPE_PG' && transactionType === 'PAYMENT') {
-      finalStatus = 'DONE'; // 결제 성공
-    } else if (status === 'FAILED' || code === 'FAILURE_TYPE_PG') {
-      finalStatus = 'FAILED'; // 결제 실패
-    } else if (status === 'CANCELLED' || transactionType === 'CANCEL') {
-      finalStatus = 'CANCELLED'; // 결제 취소
-    } else if (transactionType === 'PAYMENT') {
-      // 추가 검증이 필요한 경우 - Webhook에서는 status가 모호할 수 있음
-      console.log('⚠️ 모호한 상태, API 추가 검증 필요:', { status, code, transactionType });
-      finalStatus = 'PENDING';
-    }
-
-    // PortOne에서 'Paid'로 데이터가 온다면 'DONE'으로 변환 (예시에 따른 추가 처리)
-    if (status === 'Paid') {
-      finalStatus = 'DONE';
-    }
-
-    console.log(`🔄 결제 상태 업데이트: ${paymentId} → ${finalStatus} (txId: ${txId}, code: ${code})`);
-
-    // DB 업데이트 - payment_id 필드로 레코드 검색하도록 수정
+    // ✅ 수정: payment_id가 아닌 id 컬럼으로 조회 (이 컬럼에 PortOne의 paymentId가 저장됨)
     const { data, error } = await supabase
       .from('payments')
-      .update({ 
-        status: finalStatus,
-        transaction_id: txId,
-        code: code,
+      .update({
+        status,
+        transaction_id,
+        transaction_type,
         updated_at: new Date().toISOString()
       })
-      .eq('payment_id', paymentId) // 'id' → 'payment_id'로 변경: 실제 테이블 구조에 맞춤
-      .select();
+      .eq('id', paymentId)
+      .select('status');
 
     if (error) {
-      console.error('🔴 Webhook DB 업데이트 실패:', JSON.stringify(error, null, 2));
-      return NextResponse.json({ success: false, message: 'DB 업데이트 실패', error }, { status: 500 });
+      console.error("❌ Webhook: DB 업데이트 실패", error);
+      return NextResponse.json({ 
+        success: false, 
+        message: "결제 상태 업데이트 실패", 
+        error: error.message 
+      }, { status: 500 });
     }
 
-    // 업데이트된 결제 정보 로깅
-    if (data && data.length > 0) {
-      console.log(`✅ Webhook 반영 완료: ${paymentId} → ${finalStatus}, 데이터:`, data[0]);
-    } else {
-      console.log(`✅ Webhook 반영 완료: ${paymentId} → ${finalStatus}, 데이터 없음`);
-    }
-
-    // 결제 성공 시 추가 작업 (예: 알림 발송, 주문 상태 업데이트 등)
-    if (finalStatus === 'DONE') {
-      try {
-        // 결제 완료 시 주문 상태 업데이트 등의 작업을 여기서 수행할 수 있음
-        // 예: 이메일 알림, SMS 발송, 주문 테이블 업데이트 등
-      } catch (err) {
-        console.error('⚠️ 결제 성공 후 추가 처리 중 오류:', err);
-        // 주요 업데이트는 성공했으므로 이 오류는 무시하고 성공 응답 반환
-      }
-    }
-
-    return NextResponse.json({ success: true, status: finalStatus });
+    console.log(`✅ Webhook: 결제 상태 업데이트 성공 (payment_id=${paymentId}, status=${status})`);
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: "Webhook 처리 완료",
+      data
+    });
+    
   } catch (err: any) {
-    console.error('❌ Webhook 처리 중 오류:', err);
-    return NextResponse.json({ success: false, message: '서버 오류', error: err.message }, { status: 500 });
+    console.error("❌ Webhook 처리 중 오류:", err);
+    return NextResponse.json({ 
+      success: false, 
+      message: "서버 오류", 
+      error: err.message 
+    }, { status: 500 });
   }
 } 
