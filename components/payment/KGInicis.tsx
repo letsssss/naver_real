@@ -72,7 +72,7 @@ export default function KGInicis({
     }
   };
 
-  // ✅ 새로 추가: 결제 상태 폴링 함수
+  // ✅ 결제 상태 폴링 함수
   const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
     console.log(`🔍 결제 상태 확인 시작: ${paymentId}`);
     let attempts = 0;
@@ -83,6 +83,9 @@ export default function KGInicis({
         const data = await response.json();
         
         console.log(`📊 결제 상태 폴링 (${attempts + 1}/${maxAttempts}):`, data);
+        
+        // 명시적으로 status 값 로깅
+        console.log(`💡 현재 확인된 상태: ${data?.status}, success: ${data?.success}`);
         
         if (data.success && data.status === 'DONE') {
           console.log('✅ 결제 성공 확인됨!');
