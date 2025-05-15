@@ -12,6 +12,8 @@ interface KakaoPayProps {
   ticketInfo?: string;
   phoneNumber: string;
   selectedSeats?: string[];
+  userId: string;
+  postId: string;
   onSuccess?: (paymentId: string) => void;
   onFail?: (error: any) => void;
   disabled?: boolean;
@@ -24,6 +26,8 @@ export default function KakaoPay({
   ticketInfo = '',
   phoneNumber,
   selectedSeats = [],
+  userId,
+  postId,
   onSuccess,
   onFail,
   disabled = false
@@ -33,7 +37,35 @@ export default function KakaoPay({
   const STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID || '';
   const CHANNEL_KEY = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || '';
 
-  const generatePaymentId = () => `order_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  // 결제 시도를 DB에 기록하는 함수
+  const initiatePayment = async () => {
+    try {
+      const response = await fetch("/api/payment/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          postId,
+          amount,
+          phoneNumber,
+          selectedSeats
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '결제 초기화 실패');
+      }
+
+      const data = await response.json();
+      console.log('✅ 결제 초기화 성공:', data);
+      return data.paymentId;
+    } catch (error: any) {
+      console.error('❌ 결제 초기화 중 오류:', error);
+      toast.error('결제 초기화 중 오류가 발생했습니다.');
+      return null;
+    }
+  };
 
   const isValidPhoneNumber = (phone: string) => {
     return /^(\d{10,11}|\d{3}-\d{3,4}-\d{4}|\d{2,3}-\d{3,4}-\d{4})$/.test(phone);
@@ -62,7 +94,14 @@ export default function KakaoPay({
     }
 
     setWaitingPayment(true);
-    const paymentId = generatePaymentId();
+    
+    // 서버에서 paymentId 생성 (DB에 결제 시도 기록)
+    const paymentId = await initiatePayment();
+    if (!paymentId) {
+      setWaitingPayment(false);
+      return;
+    }
+    
     const paymentAmount = amount <= 0 ? 110 : amount;
 
     try {
