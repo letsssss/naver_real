@@ -988,6 +988,24 @@ export default function TicketCancellationDetail() {
                           </div>
                         </div>
                         
+                        {/* 신용카드 옵션 */}
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "card" ? "bg-green-50 border-green-200" : "border-gray-200 hover:border-gray-300"}`}>
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="card"
+                              name="paymentMethod"
+                              value="card"
+                              checked={selectedPaymentMethod === "card"}
+                              onChange={() => setSelectedPaymentMethod("card")}
+                              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                            />
+                            <label htmlFor="card" className="ml-2 block text-sm text-gray-700 font-medium">
+                              신용카드
+                            </label>
+                          </div>
+                        </div>
+                        
                         {/* 판매자 직접 결제 옵션 */}
                         <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "direct" ? "bg-gray-50 border-gray-300" : "border-gray-200 hover:border-gray-300"}`}>
                           <div className="flex items-center">
