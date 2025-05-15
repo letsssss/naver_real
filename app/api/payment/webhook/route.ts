@@ -11,18 +11,24 @@ export async function POST(req: NextRequest) {
 
     console.log('📥 Webhook 요청 수신:', JSON.stringify(body, null, 2));
 
+    // ✅ PortOne은 snake_case로 필드를 보냅니다
     const {
-      paymentId,
+      payment_id,  // snake_case 형태로 데이터가 전송됨
+      tx_id,
       status,
       code,
-      txId,
-      transactionType,
+      transaction_type
     } = body;
+
+    // 변환: 코드의 일관성을 위해 camelCase로 변환하여 사용
+    const paymentId = payment_id;
+    const txId = tx_id;
+    const transactionType = transaction_type;
 
     // 필수 값 검증
     if (!paymentId) {
-      console.error('⚠️ Webhook paymentId 누락:', body);
-      return NextResponse.json({ success: false, message: 'paymentId 필수 항목 누락' }, { status: 400 });
+      console.error('⚠️ Webhook payment_id 누락:', body);
+      return NextResponse.json({ success: false, message: 'payment_id 필수 항목 누락' }, { status: 400 });
     }
 
     // 상태 판단 로직 개선: KG이니시스 기준으로 정확하게 판단
@@ -39,6 +45,11 @@ export async function POST(req: NextRequest) {
       // 추가 검증이 필요한 경우 - Webhook에서는 status가 모호할 수 있음
       console.log('⚠️ 모호한 상태, API 추가 검증 필요:', { status, code, transactionType });
       finalStatus = 'PENDING';
+    }
+
+    // PortOne에서 'Paid'로 데이터가 온다면 'DONE'으로 변환 (예시에 따른 추가 처리)
+    if (status === 'Paid') {
+      finalStatus = 'DONE';
     }
 
     console.log(`🔄 결제 상태 업데이트: ${paymentId} → ${finalStatus} (txId: ${txId}, code: ${code})`);
