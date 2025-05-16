@@ -82,9 +82,20 @@ export default function KGInicis({
         
         console.log(`📊 [${attempts + 1}/${maxAttempts}] 상태:`, data);
         
-        if (data?.status === 'DONE') return 'DONE';
-        if (data?.status === 'FAILED') return 'FAILED';
-        if (data?.status === 'CANCELLED') return 'CANCELLED';
+        // ✅ 상태가 없는 경우 처리 (웹훅 도착 전일 수 있음)
+        if (!data?.status) {
+          if (attempts < 3) {
+            console.log('🔁 상태 없음, 다시 시도 중...');
+          } else {
+            console.warn('⚠️ 상태 없음이 반복됨. 계속 진행...');
+          }
+        } else if (data.status === 'DONE') {
+          return 'DONE';
+        } else if (data.status === 'FAILED') {
+          return 'FAILED';
+        } else if (data.status === 'CANCELLED') {
+          return 'CANCELLED';
+        }
       } catch (error) {
         console.warn('📡 상태 확인 중 오류:', error);
       }
