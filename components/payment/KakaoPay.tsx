@@ -75,8 +75,21 @@ export default function KakaoPay({
     
     while (attempts < maxAttempts) {
       try {
+        console.log(`🔄 폴링 시도 #${attempts + 1} - payment_id=${paymentId} 조회 시작`);
+        
         const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
+        const responseStatus = response.status;
         const data = await response.json();
+        
+        // 전체 응답 상세 로깅
+        console.log(`🔍 상태 응답 전체 [${attempts + 1}/${maxAttempts}]:`, {
+          responseStatus,
+          data,
+          rawDataType: typeof data,
+          hasStatus: data && 'status' in data,
+          statusValue: data?.status,
+          statusType: typeof data?.status
+        });
         
         console.log(`📡 [${attempts + 1}/${maxAttempts}] 결제 상태 확인:`, data);
         
@@ -86,6 +99,11 @@ export default function KakaoPay({
         
       } catch (error) {
         console.warn('⚠️ 상태 확인 중 오류:', error);
+      }
+      
+      // 디버깅용 정보 표시
+      if (attempts >= 3 && attempts % 5 === 0) {
+        console.warn(`⏱️ 아직 상태 확인 중... ${attempts + 1}/${maxAttempts} 회차`);
       }
       
       await new Promise(resolve => setTimeout(resolve, 1500));
