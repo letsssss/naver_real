@@ -139,7 +139,7 @@ export default function TossPay({
         paymentId,
         orderName,
         totalAmount: paymentAmount,
-        currency: 'KRW',
+        currency: 'KRW' as any,
         channelKey: TOSS_CHANNEL_KEY,
         payMethod: 'EASY_PAY',
         easyPay: { easyPayProvider: 'EASY_PAY_PROVIDER_TOSSPAY' },
