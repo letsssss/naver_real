@@ -13,14 +13,28 @@ export async function POST(req: Request) {
   // ✅ 필수 필드 파싱
   const paymentId = body.paymentId || body.id;
   const transactionId = body.txId || null;
-  const success = body.success ?? null;
-  let status = body.status || (success === true ? "DONE" : "FAILED");
-
-  // ✅ 중요: PortOne에서 'Paid' 상태로 오는 경우 'DONE'으로 처리
-  if (status === 'Paid') {
+  const type = body.type; // 'Transaction.Paid' 등
+  
+  // ⭐️ 중요: type 필드 기반으로 상태 판단 (성공 여부를 더 명확하게)
+  let status;
+  if (type === 'Transaction.Paid') {
     status = 'DONE';
-    console.log(`✅ 'Paid' 상태를 'DONE'으로 변환: ${paymentId}`);
+  } else if (type === 'Transaction.Cancelled') {
+    status = 'CANCELLED';
+  } else {
+    // body.status가 있으면 사용, 없으면 FAILED
+    status = body.status || 'FAILED';
   }
+
+  // 디버깅용 상세 로그
+  console.log("🔎 파싱된 필드:", {
+    paymentId,
+    transactionId,
+    type,
+    rawStatus: body.status,
+    rawSuccess: body.success,
+    parsedStatus: status
+  });
 
   if (!paymentId) {
     console.warn("❌ paymentId 없음");
@@ -92,6 +106,7 @@ export async function POST(req: Request) {
 
   console.log("✅ Webhook 처리 완료 (최종상태):", { 
     paymentId, 
+    type,
     requested_status: status, 
     final_status: finalData?.status,
     updated_at: finalData?.updated_at
