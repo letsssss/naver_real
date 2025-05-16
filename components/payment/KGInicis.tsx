@@ -68,41 +68,33 @@ export default function KGInicis({
     }
   };
 
-  const pollPaymentStatus = async (paymentId: string, maxAttempts = 20): Promise<string | null> => {
+  const pollPaymentStatus = async (paymentId: string, maxAttempts = 30): Promise<string | null> => {
     let attempts = 0;
-    
-    // ⭐ 1. 첫 요청 전에 2초 정도 기다려 웹훅 도착 유예
-    console.log(`📡 웹훅 도착 대기 중 (2초)...`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
+    // ✅ 최초 4초 대기 (웹훅 도착 유예)
+    console.log(`🕒 최초 대기 (웹훅 반영 기다리는 중)...`);
+    await new Promise(resolve => setTimeout(resolve, 4000));
+
     while (attempts < maxAttempts) {
       try {
         const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
         const data = await response.json();
-        
-        console.log(`📊 [${attempts + 1}/${maxAttempts}] 상태:`, data);
-        
-        // ✅ 상태가 없는 경우 처리 (웹훅 도착 전일 수 있음)
-        if (!data?.status) {
-          if (attempts < 3) {
-            console.log('🔁 상태 없음, 다시 시도 중...');
-          } else {
-            console.warn('⚠️ 상태 없음이 반복됨. 계속 진행...');
-          }
-        } else if (data.status === 'DONE') {
-          return 'DONE';
-        } else if (data.status === 'FAILED') {
-          return 'FAILED';
-        } else if (data.status === 'CANCELLED') {
-          return 'CANCELLED';
-        }
+
+        console.log(`📡 [${attempts + 1}/${maxAttempts}] 결제 상태 확인:`, data);
+
+        if (data?.status === 'DONE') return 'DONE';
+        if (data?.status === 'FAILED') return 'FAILED';
+        if (data?.status === 'CANCELLED') return 'CANCELLED';
+
       } catch (error) {
-        console.warn('📡 상태 확인 중 오류:', error);
+        console.warn('⚠️ 상태 확인 중 오류:', error);
       }
 
       await new Promise(resolve => setTimeout(resolve, 1500));
       attempts++;
     }
+
+    console.warn('❌ 최대 시도 횟수 초과 - 결제 상태를 확인하지 못했습니다.');
     return null;
   };
 
