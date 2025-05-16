@@ -36,7 +36,6 @@ export default function TossPay({
   
   const STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID || '';
   const TOSS_CHANNEL_KEY = 'channel-key-655baa84-32f0-4e00-9771-523951b7aa2d';
-  const TOSS_MID = 'tosstest';
 
   const initiatePayment = async () => {
     try {
@@ -147,11 +146,6 @@ export default function TossPay({
         customer: {
           fullName: customerName,
           phoneNumber
-        },
-        bypass: { 
-          toss: { 
-            mid: TOSS_MID
-          } 
         },
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
