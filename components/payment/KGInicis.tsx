@@ -83,9 +83,14 @@ export default function KGInicis({
         console.log(`💡 현재 상태: ${data?.status}`);
 
         if (data.status === 'DONE') {
+          console.log('✅ 결제 성공 확인!');
           return 'DONE';
-        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
-          return data.status;
+        } else if (data.status === 'FAILED') {
+          console.log('❌ 결제 실패 확인!');
+          return 'FAILED';
+        } else if (data.status === 'CANCELLED') {
+          console.log('⚠️ 결제 취소 확인!');
+          return 'CANCELLED';
         }
 
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -96,6 +101,7 @@ export default function KGInicis({
       }
     }
 
+    console.log('⚠️ 결제 상태 확인 시간 초과');
     return null;
   };
 
@@ -127,6 +133,7 @@ export default function KGInicis({
 
     setWaitingPayment(true);
 
+    // 1. 결제 초기화: DB에 PENDING 상태로 레코드 생성
     const paymentId = await initiatePayment();
     if (!paymentId) {
       setWaitingPayment(false);
@@ -138,7 +145,8 @@ export default function KGInicis({
     try {
       console.log('🔄 KG이니시스 결제 요청:', { STORE_ID, paymentId, amount, paymentAmount });
 
-      const response = await PortOne.requestPayment({
+      // 2. PortOne SDK 호출하여 결제창 표시
+      await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
         orderName,
@@ -154,43 +162,73 @@ export default function KGInicis({
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
 
-      console.log('✅ PortOne 응답:', response);
-
+      // 3. 결제 완료 후 DB에 저장된 최종 상태로 판단 (중요!)
       toast.info("결제 상태 확인 중입니다...");
       const finalStatus = await pollPaymentStatus(paymentId);
 
+      // 4. 최종 결제 상태에 따른 처리
       if (finalStatus === 'DONE') {
         toast.success("결제가 완료되었습니다!");
         if (onSuccess) onSuccess(paymentId);
+      } else if (finalStatus === 'CANCELLED') {
+        toast.warning("결제가 취소되었습니다.");
+        if (onFail) onFail({
+          code: 'CANCELLED',
+          message: '결제가 취소되었습니다.',
+          isCancelled: true
+        });
       } else {
-        toast.warning(finalStatus === 'CANCELLED'
-          ? "결제가 취소되었습니다."
-          : "결제가 완료되지 않았습니다.");
-
+        toast.warning("결제가 완료되지 않았습니다.");
         if (onFail) onFail({
           code: finalStatus || 'TIMEOUT',
-          message: finalStatus === 'CANCELLED'
-            ? '결제가 취소되었습니다.'
-            : '결제 확인 시간이 초과되었습니다.',
-          isCancelled: finalStatus === 'CANCELLED'
+          message: '결제 확인 시간이 초과되었습니다.',
+          isCancelled: false
         });
       }
 
     } catch (error: any) {
-      console.error('❌ 결제 중 오류 발생:', error);
-
+      console.error('🛑 결제창 표시 중 오류:', error);
+      
+      // ⭐ SDK 오류 발생해도 최종 상태는 폴링으로 확인
       if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
-        toast.info("결제가 취소되었습니다.");
-        if (onFail) onFail({
-          code: error.code,
-          message: "사용자가 결제를 취소했습니다.",
-          isCancelled: true
-        });
+        console.log('사용자가 결제창을 닫았거나 취소한 것으로 보임');
+        
+        // 사용자가 결제창을 명시적으로 닫은 경우에만 바로 처리
+        // 그 외의 경우는 폴링으로 최종 상태 확인
+        toast.info("결제 상태 확인 중입니다...");
+        const finalStatus = await pollPaymentStatus(paymentId);
+        
+        if (finalStatus === 'DONE') {
+          // 드물지만 SDK에서 오류 발생해도 결제가 완료된 경우
+          toast.success("결제가 완료되었습니다!");
+          if (onSuccess) onSuccess(paymentId);
+        } else {
+          // 결제 취소 또는 실패
+          toast.warning("결제가 취소되었습니다.");
+          if (onFail) onFail({
+            code: error.code,
+            message: "사용자가 결제를 취소했습니다.",
+            isCancelled: true
+          });
+        }
       } else {
-        toast.error("결제 처리 중 오류가 발생했습니다.");
-        if (onFail) onFail(error);
+        // 기타 SDK 오류 처리
+        toast.info("결제 상태 확인 중입니다...");
+        const finalStatus = await pollPaymentStatus(paymentId);
+        
+        if (finalStatus === 'DONE') {
+          toast.success("결제가 완료되었습니다!");
+          if (onSuccess) onSuccess(paymentId);
+        } else {
+          toast.error("결제 처리 중 오류가 발생했습니다.");
+          if (onFail) onFail({
+            code: error.code || 'ERROR',
+            message: error.message || "결제 처리 중 오류가 발생했습니다.",
+            isCancelled: false,
+            error
+          });
+        }
       }
-
     } finally {
       setWaitingPayment(false);
     }
