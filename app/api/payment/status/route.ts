@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // Supabase에서 id 필드로 결제 상태 조회 (payment_id 아님!)
     const { data, error } = await supabase
       .from('payments')
-      .select('status, transaction_id, code, updated_at')
+      .select('status, transaction_id, updated_at')
       .eq('id', payment_id) // payment_id -> id로 변경
       .single();
 
@@ -51,7 +51,6 @@ export async function GET(req: NextRequest) {
       payment_id,
       status: data.status,
       transaction_id: data.transaction_id,
-      code: data.code,
       updated_at: data.updated_at
     });
   } catch (err: any) {
