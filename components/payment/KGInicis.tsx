@@ -61,47 +61,30 @@ export default function KGInicis({
       }
 
       const data = await response.json();
-      console.log('✅ 결제 초기화 성공:', data);
       return data.paymentId;
     } catch (error: any) {
-      console.error('❌ 결제 초기화 중 오류:', error);
       toast.error('결제 초기화 중 오류가 발생했습니다.');
       return null;
     }
   };
 
   const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
-    console.log(`🔍 결제 상태 확인 시작: ${paymentId}`);
     let attempts = 0;
-
     while (attempts < maxAttempts) {
       try {
         const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
         const data = await response.json();
 
-        console.log(`📊 결제 상태 폴링 (${attempts + 1}/${maxAttempts}):`, data);
-        console.log(`💡 현재 상태: ${data?.status}`);
-
-        if (data.status === 'DONE') {
-          console.log('✅ 결제 성공 확인!');
-          return 'DONE';
-        } else if (data.status === 'FAILED') {
-          console.log('❌ 결제 실패 확인!');
-          return 'FAILED';
-        } else if (data.status === 'CANCELLED') {
-          console.log('⚠️ 결제 취소 확인!');
-          return 'CANCELLED';
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        attempts++;
-      } catch (error) {
-        console.error('폴링 중 오류:', error);
-        attempts++;
+        if (data.status === 'DONE') return 'DONE';
+        if (data.status === 'FAILED') return 'FAILED';
+        if (data.status === 'CANCELLED') return 'CANCELLED';
+      } catch (e) {
+        console.error('결제 상태 확인 실패:', e);
       }
-    }
 
-    console.log('⚠️ 결제 상태 확인 시간 초과');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      attempts++;
+    }
     return null;
   };
 
@@ -110,30 +93,11 @@ export default function KGInicis({
   };
 
   const handlePayment = async () => {
-    if (!selectedSeats || selectedSeats.length === 0) {
-      toast.error("좌석을 하나 이상 선택해주세요.");
-      return;
-    }
-
-    if (!phoneNumber || phoneNumber.trim() === '') {
-      toast.error("연락처를 입력해주세요.");
-      return;
-    }
-
-    if (!isValidPhoneNumber(phoneNumber)) {
-      toast.error("유효한 전화번호 형식이 아닙니다. (예: 010-1234-5678)");
-      return;
-    }
-
-    if (!STORE_ID || !INICIS_CHANNEL_KEY) {
-      console.error('❌ PortOne 설정 누락');
-      alert('결제 설정 오류입니다. 관리자에게 문의하세요.');
-      return;
-    }
+    if (!selectedSeats.length) return toast.error("좌석을 선택해주세요.");
+    if (!isValidPhoneNumber(phoneNumber)) return toast.error("올바른 전화번호를 입력해주세요.");
+    if (!STORE_ID || !INICIS_CHANNEL_KEY) return alert('결제 설정 오류입니다.');
 
     setWaitingPayment(true);
-
-    // 1. 결제 초기화: DB에 PENDING 상태로 레코드 생성
     const paymentId = await initiatePayment();
     if (!paymentId) {
       setWaitingPayment(false);
@@ -143,9 +107,6 @@ export default function KGInicis({
     const paymentAmount = amount <= 0 ? 110 : amount;
 
     try {
-      console.log('🔄 KG이니시스 결제 요청:', { STORE_ID, paymentId, amount, paymentAmount });
-
-      // 2. PortOne SDK 호출하여 결제창 표시
       await PortOne.requestPayment({
         storeId: STORE_ID,
         paymentId,
@@ -161,77 +122,34 @@ export default function KGInicis({
         },
         noticeUrls: [window.location.origin + '/api/payment/webhook'],
       });
-
-      // 3. 결제 완료 후 DB에 저장된 최종 상태로 판단 (중요!)
-      toast.info("결제 상태 확인 중입니다...");
-      const finalStatus = await pollPaymentStatus(paymentId);
-
-      // 4. 최종 결제 상태에 따른 처리
-      if (finalStatus === 'DONE') {
-        toast.success("결제가 완료되었습니다!");
-        if (onSuccess) onSuccess(paymentId);
-      } else if (finalStatus === 'CANCELLED') {
-        toast.warning("결제가 취소되었습니다.");
-        if (onFail) onFail({
-          code: 'CANCELLED',
-          message: '결제가 취소되었습니다.',
-          isCancelled: true
-        });
-      } else {
-        toast.warning("결제가 완료되지 않았습니다.");
-        if (onFail) onFail({
-          code: finalStatus || 'TIMEOUT',
-          message: '결제 확인 시간이 초과되었습니다.',
-          isCancelled: false
-        });
-      }
-
-    } catch (error: any) {
-      console.error('🛑 결제창 표시 중 오류:', error);
-      
-      // ⭐ SDK 오류 발생해도 최종 상태는 폴링으로 확인
-      if (error.code === 'PO_SDK_CLOSE_WINDOW' || error.code === 'USER_CANCEL') {
-        console.log('사용자가 결제창을 닫았거나 취소한 것으로 보임');
-        
-        // 사용자가 결제창을 명시적으로 닫은 경우에만 바로 처리
-        // 그 외의 경우는 폴링으로 최종 상태 확인
-        toast.info("결제 상태 확인 중입니다...");
-        const finalStatus = await pollPaymentStatus(paymentId);
-        
-        if (finalStatus === 'DONE') {
-          // 드물지만 SDK에서 오류 발생해도 결제가 완료된 경우
-          toast.success("결제가 완료되었습니다!");
-          if (onSuccess) onSuccess(paymentId);
-        } else {
-          // 결제 취소 또는 실패
-          toast.warning("결제가 취소되었습니다.");
-          if (onFail) onFail({
-            code: error.code,
-            message: "사용자가 결제를 취소했습니다.",
-            isCancelled: true
-          });
-        }
-      } else {
-        // 기타 SDK 오류 처리
-        toast.info("결제 상태 확인 중입니다...");
-        const finalStatus = await pollPaymentStatus(paymentId);
-        
-        if (finalStatus === 'DONE') {
-          toast.success("결제가 완료되었습니다!");
-          if (onSuccess) onSuccess(paymentId);
-        } else {
-          toast.error("결제 처리 중 오류가 발생했습니다.");
-          if (onFail) onFail({
-            code: error.code || 'ERROR',
-            message: error.message || "결제 처리 중 오류가 발생했습니다.",
-            isCancelled: false,
-            error
-          });
-        }
-      }
-    } finally {
-      setWaitingPayment(false);
+    } catch (err: any) {
+      console.warn('⚠️ SDK 오류 발생 (무시하고 상태 확인 진행):', err);
     }
+
+    // SDK 응답과 무관하게 DB 상태로 판단
+    toast.info("결제 상태를 확인 중입니다...");
+    const finalStatus = await pollPaymentStatus(paymentId);
+
+    if (finalStatus === 'DONE') {
+      toast.success("결제가 완료되었습니다!");
+      onSuccess?.(paymentId);
+    } else if (finalStatus === 'CANCELLED') {
+      toast.warning("결제가 취소되었습니다.");
+      onFail?.({
+        code: 'CANCELLED',
+        message: '결제가 취소되었습니다.',
+        isCancelled: true
+      });
+    } else {
+      toast.error("결제가 완료되지 않았습니다.");
+      onFail?.({
+        code: finalStatus || 'UNKNOWN',
+        message: '결제 상태 확인에 실패했습니다.',
+        isCancelled: false
+      });
+    }
+
+    setWaitingPayment(false);
   };
 
   return (
