@@ -68,18 +68,25 @@ export default function KGInicis({
     }
   };
 
-  const pollPaymentStatus = async (paymentId: string, maxAttempts = 10): Promise<string | null> => {
+  const pollPaymentStatus = async (paymentId: string, maxAttempts = 20): Promise<string | null> => {
     let attempts = 0;
+    
+    // ⭐ 1. 첫 요청 전에 2초 정도 기다려 웹훅 도착 유예
+    console.log(`📡 웹훅 도착 대기 중 (2초)...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     while (attempts < maxAttempts) {
       try {
         const response = await fetch(`/api/payment/status?payment_id=${paymentId}`);
         const data = await response.json();
-
-        if (data.status === 'DONE') return 'DONE';
-        if (data.status === 'FAILED') return 'FAILED';
-        if (data.status === 'CANCELLED') return 'CANCELLED';
-      } catch (e) {
-        console.error('결제 상태 확인 실패:', e);
+        
+        console.log(`📊 [${attempts + 1}/${maxAttempts}] 상태:`, data);
+        
+        if (data?.status === 'DONE') return 'DONE';
+        if (data?.status === 'FAILED') return 'FAILED';
+        if (data?.status === 'CANCELLED') return 'CANCELLED';
+      } catch (error) {
+        console.warn('📡 상태 확인 중 오류:', error);
       }
 
       await new Promise(resolve => setTimeout(resolve, 1500));
