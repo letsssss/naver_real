@@ -149,7 +149,7 @@ export default function TossPay({
           phoneNumber
         },
         bypass: { 
-          tosspay: { 
+          toss: { 
             mid: TOSS_MID
           } 
         },
