@@ -1,6 +1,6 @@
 "use client"
 
-// 파일 로드 확인용 로그 - 무조건 실행되는지 확인
+// 파일 로드 확인용 로그 - 이 파일이 로드되었는지 확인
 console.log("🚨🚨🚨 SELLPAGE 파일 로드됨 - 이 로그는 파일이 읽혔음을 의미함");
 
 import React, { useState, useEffect } from "react"
@@ -146,18 +146,12 @@ export default function SellPage() {
   // 컴포넌트 실행 확인
   console.log("🚨🚨 SellPage 컴포넌트 함수 실행 시작");
   
-  try {
-    // 🚨 이 로그는 무조건 찍혀야 함 - 컴포넌트가 호출되기만 해도 찍힘
-    console.log("🚨 SellPage 함수 호출됨");
-    
-    const { user, isLoading } = useAuth();
-    // 인증 상태 즉시 확인
-    console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
-    
-    const router = useRouter();
-  } catch (error) {
-    console.error("SellPage 초기화 중 오류 발생:", error);
-  }
+  // 변수 선언을 try-catch 블록 밖으로 이동
+  const { user, isLoading } = useAuth();
+  // 인증 상태 즉시 확인
+  console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
+  
+  const router = useRouter();
   
   // 🎯 SellPage 렌더링 진입점 로그
   console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
