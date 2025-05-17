@@ -140,8 +140,14 @@ const concertData: Concert[] = [
 ]
 
 export default function SellPage() {
-  const { user, isLoading } = useAuth()
-  const router = useRouter()
+  // 🚨 이 로그는 무조건 찍혀야 함 - 컴포넌트가 호출되기만 해도 찍힘
+  console.log("🚨 SellPage 함수 호출됨");
+  
+  const { user, isLoading } = useAuth();
+  // 인증 상태 즉시 확인
+  console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
+  
+  const router = useRouter();
   
   // 🎯 SellPage 렌더링 진입점 로그
   console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
@@ -185,13 +191,19 @@ export default function SellPage() {
   console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
 
   useEffect(() => {
+    // 수수료 확인 useEffect 실행 확인
+    console.log("🧪 useEffect(user/isLoading) 실행됨", { user, isLoading });
     console.log("✅ useEffect 진입함")
     console.log("✅ user:", user)
     console.log("✅ isLoading:", isLoading)
 
     async function checkFees() {
+      // 함수 진입 로그
+      console.log("🔥 checkFees() 함수 진입");
       console.log("🔥 checkFees() 실행됨")
       try {
+        // 함수 호출 직전 로그
+        console.log("💰 checkUnpaidFees 호출 직전", { userId: user?.id?.toString() });
         const result = await checkUnpaidFees(user?.id?.toString())
         console.log("🧪 checkUnpaidFees 결과:", result)
       } catch (error) {
