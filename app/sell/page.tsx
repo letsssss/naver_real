@@ -191,6 +191,17 @@ export default function SellPage() {
         
         const feesData = await checkUnpaidFees(user.id.toString())
         setUnpaidFeesData(feesData)
+        
+        // 미납 수수료가 있으면 수수료 납부 페이지로 즉시 리다이렉트
+        if (feesData.hasUnpaidFees) {
+          toast({
+            title: "미납 수수료 알림",
+            description: `${feesData.unpaidFees.length}건의 미납 수수료(총 ${feesData.totalAmount.toLocaleString()}원)가 있어 판매 기능이 제한됩니다.`,
+            variant: "destructive",
+            duration: 5000,
+          })
+          router.replace('/mypage/fee-payment')
+        }
       } catch (error) {
         console.error("수수료 확인 오류:", error)
       } finally {
@@ -199,7 +210,7 @@ export default function SellPage() {
     }
     
     checkFees()
-  }, [router, user])
+  }, [router, user, toast])
 
   if (isLoading || !user) return null
 
