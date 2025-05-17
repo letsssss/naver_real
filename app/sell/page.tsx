@@ -162,6 +162,7 @@ export default function SellPage() {
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
   const [feesLoading, setFeesLoading] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const [unpaidFeesData, setUnpaidFeesData] = useState<{
     hasUnpaidFees: boolean;
     unpaidFees: any[];
@@ -174,6 +175,9 @@ export default function SellPage() {
     oldestDueDate: null
   })
 
+  // 렌더링 상태 로깅
+  console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
+
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login?callbackUrl=/sell")
@@ -183,6 +187,7 @@ export default function SellPage() {
   useEffect(() => {
     async function checkFees() {
       try {
+        console.log("🔥 수수료 확인 시작", user?.id);
         setFeesLoading(true)
         if (!user || !user.id) {
           router.push('/login?redirect=/sell')
@@ -210,7 +215,8 @@ export default function SellPage() {
         
         // 미납 수수료가 있으면 수수료 납부 페이지로 즉시 리다이렉트
         if (feesData.hasUnpaidFees) {
-          console.log("미납 수수료 감지: 리다이렉트 실행");
+          console.log("❗ 미납 수수료 있음 → 리디렉션 중");
+          setIsRedirecting(true); // 리다이렉트 상태 설정
           toast({
             title: "미납 수수료 알림",
             description: `${feesData.unpaidFees.length}건의 미납 수수료(총 ${feesData.totalAmount.toLocaleString()}원)가 있어 판매 기능이 제한됩니다.`,
@@ -231,7 +237,8 @@ export default function SellPage() {
     checkFees()
   }, [router, user, toast])
 
-  if (isLoading || !user) return null
+  // 로딩 중이거나 사용자가 없거나 리다이렉트 중일 때 렌더링 차단
+  if (isLoading || !user || isRedirecting) return null
 
   const addSection = () => {
     setSections([...sections, { id: sections.length + 1, name: "", price: "" }])
