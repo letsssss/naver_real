@@ -100,11 +100,21 @@ export async function POST(
     // 구매 확정(CONFIRMED) 상태일 때 수수료 정보 업데이트
     if (status === 'CONFIRMED') {
       try {
+        console.log("✅ 예매 완료 → 수수료 계산 시작");
+        console.log("🔑 purchase_id 확인:", purchase.id);
+        console.log("🧾 order_number 확인:", order_number);
+        
+        if (!purchase.id) {
+          console.error("❌ purchase.id 없음! 수수료 계산 불가");
+        }
+        
         // 총 가격 조회
         const totalPrice = purchase.total_price || 0;
+        console.log("💰 total_price 확인:", totalPrice);
         
         // 수수료 계산 (총 가격의 10%, 소수점 버림)
         const feeAmount = Math.floor(totalPrice * 0.1);
+        console.log("💸 feeAmount 계산 결과:", feeAmount);
         
         // 수수료 납부 기한 설정 (현재 시점 + 24시간)
         const feeDueAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
@@ -112,19 +122,20 @@ export async function POST(
         console.log(`💰 수수료 계산: ${totalPrice} × 10% = ${feeAmount}원, 납부기한: ${feeDueAt.toISOString()}`);
         
         // 수수료 정보 업데이트
-        const { error: feeUpdateError } = await supabase
+        const { data: updateResult, error: feeUpdateError } = await supabase
           .from('purchases')
           .update({
             fee_amount: feeAmount,
             fee_due_at: feeDueAt.toISOString(),
             // is_fee_paid는 기본값 false 유지
           })
-          .eq('order_number', order_number);
+          .eq('id', purchase.id)  // order_number 대신 id로 업데이트
+          .select('id, fee_amount, fee_due_at, is_fee_paid');
         
         if (feeUpdateError) {
           console.error("❌ 수수료 정보 업데이트 실패:", feeUpdateError);
         } else {
-          console.log("✅ 수수료 계산 및 저장 성공:", { fee_amount: feeAmount, fee_due_at: feeDueAt.toISOString() });
+          console.log("✅ 수수료 계산 및 저장 성공:", updateResult);
         }
       } catch (feeError) {
         console.error("❌ 수수료 처리 중 오류:", feeError);
