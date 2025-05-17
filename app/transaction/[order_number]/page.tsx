@@ -276,6 +276,9 @@ export default function TransactionDetail() {
     } else if (transaction.currentStep === "ticketing_completed") {
       if (confirm("구매를 확정하시겠습니까? 구매확정 후에는 취소할 수 없습니다.")) {
         try {
+          // API 호출 시작을 알리는 로그
+          console.log("구매확정 API 호출 시작:", orderNumber);
+          
           const response = await fetch(`/api/purchase/${orderNumber}`, {
             method: "POST",
             headers: {
@@ -286,12 +289,18 @@ export default function TransactionDetail() {
             }),
           })
           
+          // API 응답 로그
+          console.log("구매확정 API 응답 상태:", response.status);
+          
           if (!response.ok) {
             const errorData = await response.json()
             throw new Error(errorData.error || "구매 확정에 실패했습니다.")
           }
           
           const result = await response.json()
+          
+          // 응답 결과 로그
+          console.log("구매확정 API 응답 데이터:", result);
           
           if (result.error) {
             throw new Error(result.error)
@@ -307,11 +316,16 @@ export default function TransactionDetail() {
               confirmed: new Date().toISOString(),
             },
           })
-
-          // UI 갱신을 위해 페이지 새로고침
-          window.location.reload()
           
+          // 성공 알림 먼저 표시
           alert("구매가 확정되었습니다.")
+          
+          // 잠시 후 페이지 새로고침 (API 처리가 완료되도록 지연)
+          console.log("페이지 새로고침 예약 (1초 후)");
+          setTimeout(() => {
+            console.log("페이지 새로고침 실행");
+            window.location.reload();
+          }, 1000);
         } catch (error) {
           console.error("구매 확정 에러:", error)
           alert(error instanceof Error ? error.message : "구매 확정에 실패했습니다.")
