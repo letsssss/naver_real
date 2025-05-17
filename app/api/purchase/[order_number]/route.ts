@@ -100,45 +100,97 @@ export async function POST(
     // 구매 확정(CONFIRMED) 상태일 때 수수료 정보 업데이트
     if (status === 'CONFIRMED') {
       try {
+        console.log("\n===== 수수료 계산 디버깅 시작 =====");
         console.log("✅ 예매 완료 → 수수료 계산 시작");
-        console.log("🔑 purchase_id 확인:", purchase.id);
-        console.log("🧾 order_number 확인:", order_number);
         
-        if (!purchase.id) {
-          console.error("❌ purchase.id 없음! 수수료 계산 불가");
+        // purchaseId 확인 및 검증
+        const purchaseId = purchase.id;
+        console.log("🔑 purchaseId:", purchaseId, typeof purchaseId);
+        console.log("🧾 order_number:", order_number);
+        
+        if (!purchaseId) {
+          console.error("❌ purchaseId 없음! 수수료 계산 불가");
+          throw new Error("purchaseId가 없어 수수료 계산을 진행할 수 없습니다.");
         }
         
-        // 총 가격 조회
-        const totalPrice = purchase.total_price || 0;
-        console.log("💰 total_price 확인:", totalPrice);
+        // 별도 조회로 total_price 재확인
+        console.log("🔍 total_price 재조회 시작...");
+        const { data: verifiedPurchase, error: verifyError } = await supabase
+          .from('purchases')
+          .select('id, total_price')
+          .eq('id', purchaseId)
+          .single();
+        
+        // 조회 결과 검증
+        if (verifyError) {
+          console.error("❌ purchaseId로 데이터 조회 실패:", verifyError);
+          console.log("📛 전달된 purchaseId:", purchaseId);
+          throw new Error(`purchaseId(${purchaseId})로 데이터 조회 실패: ${verifyError.message}`);
+        }
+        
+        if (!verifiedPurchase) {
+          console.error("❌ purchaseId로 데이터 조회 결과 없음:", purchaseId);
+          throw new Error(`purchaseId(${purchaseId})로 조회된 데이터가 없습니다.`);
+        }
+        
+        console.log("✅ 구매 데이터 조회 성공:", verifiedPurchase);
+        
+        // 총 가격 조회 및 검증
+        const totalPrice = verifiedPurchase.total_price || 0;
+        console.log("💰 total_price 확인:", totalPrice, typeof totalPrice);
+        
+        if (!totalPrice || totalPrice <= 0) {
+          console.warn("⚠️ total_price가 0 이하입니다:", totalPrice);
+        }
         
         // 수수료 계산 (총 가격의 10%, 소수점 버림)
         const feeAmount = Math.floor(totalPrice * 0.1);
         console.log("💸 feeAmount 계산 결과:", feeAmount);
+        
+        if (feeAmount <= 0 && totalPrice > 0) {
+          console.warn("⚠️ 계산된 수수료가 0 이하입니다. 계산 로직 확인 필요:", feeAmount);
+        }
         
         // 수수료 납부 기한 설정 (현재 시점 + 24시간)
         const feeDueAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
         
         console.log(`💰 수수료 계산: ${totalPrice} × 10% = ${feeAmount}원, 납부기한: ${feeDueAt.toISOString()}`);
         
-        // 수수료 정보 업데이트
+        // 수수료 정보 업데이트 (강제 테스트 값 12345 포함)
+        console.log("📝 수수료 정보 업데이트 시작...");
+        const updateData = {
+          fee_amount: feeAmount,
+          fee_due_at: feeDueAt.toISOString(),
+          test_field: 12345, // 테스트용 필드 (업데이트 확인용)
+        };
+        
+        console.log("📦 업데이트할 데이터:", updateData);
+        
         const { data: updateResult, error: feeUpdateError } = await supabase
           .from('purchases')
-          .update({
-            fee_amount: feeAmount,
-            fee_due_at: feeDueAt.toISOString(),
-            // is_fee_paid는 기본값 false 유지
-          })
-          .eq('id', purchase.id)  // order_number 대신 id로 업데이트
-          .select('id, fee_amount, fee_due_at, is_fee_paid');
+          .update(updateData)
+          .eq('id', purchaseId)
+          .select('id, fee_amount, fee_due_at, is_fee_paid, test_field');
         
         if (feeUpdateError) {
           console.error("❌ 수수료 정보 업데이트 실패:", feeUpdateError);
-        } else {
-          console.log("✅ 수수료 계산 및 저장 성공:", updateResult);
+          throw new Error(`수수료 정보 업데이트 실패: ${feeUpdateError.message}`);
         }
+        
+        if (!updateResult || updateResult.length === 0) {
+          console.error("❌ 수수료 업데이트 결과 없음:", purchaseId);
+          throw new Error("수수료 정보가 업데이트되었으나 결과가 반환되지 않았습니다.");
+        }
+        
+        console.log("✅ 수수료 계산 및 저장 성공:", updateResult);
+        console.log("===== 수수료 계산 디버깅 종료 =====\n");
       } catch (feeError) {
         console.error("❌ 수수료 처리 중 오류:", feeError);
+        console.log("💥 오류 발생 지점 디버깅 정보:", { 
+          order_number, 
+          purchase_id: purchase?.id,
+          total_price: purchase?.total_price 
+        });
         // 수수료 처리 실패해도 구매 확정은 완료된 것으로 처리
       }
     }
