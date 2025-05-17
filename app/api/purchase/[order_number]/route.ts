@@ -47,15 +47,15 @@ export async function POST(
 
   try {
     const body = await req.json()
-    const { status } = body
+    const { status: updatedStatus } = body
 
-    if (!status) {
+    if (!updatedStatus) {
       return NextResponse.json({ error: "상태가 제공되지 않았습니다." }, { status: 400 })
     }
 
     // 유효한 상태값 검증
     const validStatuses = ['PENDING', 'PROCESSING', 'COMPLETED', 'CONFIRMED', 'CANCELLED']
-    if (!validStatuses.includes(status)) {
+    if (!validStatuses.includes(updatedStatus)) {
       return NextResponse.json({ error: "유효하지 않은 상태값입니다." }, { status: 400 })
     }
 
@@ -74,7 +74,7 @@ export async function POST(
     }
 
     // 현재 상태와 동일한 상태로 업데이트하려는 경우
-    if (purchase.status === status) {
+    if (purchase.status === updatedStatus) {
       return NextResponse.json({ 
         message: "상태가 이미 동일합니다.",
         purchase
@@ -85,7 +85,7 @@ export async function POST(
     const { data: updatedPurchase, error: updateError } = await supabase
       .from("purchases")
       .update({ 
-        status,
+        status: updatedStatus,
         updated_at: new Date().toISOString()
       })
       .eq("order_number", order_number)
@@ -98,15 +98,16 @@ export async function POST(
     }
 
     // 구매 확정(CONFIRMED) 상태일 때 수수료 정보 업데이트
-    if (status === 'CONFIRMED') {
+    if (updatedStatus === 'CONFIRMED') {
       try {
         console.log("\n===== 수수료 계산 디버깅 시작 =====");
-        console.log("✅ 예매 완료 → 수수료 계산 시작");
+        console.log(`✅ 예매 완료 → 수수료 계산 시작 (상태: ${updatedStatus})`);
         
         // purchaseId 확인 및 검증
         const purchaseId = purchase.id;
         console.log("🔑 purchaseId:", purchaseId, typeof purchaseId);
         console.log("🧾 order_number:", order_number);
+        console.log("👉 요청된 상태값:", updatedStatus);
         
         if (!purchaseId) {
           console.error("❌ purchaseId 없음! 수수료 계산 불가");
@@ -117,7 +118,7 @@ export async function POST(
         console.log("🔍 total_price 재조회 시작...");
         const { data: verifiedPurchase, error: verifyError } = await supabase
           .from('purchases')
-          .select('id, total_price')
+          .select('id, total_price, status')
           .eq('id', purchaseId)
           .single();
         
@@ -134,6 +135,7 @@ export async function POST(
         }
         
         console.log("✅ 구매 데이터 조회 성공:", verifiedPurchase);
+        console.log("📊 현재 DB 상태값:", verifiedPurchase.status, "→ 요청 상태값:", updatedStatus);
         
         // 총 가격 조회 및 검증
         const totalPrice = verifiedPurchase.total_price || 0;
@@ -189,7 +191,8 @@ export async function POST(
         console.log("💥 오류 발생 지점 디버깅 정보:", { 
           order_number, 
           purchase_id: purchase?.id,
-          total_price: purchase?.total_price 
+          total_price: purchase?.total_price,
+          requested_status: updatedStatus
         });
         // 수수료 처리 실패해도 구매 확정은 완료된 것으로 처리
       }
