@@ -9,16 +9,13 @@ export async function checkUnpaidFees(userId: string) {
   // 관리자 권한으로 Supabase 클라이언트 생성
   const supabase = createAdminClient();
   
-  // 현재 날짜
-  const now = new Date().toISOString();
-  
-  // 기한이 지난 미납 수수료 조회
+  // 기간에 상관없이 모든 미납 수수료 조회 (기한 조건 제거)
   const { data, error } = await supabase
     .from('purchases')
     .select('id, order_number, fee_amount, fee_due_at, total_price')
     .eq('seller_id', userId)
     .eq('is_fee_paid', false)
-    .lt('fee_due_at', now);
+    .eq('status', 'CONFIRMED');
   
   if (error) {
     console.error("미납 수수료 조회 오류:", error);
