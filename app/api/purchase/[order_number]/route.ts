@@ -97,6 +97,41 @@ export async function POST(
       return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { status: 500 })
     }
 
+    // 구매 확정(CONFIRMED) 상태일 때 수수료 정보 업데이트
+    if (status === 'CONFIRMED') {
+      try {
+        // 총 가격 조회
+        const totalPrice = purchase.total_price || 0;
+        
+        // 수수료 계산 (총 가격의 10%, 소수점 버림)
+        const feeAmount = Math.floor(totalPrice * 0.1);
+        
+        // 수수료 납부 기한 설정 (현재 시점 + 24시간)
+        const feeDueAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+        
+        console.log(`💰 수수료 계산: ${totalPrice} × 10% = ${feeAmount}원, 납부기한: ${feeDueAt.toISOString()}`);
+        
+        // 수수료 정보 업데이트
+        const { error: feeUpdateError } = await supabase
+          .from('purchases')
+          .update({
+            fee_amount: feeAmount,
+            fee_due_at: feeDueAt.toISOString(),
+            // is_fee_paid는 기본값 false 유지
+          })
+          .eq('order_number', order_number);
+        
+        if (feeUpdateError) {
+          console.error("❌ 수수료 정보 업데이트 실패:", feeUpdateError);
+        } else {
+          console.log("✅ 수수료 계산 및 저장 성공:", { fee_amount: feeAmount, fee_due_at: feeDueAt.toISOString() });
+        }
+      } catch (feeError) {
+        console.error("❌ 수수료 처리 중 오류:", feeError);
+        // 수수료 처리 실패해도 구매 확정은 완료된 것으로 처리
+      }
+    }
+
     return NextResponse.json({ 
       message: "상태가 성공적으로 업데이트되었습니다.",
       purchase: updatedPurchase
