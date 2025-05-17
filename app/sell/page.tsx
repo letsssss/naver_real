@@ -8,7 +8,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import supabase from "@/lib/supabase"
 import { checkUnpaidFees } from '@/lib/fee-utils'
-import { getUserData } from '@/lib/auth'
 import { UnpaidFeesNotice } from './UnpaidFeesNotice'
 
 import { Button } from "@/components/ui/button"
@@ -162,6 +161,7 @@ export default function SellPage() {
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
+  const [feesLoading, setFeesLoading] = useState(false)
   const [unpaidFeesData, setUnpaidFeesData] = useState<{
     hasUnpaidFees: boolean;
     unpaidFees: any[];
@@ -183,24 +183,23 @@ export default function SellPage() {
   useEffect(() => {
     async function checkFees() {
       try {
-        setIsLoading(true)
-        const userData = await getUserData()
-        if (!userData || !userData.id) {
+        setFeesLoading(true)
+        if (!user || !user.id) {
           router.push('/login?redirect=/sell')
           return
         }
         
-        const feesData = await checkUnpaidFees(userData.id)
+        const feesData = await checkUnpaidFees(user.id.toString())
         setUnpaidFeesData(feesData)
       } catch (error) {
         console.error("수수료 확인 오류:", error)
       } finally {
-        setIsLoading(false)
+        setFeesLoading(false)
       }
     }
     
     checkFees()
-  }, [router])
+  }, [router, user])
 
   if (isLoading || !user) return null
 

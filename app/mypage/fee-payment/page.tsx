@@ -28,7 +28,7 @@ export default function FeePaymentPage() {
           return;
         }
         
-        const feesData = await checkUnpaidFees(user.id);
+        const feesData = await checkUnpaidFees(user.id.toString());
         setUnpaidFeesData(feesData);
         
         // 기본적으로 모든 수수료 선택
