@@ -47,7 +47,13 @@ export async function POST(
 
   try {
     const body = await req.json()
+    // 디버깅: 원본 body 로깅
+    console.log("🔎 원본 요청 body:", body);
+    
     const { status: updatedStatus } = body
+
+    // 디버깅: 수신된 status 값 확인
+    console.log("🔍 요청된 상태값:", updatedStatus, "타입:", typeof updatedStatus);
 
     if (!updatedStatus) {
       return NextResponse.json({ error: "상태가 제공되지 않았습니다." }, { status: 400 })
@@ -73,6 +79,9 @@ export async function POST(
       return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { status: 404 })
     }
 
+    // 디버깅: 현재 DB 상태 로깅
+    console.log("📊 DB 상태 확인 - 현재 상태:", purchase.status, "요청 상태:", updatedStatus);
+
     // 현재 상태와 동일한 상태로 업데이트하려는 경우
     if (purchase.status === updatedStatus) {
       return NextResponse.json({ 
@@ -97,8 +106,25 @@ export async function POST(
       return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { status: 500 })
     }
 
-    // 구매 확정(CONFIRMED) 상태일 때 수수료 정보 업데이트
+    // 디버깅: 조건문 진입 직전에 로그 추가
+    console.log("🧭 조건문 진입 시도 - updatedStatus:", updatedStatus, "비교결과:", updatedStatus === 'CONFIRMED');
+    
+    // 문자열 정확한 비교를 위한 추가 검사
+    const isExactConfirmed = updatedStatus === 'CONFIRMED';
+    const isLowerConfirmed = updatedStatus?.toLowerCase() === 'confirmed';
+    const containsConfirmed = updatedStatus?.includes('CONFIRM');
+    
+    console.log("🔍 문자열 비교 결과:", {
+      updatedStatus,
+      isExactConfirmed,
+      isLowerConfirmed,
+      containsConfirmed,
+      charCodes: Array.from(String(updatedStatus || '')).map(c => c.charCodeAt(0))
+    });
+    
+    // 구매확정 조건 - CONFIRMED 문자열과 정확히 일치하는지 명시적으로 확인
     if (updatedStatus === 'CONFIRMED') {
+      console.log("✳️ CONFIRMED 조건 통과 - 수수료 계산 시작");
       try {
         console.log("\n===== 간소화된 수수료 계산 시작 (테스트) =====");
         console.log("✅ 구매확정 요청 → 수수료 계산 시작");
@@ -176,7 +202,16 @@ export async function POST(
           order_number
         });
       }
+    } else {
+      console.log("⚠️ CONFIRMED 조건 불일치 - 수수료 계산 건너뜀", {
+        updatedStatus, 
+        isConfirmed: updatedStatus === 'CONFIRMED',
+        type: typeof updatedStatus
+      });
     }
+    
+    // 디버깅: 최종 응답 전 로그
+    console.log("🏁 API 처리 완료 - 상태:", updatedStatus, "수수료 계산 여부:", updatedStatus === 'CONFIRMED');
 
     return NextResponse.json({ 
       message: "상태가 성공적으로 업데이트되었습니다.",
