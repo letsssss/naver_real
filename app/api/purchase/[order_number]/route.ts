@@ -5,15 +5,18 @@ export const preferredRegion = 'auto';  // ✅ 자동 라우팅
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase"
 
+// ✅ CORS 헤더를 상수로 정의하여 중복 제거
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 // CORS Preflight 요청 처리
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*", // 개발 중엔 *, 운영은 도메인 지정
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
+    headers: corsHeaders,
   });
 }
 
@@ -24,7 +27,10 @@ export async function GET(
   const { order_number } = params
   
   if (!order_number) {
-    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { status: 400 })
+    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { 
+      status: 400,
+      headers: corsHeaders
+    })
   }
   
   // 환경변수 로그
@@ -45,17 +51,14 @@ export async function GET(
 
   if (error || !data) {
     console.error("주문번호 조회 오류:", error || "데이터 없음")
-    return NextResponse.json({ error: "해당 주문번호를 찾을 수 없습니다." }, { status: 404 })
+    return NextResponse.json({ error: "해당 주문번호를 찾을 수 없습니다." }, { 
+      status: 404,
+      headers: corsHeaders
+    })
   }
   
   // CORS 헤더 추가
-  return NextResponse.json(data, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    }
-  })
+  return NextResponse.json(data, { headers: corsHeaders })
 } 
 
 export async function POST(
@@ -64,14 +67,17 @@ export async function POST(
 ) {
   const { order_number } = params
   
+  // 요청 시작 시점 로깅
+  console.log("🔄 구매확정 API POST 요청 시작 - order_number:", order_number);
+  
   if (!order_number) {
-    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { status: 400 })
+    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { 
+      status: 400,
+      headers: corsHeaders
+    })
   }
 
   try {
-    // 요청 시작 시점 로깅
-    console.log("🔄 구매확정 API 요청 시작 - order_number:", order_number);
-    
     const body = await req.json()
     // 디버깅: 원본 body 로깅
     console.log("🔎 원본 요청 body:", body);
@@ -90,11 +96,7 @@ export async function POST(
     if (!updatedStatus) {
       return NextResponse.json({ error: "상태가 제공되지 않았습니다." }, { 
         status: 400,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        headers: corsHeaders
       })
     }
 
@@ -103,11 +105,7 @@ export async function POST(
     if (!validStatuses.includes(updatedStatus)) {
       return NextResponse.json({ error: "유효하지 않은 상태값입니다." }, { 
         status: 400,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        headers: corsHeaders
       })
     }
 
@@ -125,11 +123,7 @@ export async function POST(
       console.error("주문 조회 오류:", queryError)
       return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { 
         status: 404,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        headers: corsHeaders
       })
     }
 
@@ -142,11 +136,7 @@ export async function POST(
         message: "상태가 이미 동일합니다.",
         purchase
       }, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        headers: corsHeaders
       })
     }
 
@@ -170,11 +160,7 @@ export async function POST(
       console.error("상태 업데이트 오류:", updateError)
       return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { 
         status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        headers: corsHeaders
       })
     }
 
@@ -291,22 +277,14 @@ export async function POST(
       message: "상태가 성공적으로 업데이트되었습니다.",
       purchase: updatedPurchase
     }, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      }
+      headers: corsHeaders
     })
 
   } catch (error) {
     console.error("요청 처리 오류:", error)
     return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { 
       status: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      }
+      headers: corsHeaders
     })
   }
 } 
