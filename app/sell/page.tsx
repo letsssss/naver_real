@@ -240,6 +240,28 @@ export default function SellPage() {
   // 로딩 중이거나 사용자가 없거나 리다이렉트 중일 때 렌더링 차단
   if (isLoading || !user || isRedirecting) return null
 
+  // 수동으로 수수료 체크 테스트
+  const testFeeCheck = async () => {
+    console.log("수동 테스트: checkUnpaidFees 호출");
+    if (!user || !user.id) return;
+    
+    try {
+      const result = await checkUnpaidFees(user.id.toString());
+      console.log("수동 테스트 결과:", result);
+      
+      if (result.hasUnpaidFees) {
+        console.log("수동 테스트: 미납 수수료 감지됨!");
+        alert(`미납 수수료 발견: ${result.unpaidFees.length}건, 총 ${result.totalAmount.toLocaleString()}원`);
+      } else {
+        console.log("수동 테스트: 미납 수수료 없음");
+        alert("미납 수수료가 없습니다.");
+      }
+    } catch (error) {
+      console.error("수동 테스트 오류:", error);
+      alert("수수료 체크 중 오류가 발생했습니다: " + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
   const addSection = () => {
     setSections([...sections, { id: sections.length + 1, name: "", price: "" }])
   }
@@ -548,6 +570,17 @@ export default function SellPage() {
             <span>홈으로 돌아가기</span>
           </Link>
           <h1 className="text-3xl font-bold mt-4">티켓 판매하기</h1>
+          
+          {/* 수수료 체크 수동 테스트 버튼 */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <p className="text-sm text-blue-700 mb-2">🧪 개발 테스트: 수수료 체크 로직이 작동하는지 확인</p>
+            <Button 
+              onClick={testFeeCheck} 
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              수수료 체크 수동 테스트
+            </Button>
+          </div>
         </div>
       </header>
 
