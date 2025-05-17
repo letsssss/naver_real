@@ -145,6 +145,8 @@ export default function SellPage() {
   
   // 🎯 SellPage 렌더링 진입점 로그
   console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
+  // ✅ 컴포넌트 렌더링 확인 로그
+  console.log("✅ SellPage 렌더됨", { user, isLoading, isRedirecting: false });
 
   const [concertTitle, setConcertTitle] = useState("")
   // 날짜의 초기값을 오늘 날짜로 설정
@@ -181,6 +183,28 @@ export default function SellPage() {
 
   // 렌더링 상태 로깅
   console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
+
+  useEffect(() => {
+    console.log("✅ useEffect 진입함")
+    console.log("✅ user:", user)
+    console.log("✅ isLoading:", isLoading)
+
+    async function checkFees() {
+      console.log("🔥 checkFees() 실행됨")
+      try {
+        const result = await checkUnpaidFees(user?.id?.toString())
+        console.log("🧪 checkUnpaidFees 결과:", result)
+      } catch (error) {
+        console.error("❌ checkUnpaidFees 오류:", error)
+      }
+    }
+
+    if (!isLoading && user) {
+      checkFees()
+    } else {
+      console.log("❌ checkFees 실행 조건 불충족:", { isLoading, hasUser: !!user })
+    }
+  }, [user, isLoading])
 
   useEffect(() => {
     console.log("👣 첫 번째 useEffect 진입 상태", { user, isLoading });
