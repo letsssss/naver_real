@@ -189,11 +189,28 @@ export default function SellPage() {
           return
         }
         
+        // 디버깅: 사용자 ID 정보 로깅
+        console.log("사용자 ID 정보:", {
+          id: user.id,
+          type: typeof user.id,
+          stringified: user.id.toString()
+        });
+        
         const feesData = await checkUnpaidFees(user.id.toString())
+        
+        // 디버깅: 수수료 데이터 상세 정보 로깅
+        console.log("수수료 데이터 상세:", {
+          hasUnpaidFees: feesData.hasUnpaidFees,
+          count: feesData.unpaidFees.length,
+          unpaidFees: feesData.unpaidFees,
+          totalAmount: feesData.totalAmount
+        });
+        
         setUnpaidFeesData(feesData)
         
         // 미납 수수료가 있으면 수수료 납부 페이지로 즉시 리다이렉트
         if (feesData.hasUnpaidFees) {
+          console.log("미납 수수료 감지: 리다이렉트 실행");
           toast({
             title: "미납 수수료 알림",
             description: `${feesData.unpaidFees.length}건의 미납 수수료(총 ${feesData.totalAmount.toLocaleString()}원)가 있어 판매 기능이 제한됩니다.`,
@@ -201,6 +218,8 @@ export default function SellPage() {
             duration: 5000,
           })
           router.replace('/mypage/fee-payment')
+        } else {
+          console.log("미납 수수료 없음: 판매 페이지 접근 허용");
         }
       } catch (error) {
         console.error("수수료 확인 오류:", error)

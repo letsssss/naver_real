@@ -9,6 +9,8 @@ export async function checkUnpaidFees(userId: string) {
   // 관리자 권한으로 Supabase 클라이언트 생성
   const supabase = createAdminClient();
   
+  console.log("checkUnpaidFees 호출됨, 사용자 ID:", userId, "타입:", typeof userId);
+  
   // 기간에 상관없이 모든 미납 수수료 조회 (기한 조건 제거)
   const { data, error } = await supabase
     .from('purchases')
@@ -16,6 +18,8 @@ export async function checkUnpaidFees(userId: string) {
     .eq('seller_id', userId)
     .eq('is_fee_paid', false)
     .eq('status', 'CONFIRMED');
+  
+  console.log("Supabase 쿼리 결과:", { data, error });
   
   if (error) {
     console.error("미납 수수료 조회 오류:", error);
@@ -25,7 +29,7 @@ export async function checkUnpaidFees(userId: string) {
   // 총 미납 금액 계산
   const totalUnpaidAmount = data?.reduce((sum, item) => sum + (item.fee_amount || 0), 0) || 0;
   
-  return {
+  const result = {
     hasUnpaidFees: data && data.length > 0,
     unpaidFees: data || [],
     totalAmount: totalUnpaidAmount,
@@ -33,4 +37,8 @@ export async function checkUnpaidFees(userId: string) {
       ? new Date(data.sort((a, b) => new Date(a.fee_due_at).getTime() - new Date(b.fee_due_at).getTime())[0].fee_due_at)
       : null
   };
+  
+  console.log("checkUnpaidFees 반환 결과:", result);
+  
+  return result;
 } 
