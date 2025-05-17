@@ -261,6 +261,11 @@ export default function SellPage() {
           totalAmount: feesData.totalAmount
         });
         
+        // 사용자 요청 디버깅 로그 추가
+        console.log("✅ user:", user);
+        console.log("✅ unpaidFeesData:", feesData);
+        console.log("✅ unpaidFeesData.hasUnpaidFees:", feesData.hasUnpaidFees);
+        
         setUnpaidFeesData(feesData)
         
         // 미납 수수료가 있으면 수수료 납부 페이지로 즉시 리다이렉트

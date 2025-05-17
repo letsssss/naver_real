@@ -75,6 +75,7 @@ export async function checkUnpaidFees(userId: string) {
       oldestDueDate: oldestDueDate ? new Date(oldestDueDate) : null
     };
     
+    console.log("💥 최종 판단 - 미납 수수료 있음?", result.hasUnpaidFees);
     console.log("📊 최종 결과:", result);
     return result;
   } catch (error) {
