@@ -7,6 +7,9 @@ import { ArrowLeft, X } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import supabase from "@/lib/supabase"
+import { checkUnpaidFees } from '@/lib/fee-utils'
+import { getUserData } from '@/lib/auth'
+import { UnpaidFeesNotice } from './UnpaidFeesNotice'
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -159,12 +162,45 @@ export default function SellPage() {
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
+  const [unpaidFeesData, setUnpaidFeesData] = useState<{
+    hasUnpaidFees: boolean;
+    unpaidFees: any[];
+    totalAmount: number;
+    oldestDueDate: Date | null;
+  }>({
+    hasUnpaidFees: false,
+    unpaidFees: [],
+    totalAmount: 0,
+    oldestDueDate: null
+  })
 
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login?callbackUrl=/sell")
     }
   }, [user, isLoading, router])
+
+  useEffect(() => {
+    async function checkFees() {
+      try {
+        setIsLoading(true)
+        const userData = await getUserData()
+        if (!userData || !userData.id) {
+          router.push('/login?redirect=/sell')
+          return
+        }
+        
+        const feesData = await checkUnpaidFees(userData.id)
+        setUnpaidFeesData(feesData)
+      } catch (error) {
+        console.error("수수료 확인 오류:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    checkFees()
+  }, [router])
 
   if (isLoading || !user) return null
 
@@ -463,6 +499,10 @@ export default function SellPage() {
     }
   }
 
+  const handlePayNow = () => {
+    router.push('/mypage/fee-payment')
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
@@ -477,243 +517,291 @@ export default function SellPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
-          <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  티켓 사진 <span className="text-gray-500">(선택)</span>
-                </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                  <div className="space-y-1 text-center">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="flex text-sm text-gray-600">
-                      <label
-                        htmlFor="file-upload"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
+          {unpaidFeesData.hasUnpaidFees ? (
+            <>
+              <UnpaidFeesNotice 
+                totalAmount={unpaidFeesData.totalAmount}
+                unpaidCount={unpaidFeesData.unpaidFees.length}
+                oldestDueDate={unpaidFeesData.oldestDueDate}
+                onPayNow={handlePayNow}
+              />
+              
+              <div className="mt-8 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <h3 className="text-xl font-semibold mb-4">미납 수수료 내역</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left">주문번호</th>
+                        <th className="px-4 py-2 text-left">거래금액</th>
+                        <th className="px-4 py-2 text-left">수수료</th>
+                        <th className="px-4 py-2 text-left">납부기한</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unpaidFeesData.unpaidFees.slice(0, 5).map(fee => (
+                        <tr key={fee.id} className="border-t border-gray-100">
+                          <td className="px-4 py-3">{fee.order_number}</td>
+                          <td className="px-4 py-3">{fee.total_price.toLocaleString()}원</td>
+                          <td className="px-4 py-3 font-medium text-red-600">{fee.fee_amount.toLocaleString()}원</td>
+                          <td className="px-4 py-3">{new Date(fee.fee_due_at).toLocaleDateString('ko-KR')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {unpaidFeesData.unpaidFees.length > 5 && (
+                    <div className="mt-4 text-right">
+                      <button 
+                        onClick={handlePayNow}
+                        className="text-blue-600 hover:text-blue-800 font-medium"
                       >
-                        <span>티켓 사진 업로드</span>
-                        <input id="file-upload" name="file-upload" type="file" className="sr-only" />
-                      </label>
-                      <p className="pl-1">또는 드래그 앤 드롭</p>
+                        전체 {unpaidFeesData.unpaidFees.length}건 보기
+                      </button>
                     </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                  </div>
+                  )}
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  공연 제목 <span className="text-red-500">(필수)</span>
-                </label>
-                <Input
-                  type="text"
-                  placeholder="공연 제목을 입력하세요"
-                  value={concertTitle}
-                  onChange={(e) => setConcertTitle(e.target.value)}
-                  className={formErrors.concertTitle ? "border-red-500" : ""}
-                  required
-                />
-                {formErrors.concertTitle && (
-                  <p className="mt-1 text-xs text-red-500">{formErrors.concertTitle}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {concertDates.map((dateObj, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <div className="mb-1 flex items-center">
-                        <label className="text-sm font-medium text-gray-700">{index === 0 ? "공연 날짜" : `추가 날짜 ${index}`}</label>
-                        {formErrors[`date_${index}`] && <span className="text-xs text-red-500 ml-2">{formErrors[`date_${index}`]}</span>}
+            </>
+          ) : (
+            <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    티켓 사진 <span className="text-gray-500">(선택)</span>
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                    <div className="space-y-1 text-center">
+                      <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <div className="flex text-sm text-gray-600">
+                        <label
+                          htmlFor="file-upload"
+                          className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500"
+                        >
+                          <span>티켓 사진 업로드</span>
+                          <input id="file-upload" name="file-upload" type="file" className="sr-only" />
+                        </label>
+                        <p className="pl-1">또는 드래그 앤 드롭</p>
                       </div>
-                      <Input
-                        type="date"
-                        value={dateObj.date}
-                        onChange={(e) => updateDate(index, e.target.value)}
-                        className={formErrors[`date_${index}`] ? "border-red-500" : ""}
-                      />
+                      <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
                     </div>
-                    {concertDates.length > 1 && (
-                      <Button type="button" variant="ghost" className="mt-6" onClick={() => removeDate(index)}>
-                        삭제
-                      </Button>
-                    )}
                   </div>
-                ))}
-                <Button type="button" variant="outline" onClick={addDate}>
-                  + 날짜 추가
-                </Button>
-              </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  공연 장소 <span className="text-gray-500">(선택)</span>
-                </label>
-                <Input
-                  placeholder="공연 장소를 입력하세요"
-                  value={concertVenue}
-                  onChange={(e) => setConcertVenue(e.target.value)}
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    공연 제목 <span className="text-red-500">(필수)</span>
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="공연 제목을 입력하세요"
+                    value={concertTitle}
+                    onChange={(e) => setConcertTitle(e.target.value)}
+                    className={formErrors.concertTitle ? "border-red-500" : ""}
+                    required
+                  />
+                  {formErrors.concertTitle && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.concertTitle}</p>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  공연 시간 <span className="text-gray-500">(선택)</span>
-                </label>
-                <Input
-                  placeholder="예: 19:00"
-                  value={concertTime}
-                  onChange={(e) => setConcertTime(e.target.value)}
-                />
-              </div>
-
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-sm font-medium text-gray-700">
-                    구역별 가격 설정 <span className="text-red-500">(필수)</span>
-                  </h3>
-                  <Button type="button" variant="outline" onClick={addSection} className="text-xs">
-                    구역 추가 +
+                <div className="space-y-2">
+                  {concertDates.map((dateObj, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <div className="mb-1 flex items-center">
+                          <label className="text-sm font-medium text-gray-700">{index === 0 ? "공연 날짜" : `추가 날짜 ${index}`}</label>
+                          {formErrors[`date_${index}`] && <span className="text-xs text-red-500 ml-2">{formErrors[`date_${index}`]}</span>}
+                        </div>
+                        <Input
+                          type="date"
+                          value={dateObj.date}
+                          onChange={(e) => updateDate(index, e.target.value)}
+                          className={formErrors[`date_${index}`] ? "border-red-500" : ""}
+                        />
+                      </div>
+                      {concertDates.length > 1 && (
+                        <Button type="button" variant="ghost" className="mt-6" onClick={() => removeDate(index)}>
+                          삭제
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" onClick={addDate}>
+                    + 날짜 추가
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                  {sections.map((section, index) => (
-                    <div key={index} className="border rounded-lg p-4 text-center">
-                      <div className="flex-1 mb-2">
-                        <Input
-                          type="text"
-                          placeholder="구역명 (예: R석, S석)"
-                          value={section.name}
-                          onChange={(e) => updateSectionName(index, e.target.value)}
-                          className={formErrors[`section_${index}_name`] ? "border-red-500" : ""}
-                          required
-                        />
-                        {formErrors[`section_${index}_name`] && (
-                          <p className="mt-1 text-xs text-red-500">{formErrors[`section_${index}_name`]}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Input
-                          type="text"
-                          placeholder="가격 (최소 1,000원)"
-                          value={section.price}
-                          onChange={(e) => updateSectionPrice(index, e.target.value)}
-                          className={formErrors[`section_${index}_price`] ? "border-red-500" : ""}
-                          required
-                        />
-                        <span className="text-gray-500 whitespace-nowrap">원</span>
-                        {formErrors[`section_${index}_price`] && (
-                          <p className="mt-1 text-xs text-red-500">{formErrors[`section_${index}_price`]}</p>
-                        )}
-                      </div>
-                      <div className="flex justify-end items-center">
-                        {sections.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => removeSection(index)}
-                            className="h-8 w-8 text-red-500"
-                          >
-                            ✕
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  티켓 상세설명 <span className="text-red-500">(필수)</span>
-                </label>
-                <Textarea
-                  placeholder="티켓에 대한 상세한 설명을 입력해주세요 (최소 10글자 이상)"
-                  value={ticketDescription}
-                  onChange={(e) => setTicketDescription(e.target.value)}
-                  className={`min-h-[100px] ${formErrors.description ? "border-red-500" : ""}`}
-                  required
-                />
-                {formErrors.description && <p className="mt-1 text-sm text-red-500">{formErrors.description}</p>}
-                <p className="mt-1 text-xs text-gray-500">※ 티켓 상세설명은 최소 10글자 이상 입력해주세요. 상세한 정보를 제공할수록 구매자의 관심을 끌 수 있습니다.</p>
-              </div>
-
-              {/* 이용약관 동의 섹션 */}
-              <div className="border-t pt-6">
-                <div className="flex items-start space-x-2">
-                  <Checkbox 
-                    id="terms" 
-                    checked={isTermsAgreed}
-                    onCheckedChange={(checked) => setIsTermsAgreed(checked as boolean)}
-                    className={formErrors.terms ? "border-red-500" : ""}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    공연 장소 <span className="text-gray-500">(선택)</span>
+                  </label>
+                  <Input
+                    placeholder="공연 장소를 입력하세요"
+                    value={concertVenue}
+                    onChange={(e) => setConcertVenue(e.target.value)}
                   />
-                  <div className="grid gap-1.5 leading-none">
-                    <div className="flex items-center gap-1">
-                      <label
-                        htmlFor="terms"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        <span className="text-red-500">*</span> 이용약관 동의
-                      </label>
-                      <Dialog open={isTermsDialogOpen} onOpenChange={setIsTermsDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" className="text-xs p-0 h-auto text-blue-600 underline">
-                            (전문보기)
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle className="text-xl font-bold text-center mb-4">이용약관</DialogTitle>
-                            <Button 
-                              className="absolute right-4 top-4 rounded-full p-2" 
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    공연 시간 <span className="text-gray-500">(선택)</span>
+                  </label>
+                  <Input
+                    placeholder="예: 19:00"
+                    value={concertTime}
+                    onChange={(e) => setConcertTime(e.target.value)}
+                  />
+                </div>
+
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-sm font-medium text-gray-700">
+                      구역별 가격 설정 <span className="text-red-500">(필수)</span>
+                    </h3>
+                    <Button type="button" variant="outline" onClick={addSection} className="text-xs">
+                      구역 추가 +
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    {sections.map((section, index) => (
+                      <div key={index} className="border rounded-lg p-4 text-center">
+                        <div className="flex-1 mb-2">
+                          <Input
+                            type="text"
+                            placeholder="구역명 (예: R석, S석)"
+                            value={section.name}
+                            onChange={(e) => updateSectionName(index, e.target.value)}
+                            className={formErrors[`section_${index}_name`] ? "border-red-500" : ""}
+                            required
+                          />
+                          {formErrors[`section_${index}_name`] && (
+                            <p className="mt-1 text-xs text-red-500">{formErrors[`section_${index}_name`]}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Input
+                            type="text"
+                            placeholder="가격 (최소 1,000원)"
+                            value={section.price}
+                            onChange={(e) => updateSectionPrice(index, e.target.value)}
+                            className={formErrors[`section_${index}_price`] ? "border-red-500" : ""}
+                            required
+                          />
+                          <span className="text-gray-500 whitespace-nowrap">원</span>
+                          {formErrors[`section_${index}_price`] && (
+                            <p className="mt-1 text-xs text-red-500">{formErrors[`section_${index}_price`]}</p>
+                          )}
+                        </div>
+                        <div className="flex justify-end items-center">
+                          {sections.length > 1 && (
+                            <Button
+                              type="button"
                               variant="ghost"
-                              onClick={() => setIsTermsDialogOpen(false)}
+                              onClick={() => removeSection(index)}
+                              className="h-8 w-8 text-red-500"
                             >
-                              <X className="h-4 w-4" />
+                              ✕
                             </Button>
-                          </DialogHeader>
-                          <div className="text-sm whitespace-pre-line bg-gray-50 p-6 rounded-lg border border-gray-100">
-                            {termsOfService}
-                          </div>
-                          <div className="mt-4 flex justify-center">
-                            <Button onClick={() => {
-                              setIsTermsAgreed(true);
-                              setIsTermsDialogOpen(false);
-                            }}
-                            className="bg-[#0061FF] hover:bg-[#0052D6] text-white px-6">
-                              동의하고 닫기
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                    {formErrors.terms && <p className="text-xs text-red-500">{formErrors.terms}</p>}
-                    <p className="text-sm text-gray-500">
-                      판매 등록을 위해서는 이용약관에 동의해야 합니다.
-                    </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
 
-              <Button type="submit" className="w-full bg-[#0061FF] hover:bg-[#0052D6] text-white transition-colors">
-                판매 등록하기
-              </Button>
-            </div>
-          </form>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    티켓 상세설명 <span className="text-red-500">(필수)</span>
+                  </label>
+                  <Textarea
+                    placeholder="티켓에 대한 상세한 설명을 입력해주세요 (최소 10글자 이상)"
+                    value={ticketDescription}
+                    onChange={(e) => setTicketDescription(e.target.value)}
+                    className={`min-h-[100px] ${formErrors.description ? "border-red-500" : ""}`}
+                    required
+                  />
+                  {formErrors.description && <p className="mt-1 text-sm text-red-500">{formErrors.description}</p>}
+                  <p className="mt-1 text-xs text-gray-500">※ 티켓 상세설명은 최소 10글자 이상 입력해주세요. 상세한 정보를 제공할수록 구매자의 관심을 끌 수 있습니다.</p>
+                </div>
+
+                {/* 이용약관 동의 섹션 */}
+                <div className="border-t pt-6">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox 
+                      id="terms" 
+                      checked={isTermsAgreed}
+                      onCheckedChange={(checked) => setIsTermsAgreed(checked as boolean)}
+                      className={formErrors.terms ? "border-red-500" : ""}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <div className="flex items-center gap-1">
+                        <label
+                          htmlFor="terms"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          <span className="text-red-500">*</span> 이용약관 동의
+                        </label>
+                        <Dialog open={isTermsDialogOpen} onOpenChange={setIsTermsDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" className="text-xs p-0 h-auto text-blue-600 underline">
+                              (전문보기)
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle className="text-xl font-bold text-center mb-4">이용약관</DialogTitle>
+                              <Button 
+                                className="absolute right-4 top-4 rounded-full p-2" 
+                                variant="ghost"
+                                onClick={() => setIsTermsDialogOpen(false)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </DialogHeader>
+                            <div className="text-sm whitespace-pre-line bg-gray-50 p-6 rounded-lg border border-gray-100">
+                              {termsOfService}
+                            </div>
+                            <div className="mt-4 flex justify-center">
+                              <Button onClick={() => {
+                                setIsTermsAgreed(true);
+                                setIsTermsDialogOpen(false);
+                              }}
+                              className="bg-[#0061FF] hover:bg-[#0052D6] text-white px-6">
+                                동의하고 닫기
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                      {formErrors.terms && <p className="text-xs text-red-500">{formErrors.terms}</p>}
+                      <p className="text-sm text-gray-500">
+                        판매 등록을 위해서는 이용약관에 동의해야 합니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full bg-[#0061FF] hover:bg-[#0052D6] text-white transition-colors">
+                  판매 등록하기
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
       </main>
     </div>
