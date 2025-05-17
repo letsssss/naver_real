@@ -142,6 +142,10 @@ const concertData: Concert[] = [
 export default function SellPage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  
+  // 🎯 SellPage 렌더링 진입점 로그
+  console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
+
   const [concertTitle, setConcertTitle] = useState("")
   // 날짜의 초기값을 오늘 날짜로 설정
   const today = new Date().toISOString().split("T")[0] // YYYY-MM-DD 형식
@@ -179,17 +183,21 @@ export default function SellPage() {
   console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
 
   useEffect(() => {
+    console.log("👣 첫 번째 useEffect 진입 상태", { user, isLoading });
     if (!isLoading && !user) {
       router.replace("/login?callbackUrl=/sell")
     }
   }, [user, isLoading, router])
 
   useEffect(() => {
+    console.log("👣 두 번째 useEffect(수수료 체크) 진입 상태", { user, isLoading });
+    
     async function checkFees() {
       try {
-        console.log("🔥 수수료 확인 시작", user?.id);
+        console.log("🔥 checkFees 실행됨, user:", user);
         setFeesLoading(true)
         if (!user || !user.id) {
+          console.log("❌ user 또는 user.id가 없음, 로그인 페이지로 리다이렉트");
           router.push('/login?redirect=/sell')
           return
         }
@@ -237,6 +245,9 @@ export default function SellPage() {
     checkFees()
   }, [router, user, toast])
 
+  // 렌더링 차단 조건 확인 로그
+  console.log("🚫 렌더링 차단 조건 확인", { isLoading, user, isRedirecting });
+  
   // 로딩 중이거나 사용자가 없거나 리다이렉트 중일 때 렌더링 차단
   if (isLoading || !user || isRedirecting) return null
 
