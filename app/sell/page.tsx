@@ -1,5 +1,8 @@
 "use client"
 
+// 파일 로드 확인용 로그 - 무조건 실행되는지 확인
+console.log("🚨🚨🚨 SELLPAGE 파일 로드됨 - 이 로그는 파일이 읽혔음을 의미함");
+
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -140,14 +143,21 @@ const concertData: Concert[] = [
 ]
 
 export default function SellPage() {
-  // 🚨 이 로그는 무조건 찍혀야 함 - 컴포넌트가 호출되기만 해도 찍힘
-  console.log("🚨 SellPage 함수 호출됨");
+  // 컴포넌트 실행 확인
+  console.log("🚨🚨 SellPage 컴포넌트 함수 실행 시작");
   
-  const { user, isLoading } = useAuth();
-  // 인증 상태 즉시 확인
-  console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
-  
-  const router = useRouter();
+  try {
+    // 🚨 이 로그는 무조건 찍혀야 함 - 컴포넌트가 호출되기만 해도 찍힘
+    console.log("🚨 SellPage 함수 호출됨");
+    
+    const { user, isLoading } = useAuth();
+    // 인증 상태 즉시 확인
+    console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
+    
+    const router = useRouter();
+  } catch (error) {
+    console.error("SellPage 초기화 중 오류 발생:", error);
+  }
   
   // 🎯 SellPage 렌더링 진입점 로그
   console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
@@ -666,16 +676,6 @@ export default function SellPage() {
                     </tbody>
                   </table>
                   
-                  {unpaidFeesData.unpaidFees.length > 5 && (
-                    <div className="mt-4 text-right">
-                      <button 
-                        onClick={handlePayNow}
-                        className="text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        전체 {unpaidFeesData.unpaidFees.length}건 보기
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </>
