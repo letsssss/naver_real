@@ -311,6 +311,29 @@ export async function POST(req: Request) {
       return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
     }
     
+    // 1-1. 미납 수수료 확인 (추가)
+    try {
+      const { checkUnpaidFees } = await import('@/lib/fee-utils');
+      const unpaidFeesData = await checkUnpaidFees(userId.toString());
+      
+      if (unpaidFeesData.hasUnpaidFees) {
+        console.log(`[게시물 API] 사용자 ${userId}에게 미납 수수료가 있어 요청 거부`);
+        return createErrorResponse(
+          '미납 수수료가 있어 판매 글을 등록할 수 없습니다.',
+          'UNPAID_FEES', 
+          403,
+          {
+            unpaidCount: unpaidFeesData.unpaidFees.length,
+            totalAmount: unpaidFeesData.totalAmount,
+            oldestDueDate: unpaidFeesData.oldestDueDate
+          }
+        );
+      }
+    } catch (feeCheckError) {
+      console.error('[게시물 API] 수수료 확인 중 오류:', feeCheckError);
+      // 수수료 확인 실패 시에도 계속 진행 (장애 방지)
+    }
+    
     // 2. 요청 본문 파싱
     const body = await req.json();
     console.log('[게시물 API] 요청 본문 요약:', { 
