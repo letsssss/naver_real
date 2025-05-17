@@ -52,8 +52,14 @@ export async function POST(
     
     const { status: updatedStatus } = body
 
-    // 디버깅: 수신된 status 값 확인
-    console.log("🔍 요청된 상태값:", updatedStatus, "타입:", typeof updatedStatus);
+    // 디버깅: 수신된 status 값 확인 (더 명확하게)
+    console.log("📦 전달된 status:", updatedStatus, "타입:", typeof updatedStatus, "값 존재?:", !!updatedStatus);
+    console.log("🔬 status 값 분석:", {
+      isEmpty: !updatedStatus,
+      rawValue: updatedStatus,
+      trimmed: typeof updatedStatus === 'string' ? updatedStatus.trim() : updatedStatus,
+      upperCased: typeof updatedStatus === 'string' ? updatedStatus.toUpperCase() : updatedStatus
+    });
 
     if (!updatedStatus) {
       return NextResponse.json({ error: "상태가 제공되지 않았습니다." }, { status: 400 })
@@ -106,25 +112,27 @@ export async function POST(
       return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { status: 500 })
     }
 
-    // 디버깅: 조건문 진입 직전에 로그 추가
-    console.log("🧭 조건문 진입 시도 - updatedStatus:", updatedStatus, "비교결과:", updatedStatus === 'CONFIRMED');
+    // 디버깅: 조건문 진입 직전에 로그 추가 (더 명확하게)
+    console.log("🧭 조건문 진입 시도 - 안전한 비교 방식 체크:", (updatedStatus || '').toUpperCase().trim() === 'CONFIRMED');
     
     // 문자열 정확한 비교를 위한 추가 검사
     const isExactConfirmed = updatedStatus === 'CONFIRMED';
     const isLowerConfirmed = updatedStatus?.toLowerCase() === 'confirmed';
     const containsConfirmed = updatedStatus?.includes('CONFIRM');
+    const isSafeConfirmed = (updatedStatus || '').toUpperCase().trim() === 'CONFIRMED';
     
     console.log("🔍 문자열 비교 결과:", {
       updatedStatus,
       isExactConfirmed,
       isLowerConfirmed,
       containsConfirmed,
+      isSafeConfirmed,
       charCodes: Array.from(String(updatedStatus || '')).map(c => c.charCodeAt(0))
     });
     
-    // 구매확정 조건 - CONFIRMED 문자열과 정확히 일치하는지 명시적으로 확인
-    if (updatedStatus === 'CONFIRMED') {
-      console.log("✳️ CONFIRMED 조건 통과 - 수수료 계산 시작");
+    // 구매확정 조건 - 더 안전한 비교 방식 사용
+    if ((updatedStatus || '').toUpperCase().trim() === 'CONFIRMED') {
+      console.log("✅ CONFIRMED 조건 통과 - 수수료 계산 시작");
       try {
         console.log("\n===== 간소화된 수수료 계산 시작 (테스트) =====");
         console.log("✅ 구매확정 요청 → 수수료 계산 시작");
