@@ -10,21 +10,27 @@ interface ProfileSectionProps {
 }
 
 export default function ProfileSection({ user }: ProfileSectionProps) {
+  // ISO 형식의 날짜 문자열을 한국 시간(KST)으로 포맷팅하는 함수
   const formatDate = (dateString?: string) => {
     if (!dateString) return "정보 없음";
     
     try {
       const date = new Date(dateString);
       
+      // 날짜가 유효한지 확인
       if (isNaN(date.getTime())) {
         return "정보 없음";
       }
       
-      return date.toLocaleDateString("ko-KR", {
+      // 한국 시간대로 변환하여 날짜 포맷팅
+      return date.toLocaleString("ko-KR", {
+        timeZone: "Asia/Seoul",
         year: "numeric",
         month: "long",
-        day: "numeric"
-      });
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).split(' ').slice(0, 3).join(' '); // '오전/오후 시간:분' 부분 제거, 날짜만 표시
     } catch (error) {
       console.error("날짜 변환 오류:", error);
       return "정보 없음";
