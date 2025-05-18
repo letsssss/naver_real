@@ -808,4 +808,97 @@ export const getSaleStatusCount = (sales: Sale[]): StatusCount => {
   });
 
   return statusCount;
+};
+
+// 구매 거래 취소 함수
+export const cancelPurchase = async (
+  user: any,
+  orderNumber: string,
+  setOngoingPurchases: (updater: (prev: Purchase[]) => Purchase[]) => void,
+  setPurchaseStatus: (updater: (prev: TransactionStatus) => TransactionStatus) => void
+) => {
+  try {
+    if (!user || !user.id) {
+      toast.error("사용자 인증 정보가 없습니다. 다시 로그인해주세요.");
+      return false;
+    }
+    
+    console.log("구매 거래 취소 요청:", orderNumber, "사용자 ID:", user.id);
+    
+    // 현재 호스트 URL 가져오기 (포트 포함)
+    const currentHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+    
+    // 인증 토큰 가져오기
+    const authToken = getAuthToken();
+    
+    // 요청 헤더 구성
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    // 토큰이 있는 경우 인증 헤더 추가
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    
+    // userId를 항상 쿼리 파라미터로 추가 (인증 백업)
+    const userId = user.id?.toString() || '';
+    // 현재 호스트 사용 (포트 불일치 문제 해결)
+    let url = `${currentHost}/api/purchase/cancel?orderNumber=${orderNumber}&userId=${userId}&t=${Date.now()}`;
+    
+    console.log("취소 요청 URL:", url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      credentials: 'include', // 쿠키 포함
+      body: JSON.stringify({
+        orderNumber,
+        reason: "판매자가 3일 내에 티켓을 확보하지 못했습니다."
+      })
+    });
+    
+    // 응답 처리
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (e) {
+      console.error("응답 파싱 오류:", e);
+      responseData = { success: false, message: "서버 응답을 처리할 수 없습니다." };
+    }
+    
+    console.log("취소 응답:", responseData);
+    
+    if (!response.ok) {
+      throw new Error(responseData.message || '거래 취소에 실패했습니다.');
+    }
+    
+    toast.success("거래가 성공적으로 취소되었습니다.");
+    
+    // UI에서 상태 업데이트
+    setOngoingPurchases(prev => 
+      prev.map(purchase => 
+        purchase.orderNumber === orderNumber
+          ? { ...purchase, status: "CANCELED", statusText: "거래취소" }
+          : purchase
+      )
+    );
+    
+    // 상태 카운트 업데이트
+    setPurchaseStatus(prev => {
+      // 기존 상태를 복사
+      const newStatus = { ...prev };
+      // 취켓팅진행중 카운트 감소, 거래취소 카운트 증가
+      newStatus.취켓팅진행중 = Math.max(0, newStatus.취켓팅진행중 - 1);
+      newStatus.거래취소 = newStatus.거래취소 + 1;
+      return newStatus;
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('거래 취소 오류:', error);
+    toast.error(error instanceof Error ? error.message : "거래 취소 중 오류가 발생했습니다.");
+    return false;
+  }
 }; 

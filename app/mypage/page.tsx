@@ -439,6 +439,8 @@ export default function MyPage() {
                 purchases={ongoingPurchases} 
                 isLoading={isLoadingPurchases} 
                 router={router} 
+                setPurchaseStatus={setPurchaseStatus}
+                setOngoingPurchases={setOngoingPurchases}
               />
             )}
 

@@ -1,10 +1,26 @@
 import Link from "next/link";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import MessageButton from "./MessageButton";
+import { useAuth } from "@/contexts/auth-context";
+import { cancelPurchase } from "@/services/mypage-service";
+import { toast } from "sonner";
+
+// UI 컴포넌트 추가
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 // Loader 컴포넌트
-import { Loader as LoaderIcon } from "lucide-react";
+import { Loader as LoaderIcon, AlertTriangle } from "lucide-react";
 const Loader = ({ size = 24 }: { size?: number }) => (
   <div className="animate-spin" style={{ width: size, height: size }}>
     <LoaderIcon size={size} />
@@ -61,9 +77,57 @@ interface PurchasesSectionProps {
   purchases: Purchase[];
   isLoading: boolean;
   router: AppRouterInstance;
+  setPurchaseStatus?: any; // 옵셔널로 추가
+  setOngoingPurchases?: any; // 옵셔널로 추가
 }
 
-export default function PurchasesSection({ purchases, isLoading, router }: PurchasesSectionProps) {
+export default function PurchasesSection({ 
+  purchases, 
+  isLoading, 
+  router,
+  setPurchaseStatus,
+  setOngoingPurchases
+}: PurchasesSectionProps) {
+  const { user } = useAuth();
+  const [cancelingOrderNumber, setCancelingOrderNumber] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+
+  // 거래 취소 처리 함수
+  const handleCancelPurchase = async () => {
+    if (!cancelingOrderNumber || !user || !setOngoingPurchases || !setPurchaseStatus) {
+      toast.error("거래 취소에 필요한 정보가 부족합니다.");
+      return;
+    }
+
+    setIsCanceling(true);
+    try {
+      const success = await cancelPurchase(
+        user,
+        cancelingOrderNumber,
+        setOngoingPurchases,
+        setPurchaseStatus
+      );
+
+      if (success) {
+        setIsDialogOpen(false);
+        toast.success("거래가 성공적으로 취소되었습니다.");
+      }
+    } catch (error) {
+      console.error("거래 취소 실패:", error);
+      toast.error("거래 취소 중 오류가 발생했습니다.");
+    } finally {
+      setIsCanceling(false);
+      setCancelingOrderNumber(null);
+    }
+  };
+
+  // 취소 버튼 클릭 핸들러
+  const handleCancelButtonClick = (orderNumber: string) => {
+    setCancelingOrderNumber(orderNumber);
+    setIsDialogOpen(true);
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">진행중인 구매</h2>
@@ -124,10 +188,56 @@ export default function PurchasesSection({ purchases, isLoading, router }: Purch
               <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
                 <MessageButton orderNumber={item.orderNumber || `ORDER-${item.id}`} />
               </Link>
+              
+              {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시 */}
+              {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
+                <Button 
+                  className="text-sm bg-red-50 text-red-700 border-red-300 hover:bg-red-100 transition-colors flex items-center gap-1 font-medium" 
+                  variant="outline"
+                  onClick={() => handleCancelButtonClick(item.orderNumber || `ORDER-${item.id}`)}
+                >
+                  <AlertTriangle size={16} />
+                  거래 취소
+                </Button>
+              )}
             </div>
           </div>
         ))
       )}
+
+      {/* 거래 취소 확인 모달 */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>거래 취소 확인</DialogTitle>
+            <DialogDescription>
+              판매자가 3일 안에 티켓을 확보하지 못한 경우 거래를 취소할 수 있습니다.
+              정말로 이 거래를 취소하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-amber-50 p-3 rounded-md border border-amber-200 text-amber-800 text-sm my-2">
+            <p className="flex items-center gap-2">
+              <AlertTriangle size={16} />
+              <span>거래 취소 후에는 되돌릴 수 없으니 신중하게 결정해주세요.</span>
+            </p>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:justify-end">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                취소
+              </Button>
+            </DialogClose>
+            <Button 
+              type="button" 
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleCancelPurchase}
+              disabled={isCanceling}
+            >
+              {isCanceling ? <Loader size={16} /> : '거래 취소하기'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
