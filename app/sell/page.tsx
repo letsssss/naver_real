@@ -134,6 +134,7 @@ interface FormErrors {
   concertVenue?: string
   description?: string
   terms?: string
+  fee?: string
   [key: string]: string | undefined
 }
 
@@ -178,6 +179,7 @@ export default function SellPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
+  const [isFeeAgreed, setIsFeeAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
   const [feesLoading, setFeesLoading] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
@@ -414,92 +416,99 @@ export default function SellPage() {
   }
 
   const validateForm = () => {
-    const errors: Record<string, string> = {}
+    const errors: FormErrors = {}
 
-    if (!concertTitle) {
-      errors.concertTitle = "공연 제목을 입력해주세요"
+    if (!concertTitle.trim()) {
+      errors.concertTitle = "공연 제목을 입력해주세요."
     }
 
+    // 추가된 날짜 유효성 검사 (첫번째 날짜는 필수)
+    if (!concertDates[0].date) {
+      errors["date_0"] = "공연 날짜를 입력해주세요."
+    }
+
+    // 다른 날짜들은 입력되었다면 과거 날짜인지 체크
     concertDates.forEach((dateObj, index) => {
-      if (!dateObj.date) {
-        errors[`date_${index}`] = "공연 날짜를 입력해주세요"
-      }
-    })
+      if (dateObj.date) {
+        const enteredDate = new Date(dateObj.date)
+        // 오늘 날짜의 시간을 00:00:00으로 설정하여 비교
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
 
-    if (!ticketDescription) {
-      errors.description = "티켓 상세설명을 입력해주세요"
-    }
-
-    sections.forEach((section, index) => {
-      if (!section.name) {
-        errors[`section_${index}_name`] = "구역명을 입력해주세요"
-      }
-      if (!section.price) {
-        errors[`section_${index}_price`] = "가격을 입력해주세요"
-      } else {
-        // 가격이 1000원 미만인지 확인
-        const priceValue = Number(section.price.replace(/[^\d]/g, ''))
-        if (priceValue < 1000) {
-          errors[`section_${index}_price`] = "가격은 최소 1000원 이상이어야 합니다"
+        if (enteredDate < today) {
+          errors[`date_${index}`] = "과거 날짜는 선택할 수 없습니다."
         }
       }
     })
 
-    // 이용약관 동의 여부 확인
-    if (!isTermsAgreed) {
-      errors.terms = "이용약관에 동의해주세요"
+    // 상세설명 유효성 검사
+    if (!ticketDescription.trim()) {
+      errors.description = "티켓 상세설명을 입력해주세요."
+    } else if (ticketDescription.trim().length < 10) {
+      errors.description = "티켓 상세설명은 최소 10글자 이상 입력해주세요."
     }
 
-    setFormErrors(errors)
-    return Object.keys(errors).length === 0
+    // 구역 정보 유효성 검사
+    sections.forEach((section, index) => {
+      if (!section.name.trim()) {
+        errors[`section_${index}_name`] = "구역명을 입력해주세요."
+      }
+
+      if (!section.price) {
+        errors[`section_${index}_price`] = "가격을 입력해주세요."
+      } else {
+        const numericPrice = parseInt(section.price.replace(/,/g, ""))
+        if (isNaN(numericPrice) || numericPrice < 1000) {
+          errors[`section_${index}_price`] = "가격은 최소 1,000원 이상이어야 합니다."
+        }
+      }
+    })
+
+    // 이용약관 동의 체크
+    if (!isTermsAgreed) {
+      errors.terms = "이용약관에 동의해주세요."
+    }
+    
+    // 10% 수수료 동의 체크
+    if (!isFeeAgreed) {
+      errors.fee = "수수료 안내에 동의해주세요."
+    }
+
+    return { isValid: Object.keys(errors).length === 0, errors }
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-
-    if (!validateForm()) {
-      // 폼이 유효하지 않으면 오류 메시지를 표시하고 제출하지 않음
-      if (!concertTitle) {
-        toast({
-          title: "Error",
-          description: "공연 제목을 입력해주세요",
-          variant: "destructive",
-        })
-      } else if (concertDates.some(dateObj => !dateObj.date)) {
-        toast({
-          title: "Error",
-          description: "모든 공연 날짜를 입력해주세요",
-          variant: "destructive",
-        })
-      } else if (!ticketDescription) {
-        toast({
-          title: "Error",
-          description: "티켓 상세설명을 입력해주세요",
-          variant: "destructive",
-        })
-      } else if (sections.some((section) => !section.name || !section.price)) {
-        toast({
-          title: "Error",
-          description: "모든 구역의 이름과 가격을 입력해주세요",
-          variant: "destructive",
-        })
-      } else if (sections.some((section) => Number(section.price.replace(/[^\d]/g, '')) < 1000)) {
-        toast({
-          title: "Error",
-          description: "모든 구역의 가격은 최소 1,000원 이상이어야 합니다",
-          variant: "destructive",
-        })
-      } else if (!isTermsAgreed) {
-        toast({
-          title: "Error",
-          description: "이용약관에 동의해주세요",
-          variant: "destructive",
-        })
-      }
-      return
-    }
-
+    
     try {
+      // 유효성 검사 수행
+      const validation = validateForm()
+      if (!validation.isValid) {
+        // 오류 메시지 설정 및 토스트 표시
+        setFormErrors(validation.errors)
+        
+        // 스크롤을 첫 번째 오류로 이동
+        const firstErrorKey = Object.keys(validation.errors)[0]
+        const firstErrorElement = document.querySelector(`[id="${firstErrorKey}"]`) || 
+                                document.querySelector(`[class*="border-red-500"]`)
+        if (firstErrorElement) {
+          firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        
+        // 첫 번째 오류에 대한 토스트 메시지 표시
+        const firstErrorMessage = Object.values(validation.errors)[0]
+        toast({
+          title: "입력 오류",
+          description: firstErrorMessage,
+          variant: "destructive",
+        })
+        
+        return
+      }
+
+      // API 데이터 준비
+      const sectionsData = [...sections]
+
       // 첫 번째 날짜를 주요 날짜로 사용
       const primaryDate = concertDates[0]?.date || ""
       
@@ -507,7 +516,7 @@ export default function SellPage() {
       const formattedDates = concertDates.map(d => d.date).join(', ')
       
       // 모든 섹션을 텍스트로 포맷팅
-      const formattedSections = sections.map(s => `${s.name}: ${s.price}원`).join('\n')
+      const formattedSections = sectionsData.map(s => `${s.name}: ${s.price}원`).join('\n')
       
       // 판매 데이터 준비
       const saleData = {
@@ -517,8 +526,8 @@ export default function SellPage() {
           date: formattedDates,
           venue: concertVenue || "미정",
           time: concertTime || "미정",
-          price: Number(sections[0].price.replace(/[^0-9]/g, '')),
-          sections: sections.map(section => ({
+          price: Number(sectionsData[0].price.replace(/[^0-9]/g, '')),
+          sections: sectionsData.map(section => ({
             id: section.id.toString(),
             label: section.name,
             price: Number(section.price.replace(/[^0-9]/g, '')),
@@ -529,8 +538,8 @@ export default function SellPage() {
         type: "TICKET_SALE",
         concertDate: primaryDate,
         location: concertVenue || concertTitle,
-        price: Number(sections[0].price.replace(/[^0-9]/g, '')),
-        ticketPrice: Number(sections[0].price.replace(/[^0-9]/g, '')),
+        price: Number(sectionsData[0].price.replace(/[^0-9]/g, '')),
+        ticketPrice: Number(sectionsData[0].price.replace(/[^0-9]/g, '')),
       }
 
       console.log("제출할 판매 데이터:", saleData)
@@ -874,6 +883,28 @@ export default function SellPage() {
 
                 {/* 이용약관 동의 섹션 */}
                 <div className="border-t pt-6">
+                  {/* 10% 수수료 동의 체크박스 */}
+                  <div className="flex items-start space-x-2 mb-4">
+                    <Checkbox 
+                      id="fee-agreement" 
+                      checked={isFeeAgreed}
+                      onCheckedChange={(checked) => setIsFeeAgreed(checked as boolean)}
+                      className={formErrors.fee ? "border-red-500" : ""}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="fee-agreement"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        <span className="text-red-500">*</span> 거래가 완료되면 10% 수수료가 있어요, 확인했어요 :)
+                      </label>
+                      {formErrors.fee && <p className="text-xs text-red-500">{formErrors.fee}</p>}
+                      <p className="text-sm text-gray-500">
+                        판매 등록 시 거래가 완료되면 판매 금액의 10%가 수수료로 부과됩니다.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="flex items-start space-x-2">
                     <Checkbox 
                       id="terms" 
