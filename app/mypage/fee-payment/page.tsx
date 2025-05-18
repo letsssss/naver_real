@@ -6,6 +6,15 @@ import { checkUnpaidFees } from '@/lib/fee-utils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/contexts/auth-context';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Copy, Check } from 'lucide-react';
 
 export default function FeePaymentPage() {
   const [unpaidFeesData, setUnpaidFeesData] = useState({
@@ -15,8 +24,17 @@ export default function FeePaymentPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFees, setSelectedFees] = useState<string[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [copiedAccount, setCopiedAccount] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
+  
+  // 계좌번호 정보
+  const accountInfo = {
+    bank: "하나은행",
+    number: "391-910899-26807",
+    holder: "김진성(이지티켓)",
+  };
   
   useEffect(() => {
     async function loadUnpaidFees() {
@@ -71,14 +89,18 @@ export default function FeePaymentPage() {
       return;
     }
     
-    // 결제 모듈 연동 (예: 포트원, 토스페이먼츠 등)
-    alert('결제 시스템으로 연결합니다...');
+    // 계좌번호 모달 표시
+    setShowPaymentModal(true);
+  };
+  
+  const copyAccountNumber = () => {
+    navigator.clipboard.writeText(accountInfo.number);
+    setCopiedAccount(true);
     
-    // 실제 구현 시에는 결제 처리 코드 추가
-    // ...
-    
-    // 성공 시 페이지 이동
-    // router.push('/mypage/fee-payment/success');
+    // 2초 후 복사 상태 초기화
+    setTimeout(() => {
+      setCopiedAccount(false);
+    }, 2000);
   };
   
   if (isLoading) {
@@ -176,6 +198,66 @@ export default function FeePaymentPage() {
                 : '납부할 항목을 선택하세요'}
             </Button>
           </div>
+          
+          {/* 계좌번호 모달 */}
+          <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-center">수수료 납부 안내</DialogTitle>
+                <DialogDescription className="text-center pt-2">
+                  아래 계좌로 {getSelectedTotal().toLocaleString()}원을 입금해주세요.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="bg-blue-50 p-6 rounded-lg my-4">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">입금 은행</p>
+                  <p className="font-semibold text-lg">{accountInfo.bank}</p>
+                </div>
+                
+                <div className="mb-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-600">계좌번호</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-blue-600"
+                      onClick={copyAccountNumber}
+                    >
+                      {copiedAccount ? (
+                        <Check className="h-4 w-4 mr-1" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1" />
+                      )}
+                      {copiedAccount ? "복사됨" : "복사"}
+                    </Button>
+                  </div>
+                  <p className="font-semibold text-lg">{accountInfo.number}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-600">예금주</p>
+                  <p className="font-semibold text-lg">{accountInfo.holder}</p>
+                </div>
+              </div>
+              
+              <div className="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800">
+                <p className="font-medium mb-1">✓ 입금 후 처리 안내</p>
+                <p>입금 확인 후 영업일 기준 1일 이내 수수료 납부 처리가 완료됩니다.</p>
+                <p className="mt-2">입금자명은 회원명과 동일하게 해주세요.</p>
+              </div>
+              
+              <DialogFooter className="sm:justify-center mt-4">
+                <Button
+                  type="button"
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setShowPaymentModal(false)}
+                >
+                  확인
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       ) : (
         <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
