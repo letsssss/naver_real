@@ -145,7 +145,7 @@ export default function PurchasesSection({
         </div>
       ) : (
         purchases.map((item) => (
-          <div key={item.id} className="border-b py-4 last:border-b-0">
+          <div key={item.id} className="border-b py-4 last:border-b-0 relative">
             <h3 className="font-medium">
               {item.title !== '제목 없음' 
                 ? item.title 
@@ -188,9 +188,11 @@ export default function PurchasesSection({
               <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
                 <MessageButton orderNumber={item.orderNumber || `ORDER-${item.id}`} />
               </Link>
-              
-              {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시 */}
-              {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
+            </div>
+            
+            {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시하고 오른쪽 아래로 위치시킴 */}
+            {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
+              <div className="flex justify-end mt-3">
                 <Button 
                   className="text-sm bg-red-50 text-red-700 border-red-300 hover:bg-red-100 transition-colors flex items-center gap-1 font-medium" 
                   variant="outline"
@@ -199,8 +201,8 @@ export default function PurchasesSection({
                   <AlertTriangle size={16} />
                   거래 취소
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         ))
       )}
