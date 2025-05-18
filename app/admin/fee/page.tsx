@@ -45,9 +45,27 @@ export default function AdminFeePage() {
   }, [])
 
   const markAsPaid = async (id: string) => {
-    const supabase = createBrowserClient()
-    await supabase.from('purchases').update({ is_fee_paid: true }).eq('id', id)
-    setUnpaid((prev) => prev.filter((p) => p.id !== id))
+    try {
+      // API를 통해 수수료 납부 처리
+      const response = await fetch('/api/mark-fee-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchaseId: id }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // 성공 시 목록에서 제거
+        setUnpaid((prev) => prev.filter((p) => p.id !== id))
+        alert('수수료 납부 처리가 완료되었습니다.')
+      } else {
+        alert('처리 실패: ' + result.message)
+      }
+    } catch (error) {
+      console.error('수수료 납부 처리 중 오류:', error)
+      alert('처리 중 오류가 발생했습니다.')
+    }
   }
 
   if (loading) return <p>불러오는 중...</p>
