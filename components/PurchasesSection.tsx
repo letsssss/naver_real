@@ -11,6 +11,35 @@ const Loader = ({ size = 24 }: { size?: number }) => (
   </div>
 );
 
+// 날짜 포맷팅 함수
+const formatDate = (dateString: string | undefined): string => {
+  if (!dateString) return "날짜 정보 없음";
+  
+  try {
+    // ISO 8601 날짜 문자열을 Date 객체로 변환
+    const date = new Date(dateString);
+    
+    // 유효한 날짜인지 확인
+    if (isNaN(date.getTime())) {
+      return dateString;
+    }
+    
+    // 한국 시간대로 변환 (Asia/Seoul)
+    return date.toLocaleString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(/\. /g, '-').replace(/\.$/g, '');
+  } catch (error) {
+    console.error('날짜 변환 오류:', error);
+    return dateString || "날짜 정보 없음";
+  }
+};
+
 // 구매 데이터 인터페이스 정의
 interface Purchase {
   id: number;
@@ -62,7 +91,7 @@ export default function PurchasesSection({ purchases, isLoading, router }: Purch
                   || item.eventName 
                   || '제목 없음'}
             </h3>
-            <p className="text-sm text-gray-600">{item.date}</p>
+            <p className="text-sm text-gray-600">{formatDate(item.date)}</p>
             <p className="text-sm font-semibold">
               {typeof item.price === 'number' 
                 ? item.price.toLocaleString() + '원'
