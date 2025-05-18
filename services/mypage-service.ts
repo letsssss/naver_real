@@ -855,7 +855,8 @@ export const cancelPurchase = async (
       credentials: 'include', // 쿠키 포함
       body: JSON.stringify({
         orderNumber,
-        reason: "판매자가 3일 내에 티켓을 확보하지 못했습니다."
+        reason: "판매자가 3일 내에 티켓을 확보하지 못했습니다.",
+        status: "CANCELLED" // 상태 필드 추가
       })
     });
     
@@ -871,7 +872,7 @@ export const cancelPurchase = async (
     console.log("취소 응답:", responseData);
     
     if (!response.ok) {
-      throw new Error(responseData.message || '거래 취소에 실패했습니다.');
+      throw new Error(responseData.message || responseData.error || '거래 취소에 실패했습니다.');
     }
     
     toast.success("거래가 성공적으로 취소되었습니다.");
@@ -880,7 +881,7 @@ export const cancelPurchase = async (
     setOngoingPurchases(prev => 
       prev.map(purchase => 
         purchase.orderNumber === orderNumber
-          ? { ...purchase, status: "CANCELED", statusText: "거래취소" }
+          ? { ...purchase, status: "CANCELLED", statusText: "거래취소" }
           : purchase
       )
     );
