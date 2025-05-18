@@ -19,30 +19,28 @@ export async function checkUnpaidFees(userId: string) {
   }
   
   try {
-    const adminClient = createAdminClient();
-    console.log("✅ 수수료 확인용 Supabase 클라이언트 생성됨");
+    // 서버 API를 호출하여 미납 수수료 확인
+    console.log("🔄 미납 수수료 API 호출 시작");
     
-    // 현재 시간
-    const now = new Date().toISOString();
-    console.log("📅 현재 시간:", now);
+    const response = await fetch('/api/unpaid-fees', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
+    });
     
-    // 미납 수수료 확인
-    const { data, error } = await adminClient
-      .from('purchases')
-      .select('id, order_number, fee_amount, fee_due_at, total_price')
-      .eq('seller_id', userId)
-      .eq('is_fee_paid', false)  // 수수료가 지불되지 않은 것만 선택
-      .lt('fee_due_at', now);    // 납부기한이 현재보다 이전인 것만 선택
-    
-    console.log("📊 Supabase 쿼리 결과:", { data, error, count: data?.length });
-    
-    if (error) {
-      console.error("❌ Supabase 오류:", error);
-      throw new Error(`미납 수수료 확인 중 오류가 발생했습니다: ${error.message}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("❌ API 응답 오류:", response.status, errorData);
+      throw new Error(`미납 수수료 확인 API 오류: ${response.status} ${errorData.error || ''}`);
     }
     
+    const data = await response.json();
+    console.log("📊 API 응답 데이터:", data);
+    
     // 미납 수수료가 없는 경우
-    if (!data || data.length === 0) {
+    if (!data.hasUnpaidFees) {
       console.log("✅ 미납 수수료 없음");
       return {
         hasUnpaidFees: false,
@@ -53,26 +51,18 @@ export async function checkUnpaidFees(userId: string) {
     }
     
     // 미납 수수료가 있는 경우
-    console.log("⚠️ 미납 수수료 있음:", data.length, "건");
+    console.log("⚠️ 미납 수수료 있음:", data.count, "건");
+    console.log("💵 총 미납 금액:", data.totalAmount, "원");
     
-    // 총 금액 계산
-    const totalAmount = data.reduce((sum, item) => sum + (item.fee_amount || 0), 0);
-    console.log("💵 총 미납 금액:", totalAmount, "원");
-    
-    // 가장 오래된 납부기한 찾기
-    const oldestDueDate = data.reduce<string | null>((oldest, item) => {
-      if (!oldest || new Date(item.fee_due_at) < new Date(oldest)) {
-        return item.fee_due_at;
-      }
-      return oldest;
-    }, null);
+    // 가장 오래된 납부기한이 있으면 Date 객체로 변환
+    const oldestDueDate = data.oldestDueDate ? new Date(data.oldestDueDate) : null;
     console.log("⏰ 가장 오래된 납부기한:", oldestDueDate);
     
     const result = {
-      hasUnpaidFees: data.length > 0,
-      unpaidFees: data,
-      totalAmount,
-      oldestDueDate: oldestDueDate ? new Date(oldestDueDate) : null
+      hasUnpaidFees: data.hasUnpaidFees,
+      unpaidFees: data.unpaidFees || [],
+      totalAmount: data.totalAmount || 0,
+      oldestDueDate
     };
     
     console.log("💥 최종 판단 - 미납 수수료 있음?", result.hasUnpaidFees);
