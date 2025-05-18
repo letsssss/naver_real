@@ -162,37 +162,37 @@ export default function PurchasesSection({
                 : item.price}
             </p>
             <p className="text-sm text-blue-600">{item.status}</p>
-            <div className="flex mt-2 gap-2">
-              <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
-                <Button 
-                  className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
-                  variant="outline"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+            <div className="flex mt-2 gap-2 justify-between">
+              <div className="flex gap-2">
+                <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
+                  <Button 
+                    className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
+                    variant="outline"
                   >
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                  </svg>
-                  거래 상세 보기
-                </Button>
-              </Link>
-              <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
-                <MessageButton orderNumber={item.orderNumber || `ORDER-${item.id}`} />
-              </Link>
-            </div>
-            
-            {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시하고 오른쪽 아래로 위치시킴 */}
-            {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
-              <div className="flex justify-end mt-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    거래 상세 보기
+                  </Button>
+                </Link>
+                <Link href={`/transaction/${item.orderNumber || `ORDER-${item.id}`}`}>
+                  <MessageButton orderNumber={item.orderNumber || `ORDER-${item.id}`} />
+                </Link>
+              </div>
+              
+              {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시하고 오른쪽에 위치시킴 */}
+              {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
                 <Button 
                   className="text-sm bg-red-50 text-red-700 border-red-300 hover:bg-red-100 transition-colors flex items-center gap-1 font-medium" 
                   variant="outline"
@@ -201,8 +201,8 @@ export default function PurchasesSection({
                   <AlertTriangle size={16} />
                   거래 취소
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))
       )}
