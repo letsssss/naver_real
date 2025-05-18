@@ -135,6 +135,7 @@ interface FormErrors {
   description?: string
   terms?: string
   fee?: string
+  noAdvancePayment?: string
   [key: string]: string | undefined
 }
 
@@ -180,6 +181,7 @@ export default function SellPage() {
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isFeeAgreed, setIsFeeAgreed] = useState(false)
+  const [isNoAdvancePaymentAgreed, setIsNoAdvancePaymentAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
   const [feesLoading, setFeesLoading] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
@@ -472,6 +474,11 @@ export default function SellPage() {
     // 10% 수수료 동의 체크
     if (!isFeeAgreed) {
       errors.fee = "수수료 안내에 동의해주세요."
+    }
+    
+    // 선입금 금지 동의 체크
+    if (!isNoAdvancePaymentAgreed) {
+      errors.noAdvancePayment = "선입금 금지 및 티켓 확보 기간 안내에 동의해주세요."
     }
 
     return { isValid: Object.keys(errors).length === 0, errors }
@@ -901,6 +908,28 @@ export default function SellPage() {
                       {formErrors.fee && <p className="text-xs text-red-500">{formErrors.fee}</p>}
                       <p className="text-sm text-gray-500">
                         판매 등록 시 거래가 완료되면 판매 금액의 10%가 수수료로 부과됩니다.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* 선입금 금지 동의 체크박스 */}
+                  <div className="flex items-start space-x-2 mb-4">
+                    <Checkbox 
+                      id="no-advance-payment" 
+                      checked={isNoAdvancePaymentAgreed}
+                      onCheckedChange={(checked) => setIsNoAdvancePaymentAgreed(checked as boolean)}
+                      className={formErrors.noAdvancePayment ? "border-red-500" : ""}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="no-advance-payment"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        <span className="text-red-500">*</span> 선입금은 절대 금지! 티켓을 3일 안에 확보하지 못하면 구매자가 거래를 취소할 수 있어요 :)
+                      </label>
+                      {formErrors.noAdvancePayment && <p className="text-xs text-red-500">{formErrors.noAdvancePayment}</p>}
+                      <p className="text-sm text-gray-500">
+                        판매자는 반드시 티켓을 보유한 후 거래해야 하며, 선입금을 요청하는 행위는 금지됩니다.
                       </p>
                     </div>
                   </div>
