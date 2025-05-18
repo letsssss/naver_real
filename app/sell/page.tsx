@@ -929,7 +929,7 @@ export default function SellPage() {
                       </label>
                       {formErrors.noAdvancePayment && <p className="text-xs text-red-500">{formErrors.noAdvancePayment}</p>}
                       <p className="text-sm text-gray-500">
-                        판매자는 반드시 티켓을 보유한 후 거래해야 하며, 선입금을 요청하는 행위는 금지됩니다.
+                        선입금을 요청하는 행위는 금지됩니다.
                       </p>
                     </div>
                   </div>
