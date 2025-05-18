@@ -31,8 +31,8 @@ export default function FeePaymentPage() {
   
   // 계좌번호 정보
   const accountInfo = {
-    bank: "하나은행",
-    number: "391-910899-26807",
+    bank: "국민은행",
+    number: "289537-00-006036",
     holder: "김진성(이지티켓)",
   };
   
