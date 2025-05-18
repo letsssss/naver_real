@@ -656,17 +656,6 @@ export default function SellPage() {
             <span>홈으로 돌아가기</span>
           </Link>
           <h1 className="text-3xl font-bold mt-4">티켓 판매하기</h1>
-          
-          {/* 수수료 체크 수동 테스트 버튼 */}
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-sm text-blue-700 mb-2">🧪 개발 테스트: 수수료 체크 로직이 작동하는지 확인</p>
-            <Button 
-              onClick={testFeeCheck} 
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              수수료 체크 수동 테스트
-            </Button>
-          </div>
         </div>
       </header>
 
