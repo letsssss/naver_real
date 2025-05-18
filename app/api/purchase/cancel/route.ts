@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/lib/supabase';
+
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,9 +37,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    // 일반 클라이언트 대신 관리자 권한 클라이언트 사용 (RLS 우회)
+    const supabase = createAdminClient();
     
-    console.log("🔍 주문번호로 취소할 데이터 찾기:", orderNumber);
+    console.log("🔍 주문번호로 취소할 데이터 찾기 (관리자 권한):", orderNumber);
 
     try {
       // limit(1).single() 사용하여 정확히 하나의 결과만 가져오도록 함
