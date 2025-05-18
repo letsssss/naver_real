@@ -31,12 +31,27 @@ export default function AdminFeePage() {
         return
       }
 
-      // 미납 수수료 조회
+      // 미납 수수료 조회 (판매자 정보 포함)
       const { data, error } = await supabase
         .from('purchases')
-        .select('*')
+        .select(`
+          *,
+          seller:seller_id (
+            id,
+            name,
+            email
+          )
+        `)
         .eq('is_fee_paid', false)
 
+      if (error) {
+        console.error('미납 수수료 조회 오류:', error)
+        alert('데이터 조회 중 오류가 발생했습니다.')
+        setLoading(false)
+        return
+      }
+
+      console.log('미납 수수료 데이터:', data)
       setUnpaid(data || [])
       setLoading(false)
     }
@@ -83,8 +98,14 @@ export default function AdminFeePage() {
               className="border p-4 rounded-lg flex items-center justify-between"
             >
               <div>
-                <p className="font-medium">구매 ID: {item.buyer_id}</p>
+                <p className="font-medium">
+                  판매자: {item.seller?.name || '알 수 없음'} 
+                  <span className="text-gray-500 ml-2 text-sm">({item.seller_id})</span>
+                </p>
                 <p className="text-sm text-gray-500">수수료: {item.fee_amount}원</p>
+                {item.seller?.email && (
+                  <p className="text-xs text-gray-400 mt-1">이메일: {item.seller?.email}</p>
+                )}
               </div>
               <button
                 onClick={() => markAsPaid(item.id)}
