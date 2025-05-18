@@ -128,6 +128,59 @@ export default function PurchasesSection({
     setIsDialogOpen(true);
   };
 
+  // 구매 시간으로부터 72시간이 지났는지 확인하는 함수
+  const isCancellable = (createdAt: string | undefined): boolean => {
+    if (!createdAt) return false;
+    
+    try {
+      const purchaseDate = new Date(createdAt);
+      const now = new Date();
+      
+      // 올바른 날짜인지 확인
+      if (isNaN(purchaseDate.getTime())) return false;
+      
+      // 구매 시간으로부터 경과된 시간 (시간 단위)
+      const hoursSincePurchase = (now.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60);
+      
+      // 72시간(3일) 이상 지났으면 취소 가능
+      return hoursSincePurchase >= 72;
+    } catch (error) {
+      console.error("날짜 계산 오류:", error);
+      return false;
+    }
+  };
+
+  // 남은 시간을 계산하는 함수
+  const getRemainingTime = (createdAt: string | undefined): string => {
+    if (!createdAt) return "정보 없음";
+    
+    try {
+      const purchaseDate = new Date(createdAt);
+      const now = new Date();
+      
+      // 올바른 날짜인지 확인
+      if (isNaN(purchaseDate.getTime())) return "정보 없음";
+      
+      // 구매 시간으로부터 72시간 후
+      const cancelableDate = new Date(purchaseDate.getTime() + 72 * 60 * 60 * 1000);
+      
+      // 현재 시간이 72시간을 지났다면 이미 취소 가능
+      if (now >= cancelableDate) return "지금 취소 가능";
+      
+      // 남은 시간 계산 (밀리초)
+      const remainingMs = cancelableDate.getTime() - now.getTime();
+      
+      // 남은 시간을 시, 분 단위로 변환
+      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      return `${remainingHours}시간 ${remainingMinutes}분 후 취소 가능`;
+    } catch (error) {
+      console.error("남은 시간 계산 오류:", error);
+      return "정보 없음";
+    }
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">진행중인 구매</h2>
@@ -191,16 +244,28 @@ export default function PurchasesSection({
                 </Link>
               </div>
               
-              {/* 거래 취소 버튼 - 상태가 취켓팅진행중인 경우에만 표시하고 오른쪽에 위치시킴 */}
+              {/* 거래 취소 버튼 - 상태가 취켓팅진행중이고 72시간이 지났을 때만 활성화 */}
               {item.status === "취켓팅진행중" && setPurchaseStatus && setOngoingPurchases && (
-                <Button 
-                  className="text-sm bg-red-50 text-red-700 border-red-300 hover:bg-red-100 transition-colors flex items-center gap-1 font-medium" 
-                  variant="outline"
-                  onClick={() => handleCancelButtonClick(item.orderNumber || `ORDER-${item.id}`)}
-                >
-                  <AlertTriangle size={16} />
-                  거래 취소
-                </Button>
+                <div className="flex flex-col items-end">
+                  <Button 
+                    className={`text-sm ${isCancellable(item.date) 
+                      ? 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' 
+                      : 'bg-gray-50 text-gray-400 border-gray-300'} transition-colors flex items-center gap-1 font-medium`}
+                    variant="outline"
+                    onClick={() => handleCancelButtonClick(item.orderNumber || `ORDER-${item.id}`)}
+                    disabled={!isCancellable(item.date)}
+                  >
+                    <AlertTriangle size={16} />
+                    {isCancellable(item.date) ? "거래 취소" : "3일 후 취소 가능"}
+                  </Button>
+                  
+                  {/* 취소 가능 시간 안내 */}
+                  {!isCancellable(item.date) && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getRemainingTime(item.date)}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
