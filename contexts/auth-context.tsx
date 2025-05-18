@@ -102,6 +102,7 @@ type User = {
   email: string
   name: string
   role?: string
+  createdAt?: string
 }
 
 type AuthContextType = {
@@ -171,7 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: session.user.id,
           email: session.user.email || '',
           name: session.user.user_metadata?.name || '사용자',
-          role: session.user.user_metadata?.role || 'USER'
+          role: session.user.user_metadata?.role || 'USER',
+          createdAt: session.user.created_at || session.user.user_metadata?.createdAt || new Date().toISOString()
         };
         
         // 사용자 정보 저장
@@ -402,7 +404,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.user.id,
         email: data.user.email || email,
         name: data.user.user_metadata?.name || "사용자",
-        role: data.user.user_metadata?.role || "USER"
+        role: data.user.user_metadata?.role || "USER",
+        createdAt: data.user.created_at || data.user.user_metadata?.createdAt || new Date().toISOString()
       };
       
       // 사용자 정보 저장
