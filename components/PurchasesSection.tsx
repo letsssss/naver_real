@@ -167,14 +167,8 @@ export default function PurchasesSection({
       // 현재 시간이 72시간을 지났다면 이미 취소 가능
       if (now >= cancelableDate) return "지금 취소 가능";
       
-      // 남은 시간 계산 (밀리초)
-      const remainingMs = cancelableDate.getTime() - now.getTime();
-      
-      // 남은 시간을 시, 분 단위로 변환
-      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
-      const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-      
-      return `${remainingHours}시간 ${remainingMinutes}분 후 취소 가능`;
+      // 상세 시간 대신 고정 메시지 반환
+      return "거래 생성 후 72시간이 지나야 취소할 수 있어요.";
     } catch (error) {
       console.error("남은 시간 계산 오류:", error);
       return "정보 없음";
