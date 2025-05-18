@@ -133,6 +133,7 @@ interface FormErrors {
   concertDate?: string
   concertVenue?: string
   description?: string
+  terms?: string
   [key: string]: string | undefined
 }
 
@@ -154,6 +155,7 @@ export default function SellPage() {
   console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
   
   const router = useRouter();
+  const { toast } = useToast();
   
   // 🎯 SellPage 렌더링 진입점 로그
   console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
@@ -161,8 +163,7 @@ export default function SellPage() {
   console.log("✅ SellPage 렌더됨", { user, isLoading, isRedirecting: false });
 
   const [concertTitle, setConcertTitle] = useState("")
-  // 날짜의 초기값을 오늘 날짜로 설정
-  const today = new Date().toISOString().split("T")[0] // YYYY-MM-DD 형식
+  const today = new Date().toISOString().split("T")[0]
   const [concertDates, setConcertDates] = useState<Array<{ date: string }>>([{ date: today }])
   const [concertVenue, setConcertVenue] = useState("")
   const [concertTime, setConcertTime] = useState("")
@@ -175,7 +176,6 @@ export default function SellPage() {
     { id: 1, name: "", price: "" }
   ])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
-  const { toast } = useToast()
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isTermsDialogOpen, setIsTermsDialogOpen] = useState(false)
@@ -196,107 +196,135 @@ export default function SellPage() {
   // 렌더링 상태 로깅
   console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
 
+  // 통합된 useEffect - 인증 및 수수료 확인 로직
   useEffect(() => {
-    // 수수료 확인 useEffect 실행 확인
-    console.log("🧪 useEffect(user/isLoading) 실행됨", { user, isLoading });
-    console.log("✅ useEffect 진입함")
-    console.log("✅ user:", user)
-    console.log("✅ isLoading:", isLoading)
-
-    async function checkFees() {
-      // 함수 진입 로그
-      console.log("🔥 checkFees() 함수 진입");
-      console.log("🔥 checkFees() 실행됨")
-      try {
-        // 함수 호출 직전 로그
-        console.log("💰 checkUnpaidFees 호출 직전", { userId: user?.id?.toString() });
-        const result = await checkUnpaidFees(user?.id?.toString())
-        console.log("🧪 checkUnpaidFees 결과:", result)
-      } catch (error) {
-        console.error("❌ checkUnpaidFees 오류:", error)
-      }
-    }
-
-    if (!isLoading && user) {
-      checkFees()
-    } else {
-      console.log("❌ checkFees 실행 조건 불충족:", { isLoading, hasUser: !!user })
-    }
-  }, [user, isLoading])
-
-  useEffect(() => {
-    console.log("👣 첫 번째 useEffect 진입 상태", { user, isLoading });
-    if (!isLoading && !user) {
-      router.replace("/login?callbackUrl=/sell")
-    }
-  }, [user, isLoading, router])
-
-  useEffect(() => {
-    console.log("👣 두 번째 useEffect(수수료 체크) 진입 상태", { user, isLoading });
+    console.log("👣 통합된 useEffect 실행", { user, isLoading });
     
-    async function checkFees() {
+    const checkUserAndFees = async () => {
+      // 로딩 중이면 중단
+      if (isLoading) {
+        console.log("🔄 아직 로딩 중, 검사 중단");
+        return;
+      }
+      
+      // 사용자가 없으면 로그인 페이지로 리다이렉트
+      if (!user) {
+        console.log("👤 사용자 없음, 로그인 페이지로 리다이렉트");
+        router.replace("/login?callbackUrl=/sell");
+        return;
+      }
+      
+      // 사용자 ID가 없으면 중단
+      if (!user.id) {
+        console.log("🆔 사용자 ID 없음, 로그인 페이지로 리다이렉트");
+        router.push('/login?redirect=/sell');
+        return;
+      }
+      
       try {
-        console.log("🔥 checkFees 실행됨, user:", user);
-        setFeesLoading(true)
-        if (!user || !user.id) {
-          console.log("❌ user 또는 user.id가 없음, 로그인 페이지로 리다이렉트");
-          router.push('/login?redirect=/sell')
-          return
-        }
+        console.log("🔍 수수료 확인 시작");
+        setFeesLoading(true);
         
         // 디버깅: 사용자 ID 정보 로깅
-        console.log("사용자 ID 정보:", {
+        console.log("👤 사용자 ID 정보:", {
           id: user.id,
           type: typeof user.id,
           stringified: user.id.toString()
         });
         
-        const feesData = await checkUnpaidFees(user.id.toString())
+        // 수수료 확인
+        const feesData = await checkUnpaidFees(user.id.toString());
         
         // 디버깅: 수수료 데이터 상세 정보 로깅
-        console.log("수수료 데이터 상세:", {
+        console.log("💰 수수료 데이터:", {
           hasUnpaidFees: feesData.hasUnpaidFees,
           count: feesData.unpaidFees.length,
           unpaidFees: feesData.unpaidFees,
           totalAmount: feesData.totalAmount
         });
         
-        // 사용자 요청 디버깅 로그 추가
-        console.log("✅ user:", user);
-        console.log("✅ unpaidFeesData:", feesData);
-        console.log("✅ unpaidFeesData.hasUnpaidFees:", feesData.hasUnpaidFees);
+        setUnpaidFeesData(feesData);
         
-        setUnpaidFeesData(feesData)
-        
-        // 미납 수수료가 있으면 수수료 납부 페이지로 즉시 리다이렉트
+        // 미납 수수료가 있으면 수수료 납부 페이지로 리다이렉트
         if (feesData.hasUnpaidFees) {
-          console.log("❗ 미납 수수료 있음 → 리디렉션 중");
-          setIsRedirecting(true); // 리다이렉트 상태 설정
+          console.log("❗ 미납 수수료 있음 → 리디렉션 시작");
+          
+          // 🔴 중요: 상태 먼저 변경하여 렌더링 조건 준비
+          setIsRedirecting(true);
+          
+          // 사용자에게 알림 메시지 표시
           toast({
             title: "미납 수수료 알림",
             description: `${feesData.unpaidFees.length}건의 미납 수수료(총 ${feesData.totalAmount.toLocaleString()}원)가 있어 판매 기능이 제한됩니다.`,
             variant: "destructive",
             duration: 5000,
-          })
-          router.replace('/mypage/fee-payment')
+          });
+          
+          // 잠시 대기 후 리다이렉트 (토스트 메시지를 볼 수 있도록)
+          setTimeout(() => {
+            console.log("🔄 수수료 납부 페이지로 리다이렉트 실행");
+            router.replace('/mypage/fee-payment?redirect=/sell');
+          }, 1500);
         } else {
-          console.log("미납 수수료 없음: 판매 페이지 접근 허용");
+          console.log("✅ 미납 수수료 없음: 판매 페이지 접근 허용");
         }
       } catch (error) {
-        console.error("수수료 확인 오류:", error)
+        console.error("❌ 수수료 확인 오류:", error);
       } finally {
-        setFeesLoading(false)
+        setFeesLoading(false);
       }
-    }
+    };
     
-    checkFees()
-  }, [router, user, toast])
+    // 함수 즉시 실행
+    checkUserAndFees();
+  }, [user, isLoading, router, toast]);
 
-  // 렌더링 차단 조건 확인 로그
+  // 렌더링 조건 판단을 위한 상태 로깅
   console.log("🚫 렌더링 차단 조건 확인", { isLoading, user, isRedirecting });
   
-  // 로딩 중이거나 사용자가 없거나 리다이렉트 중일 때 렌더링 차단
-  if (isLoading || !user || isRedirecting) return null
+  // 로딩 UI 렌더링
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // 사용자 인증 확인 (사용자 정보가 없으면 빈 화면 표시, useEffect에서 리다이렉트 처리)
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <p className="mt-4 text-gray-600">로그인 페이지로 이동 중...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // 리다이렉트 중일 때 전환 UI 표시
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-md">
+          <div className="text-red-600 text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-red-700 mb-2">미납 수수료 발견</h2>
+          <p className="mb-4">
+            {unpaidFeesData.unpaidFees.length}건의 미납 수수료(총 {unpaidFeesData.totalAmount.toLocaleString()}원)가 있습니다.
+          </p>
+          <p className="mb-4 text-sm text-gray-600">
+            수수료 납부 페이지로 이동합니다...
+          </p>
+          <div className="animate-pulse">
+            <div className="h-2 bg-red-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 수동으로 수수료 체크 테스트
   const testFeeCheck = async () => {
@@ -676,7 +704,6 @@ export default function SellPage() {
                       ))}
                     </tbody>
                   </table>
-                  
                 </div>
               </div>
             </>
@@ -846,7 +873,7 @@ export default function SellPage() {
                     티켓 상세설명 <span className="text-red-500">(필수)</span>
                   </label>
                   <Textarea
-                    placeholder="티켓에 대한 상세한 설명을 입력해주세요 (최소 10글자 이상)"
+                    placeholder="티켓에 대한 추가 정보를 알려주세요. 예: 시야 좌석, 티켓 수령 방법, 판매 이유 등"
                     value={ticketDescription}
                     onChange={(e) => setTicketDescription(e.target.value)}
                     className={`min-h-[100px] ${formErrors.description ? "border-red-500" : ""}`}
@@ -924,4 +951,3 @@ export default function SellPage() {
     </div>
   )
 }
-
