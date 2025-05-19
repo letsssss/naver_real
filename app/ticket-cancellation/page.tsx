@@ -557,8 +557,12 @@ export default function TicketCancellationPage() {
                     strokeLinejoin="round"
                     className="h-8 w-8 text-[#0061FF]"
                   >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
-                    <path d="m9 12 2 2 4-4" />
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                    <path d="M4 22h16" />
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">안전한 예매 대행</h3>
@@ -578,14 +582,7 @@ export default function TicketCancellationPage() {
                     strokeLinejoin="round"
                     className="h-8 w-8 text-[#0061FF]"
                   >
-                    <path d="M12 8c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5Z" />
-                    <path d="m3 3 18 18" />
-                    <path d="M10.5 13.5 7 10" />
-                    <path d="m7 16 3.5-3.5" />
-                    <path d="M10.5 13.5 17 20" />
-                    <path d="m14 7 3 3" />
-                    <path d="M14 13v-3" />
-                    <path d="M10 13v-1" />
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">높은 성공률</h3>
