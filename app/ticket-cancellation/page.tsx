@@ -335,7 +335,7 @@ export default function TicketCancellationPage() {
             놓친 티켓, 취소표로 다시 잡자!
           </h1>
           <p className="text-base md:text-lg text-white/90 text-center mb-8 max-w-xl">
-            본인 계정으로 안전하게, 빠르게 예매완료!
+            안전하고 빠르게 예매 완료!  
             <br />
             안전한 입장까지 도와드립니다.
           </p>
