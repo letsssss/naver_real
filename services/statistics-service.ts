@@ -1,11 +1,67 @@
 import { createBrowserClient } from "@/lib/supabase";
 
 // 취켓팅 성공률 통계를 가져오는 함수
-export async function fetchTicketingSuccessRate(): Promise<number> {
+export async function fetchTicketingSuccessRate(sellerId?: string): Promise<number | string> {
   try {
     const supabase = createBrowserClient();
     
-    // cancellation_ticketing_stats_view에서 성공률 데이터 가져오기
+    // 특정 판매자의 성공률을 요청한 경우
+    if (sellerId) {
+      // 해당 판매자의 성공률 데이터 가져오기
+      const { data, error } = await supabase
+        .from("cancellation_ticketing_stats_view")
+        .select("confirmed_count, cancelled_count, total_count")
+        .eq("seller_id", sellerId)
+        .maybeSingle();
+      
+      if (error || !data) {
+        console.error(`판매자 ${sellerId}의 성공률 조회 오류:`, error);
+        
+        // seller_stats 테이블에서 직접 계산 시도
+        try {
+          const { data: statsData, error: statsError } = await supabase
+            .from("seller_stats")
+            .select("cancellation_ticketing_success, cancellation_ticketing_total")
+            .eq("seller_id", sellerId)
+            .single();
+          
+          if (statsError || !statsData) {
+            throw statsError || new Error("판매자 통계 데이터 없음");
+          }
+          
+          const successCount = statsData.cancellation_ticketing_success || 0;
+          const totalCount = statsData.cancellation_ticketing_total || 0;
+          
+          // 거래가 없는 경우는 "신규"로 표시
+          if (totalCount === 0) {
+            return "신규";
+          }
+          
+          // 성공률 계산 (소수점 없이 정수로)
+          const successRate = Math.round((successCount / totalCount) * 100);
+          return successRate || "측정중"; // 계산 결과가 0이면 "측정중" 반환
+        } catch (innerError) {
+          console.error(`판매자 ${sellerId}의 대체 계산 방법 오류:`, innerError);
+          return "정보없음"; // 데이터가 없는 경우
+        }
+      }
+      
+      // 거래 통계 뷰에서 성공률 계산
+      const confirmed = data.confirmed_count || 0;
+      const cancelled = data.cancelled_count || 0;
+      const total = data.total_count || (confirmed + cancelled);
+      
+      // 거래가 없는 경우는 "신규"로 표시
+      if (total === 0) {
+        return "신규";
+      }
+      
+      // 성공률 계산 (소수점 없이 정수로)
+      const successRate = Math.round((confirmed / total) * 100);
+      return successRate || "측정중"; // 계산 결과가 0이면 "측정중" 반환
+    }
+    
+    // 전체 시스템 성공률 (기존 로직)
     const { data, error } = await supabase
       .from("cancellation_ticketing_stats_view") // 실제 거래 통계 뷰
       .select("confirmed_count, cancelled_count, total_count")
@@ -28,12 +84,14 @@ export async function fetchTicketingSuccessRate(): Promise<number> {
         const successCount = statsData.cancellation_ticketing_success || 0;
         const totalCount = statsData.cancellation_ticketing_total || 0;
         
-        // 거래가 없으면 기본값 95% 반환
-        if (totalCount === 0) return 95;
+        // 거래가 없는 경우 - 아직 서비스 초기 단계
+        if (totalCount === 0) {
+          return 90; // 서비스 초기에는 기본 목표 성공률 표시
+        }
         
         // 성공률 계산 (소수점 없이 정수로)
         const successRate = Math.round((successCount / totalCount) * 100);
-        return successRate || 95; // 계산 결과가 0이면 기본값 95% 반환
+        return successRate || 90; // 계산 결과가 0이면 기본 목표 성공률
       } catch (innerError) {
         console.error("대체 계산 방법 오류:", innerError);
         
@@ -52,7 +110,7 @@ export async function fetchTicketingSuccessRate(): Promise<number> {
           console.error("시스템 설정 조회 오류:", configError);
         }
         
-        return 95; // 기본값
+        return 90; // 서비스 목표 성공률
       }
     }
     
@@ -61,14 +119,16 @@ export async function fetchTicketingSuccessRate(): Promise<number> {
     const cancelled = data.cancelled_count || 0;
     const total = data.total_count || (confirmed + cancelled);
     
-    // 거래가 없으면 기본값 95% 반환
-    if (total === 0) return 95;
+    // 거래가 없는 경우
+    if (total === 0) {
+      return 90; // 서비스 목표 성공률
+    }
     
     // 성공률 계산 (소수점 없이 정수로)
     const successRate = Math.round((confirmed / total) * 100);
-    return successRate || 95; // 계산 결과가 0이면 기본값 95% 반환
+    return successRate || 90; // 계산 결과가 0이면 기본 목표 성공률
   } catch (error) {
     console.error("취켓팅 성공률 조회 중 오류 발생:", error);
-    return 95; // 기본값
+    return 90; // 서비스 목표 성공률
   }
 } 
