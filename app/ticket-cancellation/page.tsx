@@ -64,7 +64,7 @@ export default function TicketCancellationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
-  const [successRate, setSuccessRate] = useState<number>(98)
+  const [successRate, setSuccessRate] = useState<number | string>(90)
 
   useEffect(() => {
     setMounted(true)
@@ -329,7 +329,7 @@ export default function TicketCancellationPage() {
       <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-hidden">
         <section className="container mx-auto flex flex-col items-center justify-center py-16 px-4 relative z-10">
           <div className="mb-4 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm">
-            취소표 예매 성공률 {successRate}%
+            취소표 예매 성공률 {typeof successRate === 'number' ? `${successRate}%` : successRate}
           </div>
           <h1 className="text-3xl md:text-5xl font-bold text-white text-center mb-4 leading-tight">
             놓친 티켓, 취소표로 다시 잡자!
@@ -589,7 +589,11 @@ export default function TicketCancellationPage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">높은 성공률</h3>
-                <p className="text-gray-600">{successRate}% 이상의 높은 예매 성공률을 자랑합니다.</p>
+                <p className="text-gray-600">
+                  {typeof successRate === 'number' 
+                    ? `${successRate}% 이상의 높은 예매 성공률을 자랑합니다.`
+                    : '높은 예매 성공률을 자랑합니다.'}
+                </p>
               </div>
             </div>
           </div>
