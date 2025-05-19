@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { reportPost, hasReportedPost } from "@/lib/report-utils";
+import { reportPost, hasReportedPost } from "./report-utils";
 
 interface ReportButtonProps {
   postId: number;
