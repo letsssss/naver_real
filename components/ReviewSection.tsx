@@ -56,11 +56,15 @@ export function ReviewSection() {
         {Array.from({ length: 5 }).map((_, i) => (
           <span 
             key={i} 
-            className={`text-lg ${
-              i < count ? "text-yellow-400" : "text-gray-300"
+            className={`text-xl ${
+              i < count ? "text-amber-400" : "text-gray-300"
             }`}
+            style={{ 
+              color: i < count ? '#ffc107' : '#d1d5db',
+              textShadow: i < count ? '0 0 1px rgba(0,0,0,0.2)' : 'none'
+            }}
           >
-            ★
+            ⭐
           </span>
         ))}
       </div>
