@@ -5,10 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { UserCircle, Calendar, ArrowLeft, Edit, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import ReportButton from '@/components/ReportButton'
 
 // Post 타입 정의
 interface Post {
@@ -46,7 +46,7 @@ export default function PostDetailPage() {
         setPost(data.post)
       } catch (error) {
         console.error('게시글 불러오기 오류:', error)
-        toast.error('게시글을 불러오는데 문제가 발생했습니다')
+        alert('게시글을 불러오는데 문제가 발생했습니다')
       } finally {
         setLoading(false)
       }
@@ -67,11 +67,11 @@ export default function PostDetailPage() {
         throw new Error('게시글 삭제에 실패했습니다')
       }
       
-      toast.success('게시글이 성공적으로 삭제되었습니다')
+      alert('게시글이 성공적으로 삭제되었습니다')
       router.push('/ticket-cancellation')
     } catch (error) {
       console.error('게시글 삭제 오류:', error)
-      toast.error('게시글 삭제 중 오류가 발생했습니다')
+      alert('게시글 삭제 중 오류가 발생했습니다')
     }
   }
   
@@ -124,11 +124,20 @@ export default function PostDetailPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6">
-          <div className="mb-2">
+          <div className="flex justify-between items-start mb-2">
             <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
               {post.category}
             </span>
+            
+            {/* 작성자가 아니면서 로그인된 경우에만 신고 버튼 표시 */}
+            {user && !isAuthor && (
+              <ReportButton 
+                postId={Number(post.id)} 
+                variant="button"
+              />
+            )}
           </div>
+          
           <h1 className="text-2xl font-bold text-gray-800 mb-4">{post.title}</h1>
           
           <div className="flex items-center text-gray-500 text-sm mb-6">
@@ -157,7 +166,7 @@ export default function PostDetailPage() {
               목록으로
             </Button>
             
-            {isAuthor && (
+            {isAuthor ? (
               <div className="flex space-x-2">
                 <Button variant="outline" onClick={() => router.push(`/posts/${id}/edit`)}>
                   <Edit className="mr-2 h-4 w-4" />
@@ -184,6 +193,14 @@ export default function PostDetailPage() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+              </div>
+            ) : user && (
+              /* 로그인한 사용자이지만 작성자가 아닌 경우 모바일에서도 신고 버튼 표시 */
+              <div className="sm:hidden">
+                <ReportButton 
+                  postId={Number(post.id)} 
+                  variant="button"
+                />
               </div>
             )}
           </div>
