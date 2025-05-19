@@ -52,18 +52,20 @@ export function ReviewSection() {
   // 별점 렌더링 함수
   const renderStars = (count: number) => {
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {Array.from({ length: 5 }).map((_, i) => (
           <span 
             key={i} 
-            className={`text-xl ${
-              i < count ? "text-amber-400" : "text-gray-300"
+            className={`text-2xl leading-none ${
+              i < count ? "text-amber-500" : "text-gray-300"
             }`}
             style={{ 
-              color: i < count ? '#ffc107' : '#d1d5db'
+              color: i < count ? '#f59e0b' : '#d1d5db',
+              filter: i < count ? 'drop-shadow(0 0 0.5px rgba(0,0,0,0.1))' : 'none',
+              transform: 'translateY(-1px)'
             }}
           >
-            ⭐
+            ★
           </span>
         ))}
       </div>
