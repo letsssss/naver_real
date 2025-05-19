@@ -445,13 +445,6 @@ export default function TransactionDetail() {
               <ArrowLeft className="h-5 w-5 mr-2" />
               <span>마이페이지로 돌아가기</span>
             </Link>
-            {/* 구매자인 경우에만 신고 버튼 표시 */}
-            {transaction.type === "purchase" && (
-              <ReportButton 
-                orderId={orderNumber}
-                variant="button"
-              />
-            )}
           </div>
           <h1 className="text-3xl font-bold mt-4">구매 거래 상세</h1>
         </div>
@@ -611,6 +604,12 @@ export default function TransactionDetail() {
             {/* 오른쪽 아래 구매확정 버튼 */}
             <div className="mt-10 flex flex-col items-end gap-2">
               <div className="flex justify-end gap-4 w-full">
+                {transaction.type === "purchase" && (
+                  <ReportButton 
+                    orderId={orderNumber}
+                    variant="button"
+                  />
+                )}
                 <Button onClick={openChat} variant="outline" className="flex items-center gap-2 border-gray-300">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -645,16 +644,6 @@ export default function TransactionDetail() {
                 <p className="text-sm text-gray-500 italic">
                   판매자가 취켓팅을 완료한 이후 구매확정 버튼을 누르실 수 있습니다.
                 </p>
-              )}
-              {/* 모바일 환경에서 하단에 신고 버튼 추가 (태블릿/데스크탑에서는 숨김) */}
-              {transaction.type === "purchase" && (
-                <div className="mt-4 sm:hidden">
-                  <ReportButton 
-                    orderId={orderNumber}
-                    variant="text"
-                    className="text-right w-full"
-                  />
-                </div>
               )}
             </div>
           </div>
