@@ -57,8 +57,9 @@ export function ReviewSection() {
       <Star
         key={i}
         className={`w-4 h-4 ${
-          i < count ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
+          i < count ? "text-yellow-400 fill-current" : "text-gray-300"
         }`}
+        fill={i < count ? "currentColor" : "none"}
       />
     ))
   }
@@ -81,7 +82,7 @@ export function ReviewSection() {
                 <span className="text-sm font-medium text-blue-600">
                   {review.category}
                 </span>
-                <div className="flex">
+                <div className="flex text-yellow-400">
                   {renderStars(review.stars)}
                 </div>
               </div>
