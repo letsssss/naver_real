@@ -112,7 +112,7 @@ export default function ReportButton({
               </p>
               <textarea
                 className="w-full border rounded p-2 h-32 text-sm"
-                placeholder="신고 사유를 자세히 설명해주세요&#10;ex) 선입금 유도, 직거래 유도"
+                placeholder="신고 사유를 자세히 설명해주세요&#10;&#10;ex) 선입금 유도, 직거래 유도"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
