@@ -22,7 +22,7 @@ export const reportTransaction = async (orderId: string, reason: string): Promis
     .from("reports")
     .select("id")
     .eq("reporter_id", user.id)
-    .eq("order_id", orderId)
+    .eq("order_number", orderId)
     .maybeSingle();
 
   if (existingReport) {
@@ -34,7 +34,7 @@ export const reportTransaction = async (orderId: string, reason: string): Promis
     .from("reports")
     .insert({
       reporter_id: user.id,
-      order_id: orderId,
+      order_number: orderId,
       reason,
       type: "transaction",
       status: "pending" // 기본 상태: 검토 대기중
@@ -65,7 +65,7 @@ export const hasReportedTransaction = async (orderId: string): Promise<boolean> 
     .from("reports")
     .select("id")
     .eq("reporter_id", user.id)
-    .eq("order_id", orderId)
+    .eq("order_number", orderId)
     .maybeSingle();
 
   return !!data;
