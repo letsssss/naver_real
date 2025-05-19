@@ -9,6 +9,8 @@ import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, Refresh
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { createBrowserClient } from "@/lib/supabase"
+import { fetchTicketingSuccessRate } from "@/services/statistics-service"
+import SuccessRateBadge from "@/components/SuccessRateBadge"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,10 +64,12 @@ export default function TicketCancellationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
+  const [successRate, setSuccessRate] = useState<number>(98)
 
   useEffect(() => {
     setMounted(true)
     fetchCancellationTickets()
+    fetchSuccessRate()
     
     // 인기 티켓 데이터 설정
     setPopularTickets([
@@ -164,6 +168,17 @@ export default function TicketCancellationPage() {
       setTickets([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 취켓팅 성공률 가져오기
+  const fetchSuccessRate = async () => {
+    try {
+      const rate = await fetchTicketingSuccessRate();
+      setSuccessRate(rate);
+    } catch (error) {
+      console.error("성공률 조회 실패:", error);
+      // 기본값 유지
     }
   };
 
@@ -314,7 +329,7 @@ export default function TicketCancellationPage() {
       <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-hidden">
         <section className="container mx-auto flex flex-col items-center justify-center py-16 px-4 relative z-10">
           <div className="mb-4 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm">
-            취소표 예매 성공률 98%
+            취소표 예매 성공률 {successRate}%
           </div>
           <h1 className="text-3xl md:text-5xl font-bold text-white text-center mb-4 leading-tight">
             놓친 티켓, 취소표로 다시 잡자!
@@ -454,9 +469,7 @@ export default function TicketCancellationPage() {
                         />
                       </Link>
                       <div className="absolute top-3 right-3">
-                        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-green-500 text-white hover:bg-green-600">
-                          성공률 98%
-                        </div>
+                        <SuccessRateBadge />
                       </div>
                       <div className="absolute bottom-3 left-3">
                         <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
@@ -576,7 +589,7 @@ export default function TicketCancellationPage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">높은 성공률</h3>
-                <p className="text-gray-600">98% 이상의 높은 예매 성공률을 자랑합니다.</p>
+                <p className="text-gray-600">{successRate}% 이상의 높은 예매 성공률을 자랑합니다.</p>
               </div>
             </div>
           </div>

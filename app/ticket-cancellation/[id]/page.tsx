@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import KakaoPay from "@/components/payment/KakaoPay"
 import KGInicis from "@/components/payment/KGInicis"
 import { createBrowserClient } from "@/lib/supabase"
+import SuccessRateBadge from "@/components/SuccessRateBadge"
 
 // 티켓 시트 타입 정의
 interface SeatOption {
@@ -768,9 +769,7 @@ export default function TicketCancellationDetail() {
                     className="object-cover"
                   />
                   <div className="absolute top-4 right-4">
-                    <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-green-500 text-white hover:bg-green-600">
-                      성공률 {ticketData.successRate}%
-                    </div>
+                    <SuccessRateBadge staticRate={ticketData.successRate} />
                   </div>
                 </div>
               </div>
