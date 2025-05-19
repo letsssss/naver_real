@@ -14,6 +14,7 @@ import ChatModal from "@/components/chat/ChatModal"
 import { useToast } from "@/components/ui/use-toast"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/supabase.types"
+import ReportButton from "./ReportButton"
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -439,10 +440,19 @@ export default function TransactionDetail() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
         <div className="container mx-auto px-4 py-6">
-          <Link href="/mypage" className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            <span>마이페이지로 돌아가기</span>
-          </Link>
+          <div className="flex justify-between items-start">
+            <Link href="/mypage" className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              <span>마이페이지로 돌아가기</span>
+            </Link>
+            {/* 구매자인 경우에만 신고 버튼 표시 */}
+            {transaction.type === "purchase" && (
+              <ReportButton 
+                orderId={orderNumber}
+                variant="button"
+              />
+            )}
+          </div>
           <h1 className="text-3xl font-bold mt-4">구매 거래 상세</h1>
         </div>
       </header>
@@ -617,22 +627,34 @@ export default function TransactionDetail() {
                   </svg>
                   판매자에게 메시지
                 </Button>
-                <Button
-                  onClick={handleAction}
-                  disabled={transaction.currentStep !== "ticketing_completed"}
-                  className={`px-6 py-3 rounded-lg shadow-md font-semibold ${
-                    transaction.currentStep === "ticketing_completed"
-                      ? "bg-[#FFD600] hover:bg-[#FFE600] text-black"
-                      : "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  }`}
-                >
-                  구매확정
-                </Button>
+                {transaction.type === "purchase" && (
+                  <Button
+                    onClick={handleAction}
+                    disabled={transaction.currentStep !== "ticketing_completed"}
+                    className={`px-6 py-3 rounded-lg shadow-md font-semibold ${
+                      transaction.currentStep === "ticketing_completed"
+                        ? "bg-[#FFD600] hover:bg-[#FFE600] text-black"
+                        : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                    }`}
+                  >
+                    구매확정
+                  </Button>
+                )}
               </div>
-              {transaction.currentStep !== "ticketing_completed" && (
+              {transaction.currentStep !== "ticketing_completed" && transaction.type === "purchase" && (
                 <p className="text-sm text-gray-500 italic">
                   판매자가 취켓팅을 완료한 이후 구매확정 버튼을 누르실 수 있습니다.
                 </p>
+              )}
+              {/* 모바일 환경에서 하단에 신고 버튼 추가 (태블릿/데스크탑에서는 숨김) */}
+              {transaction.type === "purchase" && (
+                <div className="mt-4 sm:hidden">
+                  <ReportButton 
+                    orderId={orderNumber}
+                    variant="text"
+                    className="text-right w-full"
+                  />
+                </div>
               )}
             </div>
           </div>
