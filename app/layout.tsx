@@ -10,6 +10,7 @@ import { Toaster } from "sonner"
 import { SyncUser } from "@/app/components/sync-user"
 import TokenRefresher from '@/app/components/auth/TokenRefresher'
 import { Footer } from "@/components/Footer"
+import { ReviewSection } from "@/components/ReviewSection"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -41,6 +42,7 @@ export default function RootLayout({
           <div className="flex-grow">
             {children}
           </div>
+          <ReviewSection />
           <Footer />
           <FeedbackForm />
           <Toaster position="top-center" />
