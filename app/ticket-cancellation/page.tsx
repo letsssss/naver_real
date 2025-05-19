@@ -562,7 +562,7 @@ export default function TicketCancellationPage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold mb-2">안전한 예매 대행</h3>
-                <p className="text-gray-600">본인 계정으로 안정하게 예매 대행을 해드립니다.</p>
+                <p className="text-gray-600">100% 후입금 제도로 안심하고 진행하실 수 있습니다.</p>
               </div>
               <div className="flex flex-col items-center text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
