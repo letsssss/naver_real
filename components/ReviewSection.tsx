@@ -1,5 +1,3 @@
-import { Star } from "lucide-react"
-
 // 리뷰 데이터 타입 정의
 interface Review {
   category: string
@@ -53,14 +51,20 @@ const dummyReviews = [
 export function ReviewSection() {
   // 별점 렌더링 함수
   const renderStars = (count: number) => {
-    return Array.from({ length: 5 }).map((_, i) => (
-      <Star
-        key={i}
-        className={`w-4 h-4 ${
-          i < count ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
-        }`}
-      />
-    ))
+    return (
+      <div className="flex items-center gap-1">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span 
+            key={i} 
+            className={`text-lg ${
+              i < count ? "text-yellow-400" : "text-gray-300"
+            }`}
+          >
+            ★
+          </span>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -81,9 +85,7 @@ export function ReviewSection() {
                 <span className="text-sm font-medium text-blue-600">
                   {review.category}
                 </span>
-                <div className="flex items-center gap-1">
-                  {renderStars(review.stars)}
-                </div>
+                {renderStars(review.stars)}
               </div>
               
               <h3 className="font-semibold text-gray-900 mb-1">
