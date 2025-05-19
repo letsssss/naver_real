@@ -8,7 +8,7 @@ import { UserCircle, Calendar, ArrowLeft, Edit, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import ReportButton from '@/components/ReportButton'
+import ReportButton from './ReportButton'
 
 // Post 타입 정의
 interface Post {
