@@ -22,7 +22,7 @@ export default function AuthLogsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const supabase = createBrowserClient()
-  const { user } = useAuth()
+  const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
 
   // 디버깅용 토큰 확인 함수
@@ -54,10 +54,17 @@ export default function AuthLogsPage() {
       user, 
       isAuthenticated: !!user, 
       role: user?.role,
-      email: user?.email 
+      email: user?.email,
+      authLoading
     });
     
-    // 권한 체크
+    // 인증 로딩 중일 때는 리다이렉트하지 않음
+    if (authLoading) {
+      console.log("⏳ 인증 정보 로딩 중... 리다이렉트 지연");
+      return;
+    }
+    
+    // 권한 체크 - 로딩이 완료된 후에만 실행
     if (!user) {
       console.log("⛔ 사용자 정보 없음, 로그인으로 리다이렉트");
       router.push("/login");
@@ -73,23 +80,26 @@ export default function AuthLogsPage() {
     
     console.log("✅ 관리자 확인 완료, 데이터 로딩 시작");
     
-    setLoading(true);
-    supabase
-      .from("auth_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100)
-      .then(({ data, error: fetchError }) => {
-        setLoading(false);
-        if (fetchError) {
-          console.error("❌ 데이터 로딩 오류:", fetchError);
-          setError(fetchError.message);
-        } else if (data) {
-          console.log("✅ 로그 데이터 로딩 완료:", data.length, "건");
-          setLogs(data as AuthLog[]);
-        }
-      });
-  }, [user, router]);
+    // 인증 체크가 완료된 후에만 데이터 로딩
+    if (!authLoading && user && user.role?.toUpperCase() === "ADMIN") {
+      setLoading(true);
+      supabase
+        .from("auth_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .then(({ data, error: fetchError }) => {
+          setLoading(false);
+          if (fetchError) {
+            console.error("❌ 데이터 로딩 오류:", fetchError);
+            setError(fetchError.message);
+          } else if (data) {
+            console.log("✅ 로그 데이터 로딩 완료:", data.length, "건");
+            setLogs(data as AuthLog[]);
+          }
+        });
+    }
+  }, [user, router, authLoading, supabase]);
 
   // 로그 새로고침 함수
   const refreshLogs = () => {
@@ -111,6 +121,20 @@ export default function AuthLogsPage() {
         }
       });
   };
+
+  // 인증 로딩 중일 때 로딩 UI 표시
+  if (authLoading) {
+    return (
+      <main className="p-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <h2 className="text-xl font-medium mb-2">🔄 인증 정보 확인 중...</h2>
+            <p className="text-gray-500">잠시만 기다려주세요.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="p-8">
