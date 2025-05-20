@@ -18,7 +18,8 @@ const PROTECTED_ROUTES = [
   '/sell',
   '/cart',
   '/write-post',
-  '/user-info'
+  '/user-info',
+  '/admin'
 ];
 
 // ✅ 보호된 API 경로
@@ -61,6 +62,7 @@ export const config = {
     '/cart/:path*',
     '/write-post/:path*',
     '/user-info/:path*',
+    '/admin/:path*',
     '/api/:path*'
   ],
 }; 
