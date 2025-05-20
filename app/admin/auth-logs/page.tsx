@@ -25,46 +25,92 @@ export default function AuthLogsPage() {
   const { user } = useAuth()
   const router = useRouter()
 
+  // 디버깅용 토큰 확인 함수
   useEffect(() => {
-    // 관리자 권한 검사
-    if (!user || user.role !== "ADMIN") {
-      router.push("/login")
-      return
-    }
+    // 브라우저 콘솔에서 토큰 확인
+    const checkTokens = () => {
+      try {
+        // 쿠키 확인
+        console.log("🍪 쿠키:", document.cookie);
+        
+        // localStorage 확인
+        const user = localStorage.getItem("user");
+        console.log("📝 localStorage user:", user);
+        
+        // 스토리지 토큰 확인
+        const token = localStorage.getItem("token");
+        console.log("🔑 토큰 존재 여부:", !!token);
+      } catch (e) {
+        console.error("❌ 토큰 확인 오류:", e);
+      }
+    };
+    
+    checkTokens();
+  }, []);
 
-    setLoading(true)
+  useEffect(() => {
+    // 디버깅 로그 추가
+    console.log("🔍 Auth 상태:", { 
+      user, 
+      isAuthenticated: !!user, 
+      role: user?.role,
+      email: user?.email 
+    });
+    
+    // 권한 체크
+    if (!user) {
+      console.log("⛔ 사용자 정보 없음, 로그인으로 리다이렉트");
+      router.push("/login");
+      return;
+    }
+    
+    // ADMIN 권한 체크 - 대소문자 구분 없이
+    if (user.role?.toUpperCase() !== "ADMIN") {
+      console.log(`⛔ 관리자 권한 없음 (${user.role}), 홈으로 리다이렉트`);
+      router.push("/");
+      return;
+    }
+    
+    console.log("✅ 관리자 확인 완료, 데이터 로딩 시작");
+    
+    setLoading(true);
     supabase
       .from("auth_logs")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data, error: fetchError }) => {
-        setLoading(false)
+        setLoading(false);
         if (fetchError) {
-          setError(fetchError.message)
+          console.error("❌ 데이터 로딩 오류:", fetchError);
+          setError(fetchError.message);
         } else if (data) {
-          setLogs(data as AuthLog[])
+          console.log("✅ 로그 데이터 로딩 완료:", data.length, "건");
+          setLogs(data as AuthLog[]);
         }
-      })
-  }, [user, router])
+      });
+  }, [user, router]);
 
   // 로그 새로고침 함수
   const refreshLogs = () => {
-    setLoading(true)
+    console.log("🔄 로그 새로고침 시도");
+    setLoading(true);
     supabase
       .from("auth_logs")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data, error: fetchError }) => {
-        setLoading(false)
+        setLoading(false);
         if (fetchError) {
-          setError(fetchError.message)
+          console.error("❌ 새로고침 오류:", fetchError);
+          setError(fetchError.message);
         } else if (data) {
-          setLogs(data as AuthLog[])
+          console.log("✅ 새로고침 완료:", data.length, "건");
+          setLogs(data as AuthLog[]);
         }
-      })
-  }
+      });
+  };
 
   return (
     <main className="p-8">
@@ -130,5 +176,5 @@ export default function AuthLogsPage() {
         </div>
       )}
     </main>
-  )
+  );
 } 
