@@ -50,9 +50,9 @@ export function createBrowserClient(): SupabaseClient<Database> {
       cookieOptions: {
         name: 'sb-auth-token',
         secure: true,      // ✅ HTTPS 환경에서만 쿠키 전송
-        sameSite: 'Lax',   // ✅ 기본 보안 설정
+        sameSite: 'None',  // ✅ 크로스 사이트 요청에서도 쿠키 전송 허용
         path: '/',
-        domain: undefined  // 현재 도메인 사용
+        domain: '.easyticket82.com'  // ✅ 도메인을 명시적으로 설정 (.은 서브도메인 포함)
       },
     });
     
