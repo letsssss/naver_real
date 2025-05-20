@@ -39,7 +39,7 @@ const dummyReviews = [
   },
   {
     category: "콘서트",
-    title: "아이유 월드투어 서울",
+    title: "제이홉 콘서트",
     name: "유*림",
     date: "2025. 05. 15",
     stars: 5,
