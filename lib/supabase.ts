@@ -49,10 +49,10 @@ export function createBrowserClient(): SupabaseClient<Database> {
       supabaseKey: SUPABASE_ANON_KEY,
       cookieOptions: {
         name: 'sb-auth-token',
-        secure: false,      // 임시 테스트 목적
-        sameSite: 'Lax',    // 더 관용적인 쿠키 전송
+        secure: true,                // ✅ HTTPS 필수
+        sameSite: 'None',            // ✅ 크로스 도메인 대응
         path: '/',
-        domain: 'easyticket82.com'  // 배포 환경용
+        domain: '.easyticket82.com'  // ✅ 모든 서브도메인 포함
       },
     });
     
