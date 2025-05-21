@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-login';
 import { toast } from 'sonner';
 
 type KakaoLoginButtonProps = {
@@ -32,9 +32,6 @@ export default function KakaoLoginButton({
       
       // 실제 카카오 로그인 처리
       console.log(`카카오 ${mode === 'login' ? '로그인' : '회원가입'} 시작...`);
-      
-      // Supabase 클라이언트 생성
-      const supabase = createBrowserClient();
       
       // 카카오 OAuth 요청 - redirectTo 제거하여 Supabase가 자동으로 siteUrl 기반으로 처리하도록 함
       const { data, error } = await supabase.auth.signInWithOAuth({
