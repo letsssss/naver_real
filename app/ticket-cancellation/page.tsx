@@ -69,18 +69,18 @@ export default function TicketCancellationPage() {
   // 인증 토큰 복원을 위한 useEffect
   useEffect(() => {
     const supabase = createBrowserClient();
-    const { hash } = window.location;
 
-    if (hash.includes('access_token')) {
+    // access_token이 있는 상태에서 세션 교환
+    if (window.location.hash.includes('access_token')) {
+      console.log("🔄 해시 기반 access_token 감지됨");
       supabase.auth.getSession().then(({ data, error }) => {
-        console.log("🔑 getSession 복원 결과:", data?.session);
-        if (data?.session) {
-          // 세션 저장 or 상태 업데이트가 필요한 경우 여기에 추가
-          router.replace("/ticket-cancellation"); // 해시 제거용
-        }
+        console.log("🧪 세션 복원 시도 결과:", data?.session || error);
+
+        // 해시 제거 (UX 개선)
+        window.history.replaceState(null, '', window.location.pathname);
       });
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     setMounted(true)
