@@ -7,8 +7,8 @@ const supabase = createPagesBrowserClient<Database>({
     name: 'sb-auth-token',
     secure: false,      // 임시 테스트 목적
     sameSite: 'Lax',    // 더 관용적인 쿠키 전송
-    path: '/'
-    // domain: 제거
+    path: '/',
+    domain: 'easyticket82.com'  // 배포 환경용
   },
 });
 
