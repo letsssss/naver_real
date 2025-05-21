@@ -66,6 +66,22 @@ export default function TicketCancellationPage() {
   const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
   const [successRate, setSuccessRate] = useState<number | string>(90)
 
+  // 인증 토큰 복원을 위한 useEffect
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    const { hash } = window.location;
+
+    if (hash.includes('access_token')) {
+      supabase.auth.getSession().then(({ data, error }) => {
+        console.log("🔑 getSession 복원 결과:", data?.session);
+        if (data?.session) {
+          // 세션 저장 or 상태 업데이트가 필요한 경우 여기에 추가
+          router.replace("/ticket-cancellation"); // 해시 제거용
+        }
+      });
+    }
+  }, [router]);
+
   useEffect(() => {
     setMounted(true)
     fetchCancellationTickets()
