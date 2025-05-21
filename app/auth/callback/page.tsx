@@ -15,7 +15,15 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        if (typeof window === 'undefined' || !window.location.hash) {
+        // ✅ OAuth 인증 코드 교환 수행 (가장 중요)
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+        
+        if (typeof window === 'undefined' || (!window.location.hash && !code)) {
           setError('인증 정보를 찾을 수 없습니다.');
           return;
         }
