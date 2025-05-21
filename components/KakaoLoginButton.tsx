@@ -36,11 +36,10 @@ export default function KakaoLoginButton({
       // Supabase 클라이언트 생성
       const supabase = createBrowserClient();
       
-      // 카카오 OAuth 요청
+      // 카카오 OAuth 요청 - redirectTo 제거하여 Supabase가 자동으로 siteUrl 기반으로 처리하도록 함
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
-          redirectTo: 'https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback',
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가
