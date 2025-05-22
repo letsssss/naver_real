@@ -67,13 +67,44 @@ export default function LoginPage() {
   
   // 테스트 전용: 세션 확인
   const checkSession = async () => {
-    const { data, error } = await supabase.auth.getSession()
-    console.log('현재 세션:', data.session, error)
-    
-    if (data.session) {
-      router.push('/')
-    } else {
-      setError('로그인된 세션이 없습니다.')
+    try {
+      // 기존 세션 가져오기
+      const { data, error } = await supabase.auth.getSession()
+      console.log('현재 세션 상태:', data.session ? '있음' : '없음', error)
+      
+      if (error) {
+        throw error
+      }
+      
+      if (data.session) {
+        console.log('세션 정보:', {
+          user: data.session.user.email,
+          expires: new Date(data.session.expires_at! * 1000).toLocaleString()
+        })
+        router.push('/')
+      } else {
+        // 세션이 없는 경우 로컬 스토리지 확인
+        if (typeof window !== 'undefined') {
+          const keys = Object.keys(localStorage).filter(k => 
+            k.includes('supabase') || k.includes('auth')
+          )
+          console.log('로컬 스토리지 키:', keys)
+        }
+        
+        // 쿠키 확인 API 호출
+        try {
+          const response = await fetch('/api/auth/check')
+          const cookieData = await response.json()
+          console.log('쿠키 상태:', cookieData)
+        } catch (e) {
+          console.error('쿠키 확인 API 호출 오류:', e)
+        }
+        
+        setError('로그인된 세션이 없습니다. 다시 로그인해 주세요.')
+      }
+    } catch (err: any) {
+      console.error('세션 확인 오류:', err)
+      setError('세션 확인 중 오류가 발생했습니다: ' + err.message)
     }
   }
   

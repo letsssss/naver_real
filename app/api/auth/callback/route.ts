@@ -39,6 +39,7 @@ export async function GET(request: Request) {
                 httpOnly: true,
                 sameSite: 'lax',
                 path: '/',
+                maxAge: 60 * 60 * 24 * 7, // 7일간 유효하도록 설정
               });
             } catch (error) {
               console.error('콜백 처리 중 쿠키 설정 실패:', error);
@@ -78,10 +79,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=session_error`);
     }
     
+    // 세션 디버깅 정보 출력
     console.log('🔐 세션 생성 성공:', {
       provider: session.user.app_metadata.provider, 
       email: session.user.email,
-      userId: session.user.id.substring(0, 6) + '...'
+      userId: session.user.id.substring(0, 6) + '...',
+      expiresAt: new Date(session.expires_at! * 1000).toLocaleString()
     });
     
     // 환경에 따른 리다이렉트 URL 설정
@@ -102,6 +105,20 @@ export async function GET(request: Request) {
     
     // 리다이렉트 응답 생성
     const response = NextResponse.redirect(finalRedirectUrl);
+    
+    // 세션 정보를 클라이언트 쿠키에 복사
+    const supabaseCookies = cookieStore.getAll();
+    supabaseCookies.forEach((cookie) => {
+      if (cookie.name.includes('supabase') || cookie.name.includes('auth')) {
+        console.log(`🍪 클라이언트에 쿠키 복사: ${cookie.name}`);
+        response.cookies.set(cookie.name, cookie.value, {
+          path: '/',
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 60 * 24 * 7, // 7일간 유효
+        });
+      }
+    });
     
     return response;
   } catch (error: any) {
