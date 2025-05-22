@@ -67,41 +67,46 @@ export async function GET(request: Request) {
     
     if (error) {
       console.error('세션 교환 에러:', error);
-      return NextResponse.redirect(`${origin}/login?error=auth_error&message=${error.message}`);
+      return NextResponse.redirect(`${origin}/login?error=auth_error&message=${encodeURIComponent(error.message)}`);
     }
     
     // 세션 정보 확인
     const { data: { session } } = await supabase.auth.getSession();
-    console.log('🔐 세션 생성 성공:', session?.user.email);
     
-    // 세션이 없는 경우 에러 처리
     if (!session) {
       console.error('세션 생성 실패: 세션 객체가 없음');
       return NextResponse.redirect(`${origin}/login?error=session_error`);
     }
     
+    console.log('🔐 세션 생성 성공:', {
+      provider: session.user.app_metadata.provider, 
+      email: session.user.email,
+      userId: session.user.id.substring(0, 6) + '...'
+    });
+    
     // 환경에 따른 리다이렉트 URL 설정
     const forwardedHost = request.headers.get('x-forwarded-host');
     const isLocalEnv = process.env.NODE_ENV === 'development';
     
-    let finalRedirectUrl;
+    let baseUrl;
     if (isLocalEnv) {
-      finalRedirectUrl = `${origin}${next}`;
+      baseUrl = origin;
     } else if (forwardedHost) {
-      finalRedirectUrl = `https://${forwardedHost}${next}`;
+      baseUrl = `https://${forwardedHost}`;
     } else {
-      finalRedirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL || origin}${next}`;
+      baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
     }
     
+    const finalRedirectUrl = `${baseUrl}${next}`;
     console.log('🔐 리다이렉트:', finalRedirectUrl);
     
-    // 리다이렉트 응답 생성 및 쿠키 정보 복사
+    // 리다이렉트 응답 생성
     const response = NextResponse.redirect(finalRedirectUrl);
     
-    // 리다이렉트 응답에 세션 정보 추가
     return response;
   } catch (error: any) {
     console.error('콜백 처리 중 예외 발생:', error);
-    return NextResponse.redirect(`${new URL(request.url).origin}/login?error=server_error&message=${error.message || 'Unknown error'}`);
+    const errorMessage = encodeURIComponent(error.message || 'Unknown error');
+    return NextResponse.redirect(`${new URL(request.url).origin}/login?error=server_error&message=${errorMessage}`);
   }
 } 

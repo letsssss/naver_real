@@ -2,23 +2,24 @@
 
 import React, { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import Image from "next/image"
-import Link from "next/link"
-import { Toaster, toast } from "sonner"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import KakaoLoginButton from "@/components/KakaoLoginButton"
-import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
-import LoginForm from "@/components/auth/LoginForm"
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import KakaoLoginButton from "@/components/KakaoLoginButton"
+import { Separator } from "@/components/ui/separator"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // Supabase 클라이언트 생성
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   // URL 쿼리 파라미터에서 오류 메시지 확인
   useEffect(() => {
@@ -29,12 +30,6 @@ export default function LoginPage() {
       setError(`로그인 오류: ${errorParam}${errorMsg ? ` - ${errorMsg}` : ''}`)
     }
   }, [searchParams])
-  
-  // Supabase 클라이언트 생성
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
   
   // 소셜 로그인 처리 함수
   const handleSocialLogin = async (provider: 'google' | 'github') => {
@@ -103,6 +98,20 @@ export default function LoginPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+          
+          {/* 카카오 로그인 버튼 */}
+          <KakaoLoginButton />
+          
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-slate-50 px-2 text-muted-foreground">
+                또는 다른 방법으로 로그인
+              </span>
+            </div>
+          </div>
           
           <Button
             className="w-full"

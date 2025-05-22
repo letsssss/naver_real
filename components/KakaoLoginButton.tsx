@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase-login';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 type KakaoLoginButtonProps = {
   mode?: 'login' | 'signup'; // 'login' 또는 'signup' 모드 선택
   text?: string; // 버튼에 표시될 텍스트 (옵션)
   onSuccess?: () => void; // 성공 시 호출될 콜백 (옵션)
+  redirectTo?: string; // 로그인 후 리다이렉트할 경로 (옵션)
 };
 
 export default function KakaoLoginButton({ 
   mode = 'login', 
   text,
-  onSuccess 
+  onSuccess,
+  redirectTo = '/'
 }: KakaoLoginButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -33,43 +35,26 @@ export default function KakaoLoginButton({
       // 실제 카카오 로그인 처리
       console.log(`카카오 ${mode === 'login' ? '로그인' : '회원가입'} 시작...`);
       
-      // 카카오 OAuth 요청 - redirectTo 제거하여 Supabase가 자동으로 siteUrl 기반으로 처리하도록 함
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'kakao',
-        options: {
-          scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
-          queryParams: {
-            'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가
-          }
-        }
-      });
-
-      if (error) {
-        console.error('카카오 인증 에러:', error.message);
-        toast.error('카카오 인증 중 오류가 발생했습니다.');
-        return;
-      }
-
-      if (data?.url) {
-        console.log('카카오 인증 페이지로 리디렉션:', data.url);
-        
-        // 카카오 인증 페이지로 리디렉션하기 전에 로컬 스토리지에 모드 저장
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('kakao_auth_mode', mode);
-        }
-        
-        window.location.href = data.url;
-      } else {
-        console.error('카카오 인증 URL이 없습니다.');
-        toast.error('카카오 인증 처리 중 오류가 발생했습니다.');
+      // 로컬 스토리지에 모드와 리다이렉트 정보 저장
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('kakao_auth_mode', mode);
+        localStorage.setItem('kakao_auth_redirect', redirectTo);
       }
       
-      if (onSuccess) {
-        onSuccess();
+      // API 엔드포인트를 통해 카카오 로그인 처리
+      // 이렇게 하면 CORS 문제와 설정 문제를 방지할 수 있음
+      const response = await axios.get(`/api/auth/kakao?next=${encodeURIComponent(redirectTo)}`);
+      
+      if (response.data?.url) {
+        console.log('카카오 인증 페이지로 리디렉션:', response.data.url);
+        window.location.href = response.data.url;
+      } else {
+        throw new Error('카카오 인증 URL을 받지 못했습니다.');
       }
-    } catch (err) {
+      
+    } catch (err: any) {
       console.error('인증 처리 중 오류 발생:', err);
-      toast.error('카카오 인증 처리 중 오류가 발생했습니다.');
+      toast.error(err.response?.data?.error || '카카오 인증 처리 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }

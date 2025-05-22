@@ -26,7 +26,14 @@ export async function GET(request: Request) {
           },
           set(name, value, options) {
             try {
-              cookieStore.set(name, value, options);
+              // 쿠키 보안 설정 강화
+              cookieStore.set(name, value, {
+                ...options,
+                secure: process.env.NODE_ENV === 'production',
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+              });
             } catch (error) {
               // API 라우트에서 쿠키 설정 실패 시 에러 로깅
               console.error('쿠키 설정 실패:', error);
@@ -34,7 +41,14 @@ export async function GET(request: Request) {
           },
           remove(name, options) {
             try {
-              cookieStore.set(name, '', { ...options, maxAge: 0 });
+              cookieStore.set(name, '', { 
+                ...options, 
+                maxAge: 0,
+                secure: process.env.NODE_ENV === 'production',
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+              });
             } catch (error) {
               console.error('쿠키 삭제 실패:', error);
             }
@@ -43,17 +57,38 @@ export async function GET(request: Request) {
       }
     );
     
+    // 리다이렉트 URL 설정
+    // vercel 배포 환경을 고려하여 site URL 또는 origin 사용
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+    const redirectUrl = `${baseUrl}/api/auth/callback?next=${encodeURIComponent(next)}`;
+    
+    console.log('🔑 리다이렉트 URL:', redirectUrl);
+    
     // 카카오 OAuth 로그인 시작
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || origin}/api/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: redirectUrl,
+        scopes: 'profile_nickname profile_image account_email', // 필요한 스코프 추가
+        queryParams: {
+          'single_account': 'true' // 하나의 계정만 허용
+        }
       },
     });
     
     if (error) {
       console.error('카카오 로그인 에러:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: `카카오 로그인 오류: ${error.message}` }, 
+        { status: 400 }
+      );
+    }
+    
+    if (!data?.url) {
+      return NextResponse.json(
+        { error: '카카오 인증 URL을 가져올 수 없습니다' }, 
+        { status: 500 }
+      );
     }
     
     console.log('🔑 카카오 인증 URL 생성 성공:', data.url);
@@ -61,7 +96,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('카카오 로그인 처리 중 예외 발생:', error);
     return NextResponse.json(
-      { error: '로그인 처리 중 오류가 발생했습니다.' },
+      { error: '로그인 처리 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류') },
       { status: 500 }
     );
   }
