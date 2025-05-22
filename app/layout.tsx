@@ -11,6 +11,7 @@ import { SyncUser } from "@/app/components/sync-user"
 import TokenRefresher from '@/app/components/auth/TokenRefresher'
 import { Footer } from "@/components/Footer"
 import { ReviewSection } from "@/components/ReviewSection"
+import AuthRecoveryGate from "@/components/AuthRecoveryGate"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -39,9 +40,11 @@ export default function RootLayout({
         <TokenRefresher />
         <AuthProvider>
           <SyncUser />
-          <div className="flex-grow">
-            {children}
-          </div>
+          <AuthRecoveryGate>
+            <div className="flex-grow">
+              {children}
+            </div>
+          </AuthRecoveryGate>
           <ReviewSection />
           <Footer />
           <FeedbackForm />
