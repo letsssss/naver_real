@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/types/supabase.types';
 
 // ✅ Supabase 프로젝트 Ref (프로젝트 URL에서 확인 가능)
@@ -46,7 +46,25 @@ export async function middleware(req: NextRequest) {
   console.log(`- 인증 토큰: ${req.cookies.has(authCookie) ? '있음' : '없음'}`);
   
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient<Database>({ req, res });
+  
+  // createServerClient 사용 (@supabase/ssr)
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return req.cookies.get(name)?.value;
+        },
+        set(name, value, options) {
+          res.cookies.set(name, value, options);
+        },
+        remove(name, options) {
+          res.cookies.set(name, '', { ...options, maxAge: 0 });
+        },
+      },
+    }
+  );
   
   const {
     data: { session },
