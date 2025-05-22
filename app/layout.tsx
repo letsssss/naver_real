@@ -5,13 +5,16 @@ import { GoogleAnalytics } from "@next/third-parties/google"
 import "./globals.css"
 import "./output.css"
 import { FeedbackForm } from "@/components/feedback-form"
-import { AuthProvider } from "@/contexts/auth-context"
+import { AuthProvider as OldAuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
 import { SyncUser } from "@/app/components/sync-user"
 import TokenRefresher from '@/app/components/auth/TokenRefresher'
 import { Footer } from "@/components/Footer"
 import { ReviewSection } from "@/components/ReviewSection"
 import AuthRecoveryGate from "@/components/AuthRecoveryGate"
+import { AuthProvider as SupabaseAuthProvider } from "@/lib/auth-context"
+import AuthListener from "@/app/components/AuthListener"
+import { getServerClient } from "@/lib/supabase-server"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,11 +29,15 @@ export const metadata: Metadata = {
   }
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // 서버에서 초기 사용자 정보 가져오기
+  const supabase = getServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
   return (
     <html lang="ko">
       <head>
@@ -38,19 +45,25 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <TokenRefresher />
-        <AuthProvider>
-          <SyncUser />
-          <AuthRecoveryGate>
-            <div className="flex-grow">
-              {children}
-            </div>
-          </AuthRecoveryGate>
-          <ReviewSection />
-          <Footer />
-          <FeedbackForm />
-          <Toaster position="top-center" />
-          <GoogleAnalytics gaId="G-XXXXXXXXXX" />
-        </AuthProvider>
+        {/* 새로운 Supabase 인증 공급자 추가 */}
+        <SupabaseAuthProvider initialUser={user}>
+          {/* 기존 인증 공급자 유지 */}
+          <OldAuthProvider>
+            <SyncUser />
+            <AuthRecoveryGate>
+              <div className="flex-grow">
+                {children}
+              </div>
+            </AuthRecoveryGate>
+            <ReviewSection />
+            <Footer />
+            <FeedbackForm />
+            <Toaster position="top-center" />
+            <GoogleAnalytics gaId="G-XXXXXXXXXX" />
+            {/* 세션 변경 감지를 위한 디버깅 컴포넌트 */}
+            <AuthListener />
+          </OldAuthProvider>
+        </SupabaseAuthProvider>
       </body>
     </html>
   )
