@@ -30,59 +30,128 @@ export function getBrowserClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       // 클라이언트 자동화된 쿠키 관리 사용
-      // 사용자 지정 쿠키 핸들러는 삭제 (기본값 사용)
       cookieOptions: {
         path: '/',
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7, // 7일 (쿠키 유효기간 명시적 설정)
       }
     }
   );
   
-  // 세션 상태 디버깅
-  supabaseClientInstance.auth.getSession().then(({ data, error }) => {
+  // 클라이언트 초기화 후 세션 복원 시도
+  initializeClientSession(supabaseClientInstance);
+  
+  return supabaseClientInstance;
+}
+
+/**
+ * 클라이언트 세션 초기화 및 세션 복원 시도
+ */
+async function initializeClientSession(client: ReturnType<typeof createBrowserClient<Database>>) {
+  try {
+    // 로컬 스토리지에서 세션 데이터 확인
+    const localStorageKeys = Object.keys(localStorage).filter(key => 
+      key.includes('supabase') || key.includes('sb-') || key.includes('auth')
+    );
+    
+    console.log('📋 인증 관련 로컬 스토리지 키:', localStorageKeys);
+    
+    // 세션 상태 확인
+    const { data, error } = await client.auth.getSession();
+    
     if (error) {
       console.error("❌ 세션 로드 오류:", error.message);
       return;
     }
     
-    console.log("✅ 브라우저 클라이언트 세션 확인:", data.session ? "세션 있음" : "세션 없음");
-    
     if (data.session) {
+      console.log("✅ 브라우저 세션 감지됨:", data.session.user.email);
       const expiresAt = data.session.expires_at;
       const expiresDate = expiresAt ? new Date(expiresAt * 1000).toLocaleString() : '알 수 없음';
-      console.log(`✅ 세션 만료: ${expiresDate} (${data.session.user.email})`);
+      console.log(`✅ 세션 만료: ${expiresDate}`);
       
       // 세션 토큰이 만료 예정이면 갱신 시도
       const expiresInSecs = expiresAt ? expiresAt - Math.floor(Date.now() / 1000) : 0;
       
       if (expiresInSecs < 60 * 60 * 24) { // 24시간 이내 만료 예정
         console.log('🔄 세션 토큰 만료 임박, 갱신 시도');
-        supabaseClientInstance.auth.refreshSession().then(({ data, error }) => {
-          if (error) {
-            console.error('🔄 세션 갱신 실패:', error.message);
-          } else if (data.session) {
-            console.log('🔄 세션 갱신 성공:', new Date(data.session.expires_at! * 1000).toLocaleString());
-          }
-        });
+        const { data: refreshData, error: refreshError } = await client.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('🔄 세션 갱신 실패:', refreshError.message);
+        } else if (refreshData.session) {
+          console.log('🔄 세션 갱신 성공:', new Date(refreshData.session.expires_at! * 1000).toLocaleString());
+        }
       }
     } else {
-      // 로컬 스토리지 확인을 통한 디버깅
-      try {
-        const authKeys = Object.keys(localStorage).filter(key =>
-          key.includes('supabase') || key.includes('auth')
-        );
+      console.log("⚠️ 세션 없음, 복원 시도");
+      
+      // URL에서 토큰 파라미터 확인
+      const url = new URL(window.location.href);
+      const accessToken = url.searchParams.get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token');
+      
+      if (accessToken && refreshToken) {
+        console.log('🔑 URL에서 토큰 발견, 세션 설정 시도');
         
-        if (authKeys.length > 0) {
-          console.log('🧐 로컬 스토리지에 인증 키가 있지만 세션이 로드되지 않음', authKeys);
+        // 토큰으로 세션 설정
+        const { data, error } = await client.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+        
+        if (error) {
+          console.error('❌ URL 토큰으로 세션 설정 실패:', error.message);
+        } else {
+          console.log('✅ URL 토큰으로 세션 설정 성공');
+          
+          // URL에서 토큰 파라미터 제거
+          url.searchParams.delete('access_token');
+          url.searchParams.delete('refresh_token');
+          window.history.replaceState({}, '', url.toString());
         }
-      } catch (error) {
-        console.error('🧐 로컬 스토리지 접근 오류:', error);
+      } else {
+        // 로컬 스토리지에서 토큰 추출 시도
+        try {
+          const sbAccessToken = localStorage.getItem('sb-access-token');
+          const sbRefreshToken = localStorage.getItem('sb-refresh-token');
+          
+          if (sbAccessToken && sbRefreshToken) {
+            console.log('🔑 로컬 스토리지에서 토큰 발견, 세션 설정 시도');
+            
+            const { data, error } = await client.auth.setSession({
+              access_token: sbAccessToken,
+              refresh_token: sbRefreshToken
+            });
+            
+            if (error) {
+              console.error('❌ 로컬 스토리지 토큰으로 세션 설정 실패:', error.message);
+            } else {
+              console.log('✅ 로컬 스토리지 토큰으로 세션 설정 성공');
+            }
+          } else {
+            // 쿠키 상태 확인
+            try {
+              const response = await fetch('/api/auth/check');
+              const cookieData = await response.json();
+              console.log('🍪 쿠키 상태 확인:', cookieData);
+              
+              if (cookieData.hasAuthCookies && !cookieData.hasSession) {
+                console.log('🔄 쿠키는 있지만 세션이 없음, 세션 수동 복원 필요할 수 있음');
+              }
+            } catch (fetchError) {
+              console.error('❌ 쿠키 상태 확인 중 오류:', fetchError);
+            }
+          }
+        } catch (localStorageError) {
+          console.error('❌ 로컬 스토리지 접근 중 오류:', localStorageError);
+        }
       }
     }
-  });
-  
-  return supabaseClientInstance;
+  } catch (error) {
+    console.error('❌ 세션 초기화 중 오류 발생:', error);
+  }
 }
 
 /**
@@ -125,4 +194,74 @@ export function setupAuthListener(
   return () => {
     subscription.unsubscribe();
   };
+}
+
+/**
+ * 토큰을 이용하여 세션을 복원합니다.
+ * 다양한 소스에서 세션 토큰을 찾아 복원을 시도합니다.
+ */
+export async function recoverSession() {
+  const client = getBrowserClient();
+  
+  try {
+    // 1. URL 파라미터에서 세션 토큰 확인
+    const url = new URL(window.location.href);
+    const accessToken = url.searchParams.get('access_token');
+    const refreshToken = url.searchParams.get('refresh_token');
+    
+    if (accessToken && refreshToken) {
+      console.log('🔑 URL에서 세션 토큰 발견, 복원 시도');
+      
+      const { data, error } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+      
+      if (error) {
+        console.error('❌ URL 토큰으로 세션 복원 실패:', error.message);
+      } else {
+        console.log('✅ URL 토큰으로 세션 복원 성공');
+        
+        // URL에서 토큰 파라미터 제거
+        url.searchParams.delete('access_token');
+        url.searchParams.delete('refresh_token');
+        window.history.replaceState({}, '', url.toString());
+        
+        return true;
+      }
+    }
+    
+    // 2. 로컬 스토리지에서 세션 토큰 확인
+    const sbAccessToken = localStorage.getItem('sb-access-token');
+    const sbRefreshToken = localStorage.getItem('sb-refresh-token');
+    
+    if (sbAccessToken && sbRefreshToken) {
+      console.log('🔑 로컬 스토리지에서 세션 토큰 발견, 복원 시도');
+      
+      const { data, error } = await client.auth.setSession({
+        access_token: sbAccessToken,
+        refresh_token: sbRefreshToken
+      });
+      
+      if (error) {
+        console.error('❌ 로컬 스토리지 토큰으로 세션 복원 실패:', error.message);
+      } else {
+        console.log('✅ 로컬 스토리지 토큰으로 세션 복원 성공');
+        return true;
+      }
+    }
+    
+    // 3. 현재 세션 확인
+    const { data, error } = await client.auth.getSession();
+    
+    if (error) {
+      console.error('❌ 세션 확인 중 오류:', error.message);
+      return false;
+    }
+    
+    return !!data.session;
+  } catch (error) {
+    console.error('❌ 세션 복원 중 오류 발생:', error);
+    return false;
+  }
 } 
