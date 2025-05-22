@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React, { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
@@ -9,117 +9,130 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
+import { createBrowserClient } from '@supabase/ssr'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { redirectTo?: string }
-}) {
+export default function LoginPage() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const searchParams = useSearchParams()
 
+  // URL 쿼리 파라미터에서 오류 메시지 확인
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        router.push(searchParams?.redirectTo || '/')
-      }
-    }
+    const errorParam = searchParams.get('error')
+    const errorMsg = searchParams.get('message')
     
-    checkSession()
-  }, [router, searchParams, supabase.auth])
-
-  // 소셜 로그인 준비중 메시지 표시 함수
-  const handleSocialLogin = (provider: string) => {
-    toast.info(`${provider} 로그인은 현재 준비중입니다`, {
-      position: 'top-center',
-      duration: 3000,
-      icon: '🔧'
-    });
-  };
+    if (errorParam) {
+      setError(`로그인 오류: ${errorParam}${errorMsg ? ` - ${errorMsg}` : ''}`)
+    }
+  }, [searchParams])
+  
+  // Supabase 클라이언트 생성
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  
+  // 소셜 로그인 처리 함수
+  const handleSocialLogin = async (provider: 'google' | 'github') => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // 현재 URL 기반으로 리다이렉트 URL 설정
+      const redirectTo = `${window.location.origin}/api/auth/callback`
+      console.log(`🔐 로그인 시도 (${provider}), 리다이렉트: ${redirectTo}`)
+      
+      // Supabase OAuth 로그인 시작
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          scopes: provider === 'github' ? 'user:email' : undefined,
+        },
+      })
+      
+      if (error) {
+        throw error
+      }
+      
+      // 로그인 요청 성공, 유저는 제공자의 인증 페이지로 리다이렉트됨
+      console.log('🔐 소셜 로그인 리다이렉트 URL:', data.url)
+      
+    } catch (err: any) {
+      console.error('소셜 로그인 에러:', err)
+      setError(err.message || '로그인 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  // 테스트 전용: 세션 확인
+  const checkSession = async () => {
+    const { data, error } = await supabase.auth.getSession()
+    console.log('현재 세션:', data.session, error)
+    
+    if (data.session) {
+      router.push('/')
+    } else {
+      setError('로그인된 세션이 없습니다.')
+    }
+  }
+  
+  // 테스트 전용: 디버깅 페이지로 이동
+  const goToDebugPage = () => {
+    router.push('/debug/session')
+  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-white">
-      <Toaster position="top-center" />
-      <div className="w-full max-w-md space-y-10">
-        {/* Logo */}
-        <div className="flex justify-center">
-          <Link href="/">
-            <Image
-              src="/easyticket-logo.png"
-              alt="EasyTicket"
-              width={300}
-              height={100}
-              className="h-24 object-contain cursor-pointer"
-            />
-          </Link>
-        </div>
-
-        {/* Login Options */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-center">간편하게 로그인하기</h2>
+    <div className="flex justify-center items-center min-h-screen bg-slate-50">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>로그인</CardTitle>
+          <CardDescription>
+            소셜 계정으로 간편하게 로그인하세요.
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           
-          {/* 일반 로그인 폼 */}
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <LoginForm />
+          <Button
+            className="w-full"
+            onClick={() => handleSocialLogin('google')}
+            disabled={loading}
+          >
+            {loading ? '로그인 처리 중...' : '구글로 로그인'}
+          </Button>
+          
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => handleSocialLogin('github')}
+            disabled={loading}
+          >
+            {loading ? '로그인 처리 중...' : 'GitHub로 로그인'}
+          </Button>
+        </CardContent>
+        
+        <CardFooter className="flex flex-col space-y-2">
+          <div className="w-full flex justify-between">
+            <Button variant="ghost" size="sm" onClick={checkSession}>
+              세션 확인
+            </Button>
+            <Button variant="ghost" size="sm" onClick={goToDebugPage}>
+              세션 디버깅
+            </Button>
           </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">또는</span>
-            </div>
-          </div>
-
-          <KakaoLoginButton mode="login" />
-
-          <Link href="/signup" className="block">
-            <button className="w-full py-3 border border-gray-300 rounded-md text-center text-gray-700">
-              회원가입
-            </button>
-          </Link>
-        </div>
-
-        {/* Social Login */}
-        <div className="flex justify-center space-x-12">
-          <button 
-            className="flex flex-col items-center group"
-            onClick={() => handleSocialLogin('네이버')}
-          >
-            <div className="w-14 h-14 flex items-center justify-center bg-[#03C75A] rounded-full mb-2 group-hover:opacity-90 transition-opacity">
-              <span className="text-white font-bold text-xl">N</span>
-            </div>
-            <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">네이버</span>
-          </button>
-
-          <button 
-            className="flex flex-col items-center group"
-            onClick={() => handleSocialLogin('Google')}
-          >
-            <div className="w-14 h-14 flex items-center justify-center border border-gray-300 rounded-full mb-2 group-hover:border-gray-400 transition-colors">
-              <Image src="/placeholder.svg" alt="Google" width={28} height={28} />
-            </div>
-            <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Google</span>
-          </button>
-
-          <button 
-            className="flex flex-col items-center group"
-            onClick={() => handleSocialLogin('Apple')}
-          >
-            <div className="w-14 h-14 flex items-center justify-center bg-black rounded-full mb-2 group-hover:bg-gray-900 transition-colors">
-              <Image src="/placeholder.svg" alt="Apple" width={28} height={28} className="invert" />
-            </div>
-            <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Apple</span>
-          </button>
-        </div>
-
-        <div className="mt-6 border-t pt-4">
-          <p className="text-sm text-gray-500 mb-4">JWT 토큰이 만료되었나요?</p>
-          <SessionAuthButton />
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   )
 }
