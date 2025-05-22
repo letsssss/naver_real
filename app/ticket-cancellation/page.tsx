@@ -70,11 +70,13 @@ export default function TicketCancellationPage() {
   useEffect(() => {
     const supabase = createBrowserClient();
 
-    // access_token이 있는 상태에서 세션 교환
+    // ✅ 해시 URL에 access_token 포함되어 있으면 세션 복원 시도
     if (window.location.hash.includes('access_token')) {
-      console.log("🔄 해시 기반 access_token 감지됨");
+      console.log("🔁 URL 해시에서 access_token 감지됨");
+      
       supabase.auth.getSession().then(({ data, error }) => {
-        console.log("🧪 세션 복원 시도 결과:", data?.session || error);
+        console.log("🔄 해시 기반 getSession 결과:", data, error);
+        console.log("🧪 세션 복원 여부:", data?.session ? "성공" : "실패");
 
         // 해시 제거 (UX 개선)
         window.history.replaceState(null, '', window.location.pathname);
