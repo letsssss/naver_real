@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 import { getBrowserClient } from '@/lib/supabase-client';
-import { createBrowserClient } from '@supabase/ssr';
 
 /**
  * 토큰 자동 갱신 컴포넌트
@@ -14,11 +13,8 @@ export default function TokenRefresher() {
   const authListenerRef = useRef<{ unsubscribe: () => void } | null>(null);
 
   useEffect(() => {
-    // 새로운 브라우저 클라이언트 생성
-    const supabaseClient = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // 싱글톤 Supabase 클라이언트 사용 (중복 생성 방지)
+    const supabaseClient = getBrowserClient();
     
     console.log('🔄 TokenRefresher 마운트');
     
@@ -62,7 +58,13 @@ export default function TokenRefresher() {
     
     // 초기 세션 확인 및 갱신 타이머 설정
     const initSession = async () => {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      
+      if (error) {
+        console.error('🔄 TokenRefresher 세션 로드 오류:', error.message);
+        return;
+      }
+      
       console.log('🔄 TokenRefresher 초기 세션:', session ? '있음' : '없음');
       
       if (session) {
@@ -89,6 +91,14 @@ export default function TokenRefresher() {
         }
       } else {
         console.log('🔄 인증된 세션 없음, 토큰 갱신 타이머 설정 안 함');
+        
+        // 로컬 스토리지 인증 키 확인
+        if (typeof window !== 'undefined') {
+          const authKeys = Object.keys(localStorage).filter(key => 
+            key.includes('supabase') || key.includes('sb-') || key.includes('auth')
+          );
+          console.log('현재 localStorage 인증 키:', authKeys);
+        }
       }
     };
     
@@ -123,12 +133,42 @@ export default function TokenRefresher() {
           });
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log("🚪 로그아웃됨");
+        console.log("🚪 로그아웃됨, 세션 제거");
         
         // 로그아웃 시 타이머 취소
         if (refreshTimerRef.current) {
           clearTimeout(refreshTimerRef.current);
           refreshTimerRef.current = null;
+        }
+        
+        // 로그아웃 시 로컬 스토리지 인증 정보 정리
+        if (typeof window !== 'undefined') {
+          const authKeys = Object.keys(localStorage).filter(key => 
+            key.includes('supabase') || key.includes('sb-') || key.includes('auth')
+          );
+          console.log('현재 localStorage 인증 키:', authKeys);
+          
+          // 인증 관련 키 모두 제거
+          try {
+            authKeys.forEach(key => {
+              localStorage.removeItem(key);
+              console.log(`🗑️ localStorage 키 제거: ${key}`);
+            });
+          } catch (err) {
+            console.error('localStorage 정리 중 오류:', err);
+          }
+        }
+      } else if (event === 'INITIAL_SESSION') {
+        if (!session) {
+          console.log(" ❗ TokenRefresher에서 INITIAL_SESSION 발생했지만 session은 없음");
+          
+          // 로컬 스토리지 인증 키 확인
+          if (typeof window !== 'undefined') {
+            const authKeys = Object.keys(localStorage).filter(key => 
+              key.includes('supabase') || key.includes('sb-') || key.includes('auth')
+            );
+            console.log('현재 localStorage 인증 키:', authKeys);
+          }
         }
       }
       
