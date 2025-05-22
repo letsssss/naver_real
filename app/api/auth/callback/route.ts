@@ -36,7 +36,7 @@ export async function GET(request: Request) {
               cookieStore.set(name, value, {
                 ...options,
                 secure: process.env.NODE_ENV === 'production',
-                httpOnly: true,
+                httpOnly: false, // false로 변경하여 클라이언트에서 접근 가능하게 함
                 sameSite: 'lax',
                 path: '/',
                 maxAge: 60 * 60 * 24 * 7, // 7일간 유효하도록 설정
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
                 ...options, 
                 maxAge: 0,
                 secure: process.env.NODE_ENV === 'production',
-                httpOnly: true,
+                httpOnly: false, // false로 변경
                 sameSite: 'lax',
                 path: '/',
               });
@@ -64,15 +64,30 @@ export async function GET(request: Request) {
     );
     
     // 코드를 세션으로 교환
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
     
-    if (error) {
-      console.error('세션 교환 에러:', error);
-      return NextResponse.redirect(`${origin}/login?error=auth_error&message=${encodeURIComponent(error.message)}`);
+    if (sessionError) {
+      console.error('세션 교환 에러:', sessionError);
+      return NextResponse.redirect(`${origin}/login?error=auth_error&message=${encodeURIComponent(sessionError.message)}`);
     }
     
-    // 세션 정보 확인
-    const { data: { session } } = await supabase.auth.getSession();
+    // 세션 데이터가 있는지 확인
+    if (!sessionData?.session) {
+      console.error('exchangeCodeForSession 후 세션 객체가 없음');
+    } else {
+      console.log('🔐 exchangeCodeForSession 성공:', {
+        userId: sessionData.session.user.id.substring(0, 6) + '...',
+        email: sessionData.session.user.email,
+        expiresAt: new Date(sessionData.session.expires_at! * 1000).toLocaleString()
+      });
+    }
+    
+    // 세션 정보 다시 확인
+    const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
+    
+    if (getSessionError) {
+      console.error('getSession 에러:', getSessionError);
+    }
     
     if (!session) {
       console.error('세션 생성 실패: 세션 객체가 없음');
@@ -100,25 +115,38 @@ export async function GET(request: Request) {
       baseUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
     }
     
-    const finalRedirectUrl = `${baseUrl}${next}`;
-    console.log('🔐 리다이렉트:', finalRedirectUrl);
+    // 세션 토큰을 URL 쿼리 파라미터로 추가
+    // 이를 통해 클라이언트에서 세션을 복원할 수 있음
+    const sessionToken = session.access_token;
+    const refreshToken = session.refresh_token;
+    const encodedAccessToken = encodeURIComponent(sessionToken || '');
+    const encodedRefreshToken = encodeURIComponent(refreshToken || '');
+    
+    const finalRedirectUrl = `${baseUrl}${next}?access_token=${encodedAccessToken}&refresh_token=${encodedRefreshToken}`;
+    console.log('🔐 리다이렉트 준비:', { url: baseUrl + next });
     
     // 리다이렉트 응답 생성
     const response = NextResponse.redirect(finalRedirectUrl);
     
     // 세션 정보를 클라이언트 쿠키에 복사
     const supabaseCookies = cookieStore.getAll();
+    let copiedCookieCount = 0;
+    
     supabaseCookies.forEach((cookie) => {
-      if (cookie.name.includes('supabase') || cookie.name.includes('auth')) {
+      if (cookie.name.includes('supabase') || cookie.name.includes('auth') || cookie.name.includes('sb-')) {
         console.log(`🍪 클라이언트에 쿠키 복사: ${cookie.name}`);
         response.cookies.set(cookie.name, cookie.value, {
           path: '/',
           sameSite: 'lax',
           secure: process.env.NODE_ENV === 'production',
+          httpOnly: false, // JavaScript에서 접근 가능하도록 false로 설정
           maxAge: 60 * 60 * 24 * 7, // 7일간 유효
         });
+        copiedCookieCount++;
       }
     });
+    
+    console.log(`🍪 총 ${copiedCookieCount}개의 쿠키를 클라이언트에 복사함`);
     
     return response;
   } catch (error: any) {

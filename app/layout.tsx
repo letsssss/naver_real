@@ -14,6 +14,7 @@ import { ReviewSection } from "@/components/ReviewSection"
 import AuthRecoveryGate from "@/components/AuthRecoveryGate"
 import { AuthProvider as SupabaseAuthProvider } from "@/lib/auth-context"
 import AuthListener from "@/app/components/AuthListener"
+import SessionRecovery from "@/app/components/SessionRecovery"
 import { getServerClient } from "@/lib/supabase-server"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -45,6 +46,8 @@ export default async function RootLayout({
       </head>
       <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <TokenRefresher />
+        {/* SessionRecovery 컴포넌트 추가 - URL 파라미터에서 세션 복원 */}
+        <SessionRecovery />
         {/* 새로운 Supabase 인증 공급자 추가 */}
         <SupabaseAuthProvider initialUser={user}>
           {/* 기존 인증 공급자 유지 */}
