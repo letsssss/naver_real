@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import axios from 'axios';
 
 // 환경 변수에서 가져오기
@@ -8,14 +8,10 @@ const SOLAPI_API_SECRET = process.env.SOLAPI_API_SECRET!;
 const SOLAPI_SENDER_KEY = process.env.SOLAPI_SENDER_KEY!;
 const SOLAPI_TEMPLATE_CODE = process.env.SOLAPI_TEMPLATE_CODE || 'your_template_code';
 
-// Supabase 클라이언트 생성
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 // 사용자 전화번호 조회 함수
 async function getUserPhoneById(userId: string): Promise<string | null> {
   try {
+    const supabase = createSupabaseServerClient();
     const { data, error } = await supabase
       .from('users')  // users 테이블에서 조회
       .select('phone_number')
@@ -46,6 +42,7 @@ export async function POST(request: Request) {
     }
 
     // 발신자 정보 가져오기 (옵션)
+    const supabase = createSupabaseServerClient();
     const { data: senderData } = await supabase
       .from('users')  // users 테이블에서 조회
       .select('name')

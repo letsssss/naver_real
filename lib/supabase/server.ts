@@ -30,6 +30,31 @@ export const supabaseServer = () => {
 };
 
 /**
+ * ✅ 서버 컴포넌트용 Supabase 클라이언트 생성 함수
+ */
+export function createSupabaseServerClient() {
+  const cookieStore = cookies();
+
+  return createServerClient<Database>(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
+          cookieStore.set(name, value, options);
+        },
+        remove(name: string, options: { path: string; domain?: string }) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        }
+      }
+    }
+  );
+}
+
+/**
  * ✅ 인증된 사용자 정보를 가져오는 함수
  * App Router 환경 + Supabase 인증 세션 사용 기준
  */

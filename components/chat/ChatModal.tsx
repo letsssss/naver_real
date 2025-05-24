@@ -65,11 +65,9 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
   const hasUserId = !!currentUser?.id;
 
-  useRealtimeMessages(
-    hasUserId ? roomId : '',
-    handleNewMessage,
-    currentUser?.id,
-    setMessages
+  const { isConnected, error: realtimeError } = useRealtimeMessages(
+    hasUserId ? roomId : null,
+    handleNewMessage
   );
 
   useEffect(() => {
