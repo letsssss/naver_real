@@ -1,5 +1,7 @@
+import { getApiBaseUrl } from '@/lib/domain-config';
+
 // API 기본 URL 설정 (환경별로 다른 호스트 사용)
-export const API_BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+export const API_BASE_URL = getApiBaseUrl();
 
 // 날짜 형식화 함수
 export const formatDate = (...dates: (string | undefined)[]): string => {

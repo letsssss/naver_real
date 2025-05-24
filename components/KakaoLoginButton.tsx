@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/utils/supabaseClient';
 import { toast } from 'sonner';
+import { getAuthCallbackUrl } from '@/lib/domain-config';
 
 type KakaoLoginButtonProps = {
   mode?: 'login' | 'signup'; // 'login' 또는 'signup' 모드 선택
@@ -34,13 +35,13 @@ export default function KakaoLoginButton({
       console.log(`카카오 ${mode === 'login' ? '로그인' : '회원가입'} 시작...`);
       
       // Supabase 클라이언트 생성
-      const supabase = createBrowserClient();
+      const supabaseClient = supabase;
       
       // 카카오 OAuth 요청
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
-          redirectTo: 'https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback',
+          redirectTo: getAuthCallbackUrl(),
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가

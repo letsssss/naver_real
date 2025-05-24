@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { User } from '@supabase/supabase-js';
+import { getResetPasswordUrl } from './domain-config';
 
 // 사용자 회원가입
 export async function signUp(email: string, password: string, name: string) {
@@ -80,7 +81,7 @@ export async function updateUserProfile(userData: { name?: string, profileImage?
 export async function resetPassword(email: string) {
   try {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getResetPasswordUrl(),
     });
 
     if (error) throw error;
