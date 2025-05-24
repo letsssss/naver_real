@@ -4,8 +4,23 @@ import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase.types';
 
-// ✅ Supabase 프로젝트 Ref (프로젝트 URL에서 확인 가능)
-const projectRef = 'jdubrjczdyqqtsppojgu';
+// ✅ Supabase 프로젝트 ID를 환경변수에서 동적으로 가져오기
+function getProjectRef(): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let projectRef = 'jdubrjczdyqqtsppojgu'; // 기본값 (fallback)
+  
+  if (supabaseUrl) {
+    // URL에서 프로젝트 ID 추출: https://[PROJECT_ID].supabase.co
+    const urlMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
+    if (urlMatch && urlMatch[1]) {
+      projectRef = urlMatch[1];
+    }
+  }
+  
+  return projectRef;
+}
+
+const projectRef = getProjectRef();
 const accessCookie = `sb-${projectRef}-access-token`;
 const refreshCookie = `sb-${projectRef}-refresh-token`;
 const authCookie = `sb-${projectRef}-auth-token`;

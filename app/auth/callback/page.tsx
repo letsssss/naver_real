@@ -39,10 +39,22 @@ export default function AuthCallback() {
 
         // ✅ 세션 쿠키 명시적 설정 (서버에서 인식할 수 있도록)
         if (typeof document !== 'undefined') {
-          const projectRef = 'jdubrjczdyqqtsppojgu';
+          // 환경변수에서 Supabase URL을 가져와서 프로젝트 ID 추출
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          let projectRef = 'jdubrjczdyqqtsppojgu'; // 기본값 (fallback)
+          
+          if (supabaseUrl) {
+            // URL에서 프로젝트 ID 추출: https://[PROJECT_ID].supabase.co
+            const urlMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
+            if (urlMatch && urlMatch[1]) {
+              projectRef = urlMatch[1];
+              console.log('✅ 환경변수에서 프로젝트 ID 추출:', projectRef);
+            }
+          }
+          
           document.cookie = `sb-${projectRef}-access-token=${data.session.access_token}; path=/; max-age=86400; SameSite=Lax`;
           document.cookie = `sb-${projectRef}-refresh-token=${data.session.refresh_token}; path=/; max-age=86400; SameSite=Lax`;
-          console.log('✅ 소셜 로그인 콜백: 세션 쿠키를 명시적으로 설정했습니다');
+          console.log('✅ 소셜 로그인 콜백: 세션 쿠키를 명시적으로 설정했습니다 (프로젝트:', projectRef + ')');
         }
 
         const authMode = localStorage.getItem('kakao_auth_mode') || 'login';
