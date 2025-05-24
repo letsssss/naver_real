@@ -5,16 +5,8 @@ console.log("🔧 route.ts 파일 실행됨 - API 서버에 정상적으로 배�
 
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
-import { 
-  supabase, 
-  createAuthClient, 
-  formatUserId, 
-  transformers,
-  getSupabaseClient
-} from '@/lib/supabase';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
-import { getAuthUser } from '@/lib/auth/getAuthUser';
+import { validateRequestToken } from '@/lib/auth';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
@@ -106,7 +98,7 @@ export async function POST(req: Request) {
     }
 
     // 사용자 ID 형식 변환
-    const formattedUserId = formatUserId(userId);
+    const formattedUserId = String(userId);
 
     // 알림 데이터 생성
     const notificationData = {
