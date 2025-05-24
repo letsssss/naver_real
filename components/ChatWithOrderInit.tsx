@@ -8,8 +8,7 @@ console.log('✅ ANON_KEY from ENV:', SUPABASE_ANON_KEY);
 
 import { useState, useEffect } from 'react';
 import ChatRoom from './ChatRoom';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import supabase from '@/lib/supabase/client';
+import { createBrowserClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -38,7 +37,7 @@ export default function ChatWithOrderInit({ orderNumber, currentUserId }: ChatWi
       setLoading(true);
       try {
         // 세션 가져오기
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await createBrowserClient().auth.getSession();
         if (sessionError) throw sessionError;
         if (!session) {
           setError('로그인이 필요합니다');
