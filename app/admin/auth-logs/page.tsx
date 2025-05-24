@@ -1,10 +1,10 @@
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic'; // ✅ 캐시 비활성화
 
 export default async function AuthLogsPage() {
-  const supabase = createServerSupabaseClient();
+  const supabase = createSupabaseServerClient();
 
   const {
     data: { user },

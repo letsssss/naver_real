@@ -1,12 +1,11 @@
 // ✅ 인증 상태를 확인하는 API
-import { createRouteHandlerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase.types';
 
 export async function GET() {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: cookieStore });
+  const supabase = createSupabaseServerClient();
 
   const {
     data: { session },

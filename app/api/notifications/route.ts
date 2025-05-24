@@ -7,12 +7,12 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { 
   supabase, 
-  createServerSupabaseClient, 
   createAuthClient, 
   formatUserId, 
   transformers,
   getSupabaseClient
 } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies, validateRequestToken } from '@/lib/auth';
 import { getAuthUser } from '@/lib/auth/getAuthUser';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
@@ -91,7 +91,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     // 관리자 권한 필요한 작업이므로 서버 클라이언트 사용
-    const serverClient = createServerSupabaseClient();
+    const serverClient = createSupabaseServerClient();
     
     const body = await req.json();
     const { userId, postId, message, type = 'SYSTEM' } = body;
@@ -180,7 +180,7 @@ export async function PATCH(req: Request) {
     
     try {
       // Supabase 클라이언트 생성
-      const client = createServerSupabaseClient();
+      const client = createSupabaseServerClient();
       
       // 알림 소유자 확인
       const { data: notification, error: fetchError } = await client

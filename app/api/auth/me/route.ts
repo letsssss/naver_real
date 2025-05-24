@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { createAdminClient } from '@/lib/supabase';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/supabase.types';
 
 export const runtime = 'nodejs';
@@ -12,8 +12,7 @@ const userCache = new Map<string, { user: any, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
 export async function GET() {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: cookieStore });
+  const supabase = createSupabaseServerClient();
 
   const {
     data: { session },
