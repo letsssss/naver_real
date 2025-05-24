@@ -5,7 +5,7 @@ import type { Database } from '@/types/supabase.types';
 import { Button } from '@/components/ui/button';
 import { X, Send } from 'lucide-react';
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages';
-import supabase from '@/lib/supabase-browser';
+import { createBrowserClient } from '@/lib/supabase';
 
 interface Message {
   id: string;
@@ -53,10 +53,11 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
     });
 
     if (newMessage.sender_id !== currentUser.id) {
-      supabase
+      createBrowserClient()
         .from('messages')
         .update({ is_read: true })
-        .eq('id', newMessage.id);
+        .eq('id', newMessage.id)
+        .eq('receiver_id', currentUser.id);
     }
 
     scrollToBottom();
@@ -78,7 +79,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
         console.log(`🔄 ChatModal - 채팅 데이터 불러오기 시작 (roomId: ${roomId})`);
         
         // 1. 현재 사용자 정보 확인
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await createBrowserClient().auth.getUser();
         if (userError || !user) {
           console.error(`❌ ChatModal - 로그인 오류:`, userError);
           setError('로그인이 필요합니다.');
@@ -90,7 +91,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
         // 2. 채팅방 정보 확인
         console.log(`🔍 ChatModal - 채팅방 정보 조회 (roomId: ${roomId})`);
-        const { data: roomData, error: roomError } = await supabase
+        const { data: roomData, error: roomError } = await createBrowserClient()
           .from('rooms')
           .select('*, buyer:buyer_id(*), seller:seller_id(*)')
           .eq('id', roomId)
@@ -112,7 +113,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
         // 3. 메시지 목록 조회
         console.log(`💬 ChatModal - 메시지 목록 조회 (roomId: ${roomId})`);
-        const { data: messagesData, error: messagesError } = await supabase
+        const { data: messagesData, error: messagesError } = await createBrowserClient()
           .from('messages')
           .select('*')
           .eq('room_id', roomId)
@@ -136,7 +137,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
         // 4. 읽지 않은 메시지 읽음 처리
         try {
-          await supabase
+          await createBrowserClient()
             .schema('public')
             .from('messages')
             .update({ is_read: true })
@@ -195,16 +196,18 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
     console.log("🔥 sender_id:", currentUser.id);
     console.log("💬 메시지 내용:", newMessage);
 
-    const { data, error } = await supabase
+    const { data, error } = await createBrowserClient()
       .schema('public')
       .from('messages')
-      .insert({
-        content: newMessage,
-        room_id: roomId,
-        sender_id: currentUser.id,
-        receiver_id: otherUser?.id,
-        is_read: false,
-      })
+      .insert([
+        {
+          room_id: roomId,
+          sender_id: currentUser.id,
+          receiver_id: otherUser.id,
+          content: newMessage,
+          is_read: false,
+        },
+      ])
       .select()
       .single();
 

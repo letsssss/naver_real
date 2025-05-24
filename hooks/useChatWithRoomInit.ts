@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import supabase from '@/lib/supabase-browser';
+import { createBrowserClient } from '@/lib/supabase';
 // 타입 임포트 문제 수정
 // import { Database } from '@/types/supabase.types';
 import { v4 as uuidv4 } from 'uuid';
@@ -83,7 +83,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       console.log(`[채팅] 메시지 불러오기 시작 - 방ID: ${roomId}`);
       
       // 1. 채팅방 정보 조회
-      const { data: roomData, error: roomError } = await supabase
+      const { data: roomData, error: roomError } = await createBrowserClient()
         .from('rooms')
         .select('*')
         .eq('id', roomId)
@@ -100,7 +100,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       }
       
       // 2. 채팅 메시지 조회
-      const { data: messagesData, error: messagesError } = await supabase
+      const { data: messagesData, error: messagesError } = await createBrowserClient()
         .from('messages')
         .select(`
           *,
@@ -123,7 +123,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       setMessages(messagesData || []);
       
       // 3. 참가자 정보 조회
-      const { data: participantsData, error: participantsError } = await supabase
+      const { data: participantsData, error: participantsError } = await createBrowserClient()
         .from('room_participants')
         .select(`
           *,
@@ -149,7 +149,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     } finally {
       setLoading(false);
     }
-  }, [roomId, supabase]);
+  }, [roomId, createBrowserClient]);
 
   /**
    * 메시지 읽음 표시
@@ -158,7 +158,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     if (!roomId || !userId) return;
     
     try {
-      const { error } = await supabase
+      const { error } = await createBrowserClient()
         .from('messages')
         .update({ is_read: true })
         .eq('room_id', roomId)
@@ -171,7 +171,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     } catch (err) {
       console.error('[채팅] 메시지 읽음 처리 중 오류:', err);
     }
-  }, [roomId, userId, supabase]);
+  }, [roomId, userId, createBrowserClient]);
 
   /**
    * 초기 데이터 로딩
@@ -198,13 +198,13 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     
     if (userId && chatMessage.sender_id !== userId) {
       // 내가 보낸 메시지가 아닐 경우 읽음 표시
-      await supabase
+      await createBrowserClient()
         .from('messages')
         .update({ is_read: true })
         .eq('id', chatMessage.id);
         
       // 다른 사람의 메시지인 경우 발신자 정보 조회
-      const { data: sender } = await supabase
+      const { data: sender } = await createBrowserClient()
         .from('users')
         .select('id, name, profile_image')
         .eq('id', chatMessage.sender_id)
@@ -239,16 +239,18 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       const messageId = uuidv4();
       
       // 메시지 삽입
-      const { error } = await supabase.from('messages').insert([
-        {
-          id: messageId,
-          room_id: roomId,
-          sender_id: userId,
-          content: trimmedMessage,
-          is_read: false,
-          created_at: new Date().toISOString()
-        },
-      ]);
+      const { error } = await createBrowserClient()
+        .from('messages')
+        .insert([
+          {
+            id: messageId,
+            room_id: roomId,
+            sender_id: userId,
+            content: trimmedMessage,
+            is_read: false,
+            created_at: new Date().toISOString()
+          },
+        ]);
       
       if (error) {
         console.error('[채팅] 메시지 전송 오류:', error);
@@ -257,7 +259,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       }
       
       // 채팅방 마지막 메시지 업데이트
-      await supabase
+      await createBrowserClient()
         .from('rooms')
         .update({
           last_chat: trimmedMessage,
@@ -274,7 +276,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     } finally {
       setSendingMessage(false);
     }
-  }, [newMessage, roomId, userId, supabase]);
+  }, [newMessage, roomId, userId, createBrowserClient]);
 
   /**
    * 엔터 키로 메시지 전송
