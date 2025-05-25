@@ -50,6 +50,7 @@ export default function KakaoLoginButton({
           redirectTo: callbackUrl,
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
+            'response_type': 'code', // ✅ code 기반 인증 플로우로 설정
             'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가
           }
         }
