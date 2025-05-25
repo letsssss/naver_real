@@ -1,9 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase.types';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
-// 직접 import하지 않고 필요할 때 동적으로 가져오도록 수정
-// import { cookies } from 'next/headers';
+import { cookies } from 'next/headers';
 
 // env.ts에서 환경변수 가져오기
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/env';
@@ -123,27 +122,40 @@ const supabase = createSupabaseInstance();
 /**
  * Next.js 서버 컴포넌트에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
  * 이 함수는 App Router(/app)에서만 사용해야 합니다.
+ * @supabase/ssr의 createServerClient를 사용하여 쿠키 처리를 완벽하게 지원합니다.
  */
 export const createServerSupabaseClient = () => {
-  try {
-    // 동적으로 cookies 가져오기
-    const { cookies } = require('next/headers');
-    
-    // createServerComponentClient 사용
-    try {
-      // 기본 호출 시도
-      return createServerComponentClient({ cookies });
-    } catch (e) {
-      console.error('기본 서버 컴포넌트 클라이언트 생성 실패:', e);
-      
-      // 대체: 싱글톤 인스턴스 반환
-      return getSupabaseClient();
+  const cookieStore = cookies();
+
+  const supabase = createServerClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // 서버 컴포넌트에서 쿠키 설정이 실패할 수 있음 (읽기 전용 컨텍스트)
+            console.warn('[Supabase] 쿠키 설정 실패:', error);
+          }
+        },
+        remove(name: string, options: any) {
+          try {
+            cookieStore.delete({ name, ...options });
+          } catch (error) {
+            // 서버 컴포넌트에서 쿠키 삭제가 실패할 수 있음 (읽기 전용 컨텍스트)
+            console.warn('[Supabase] 쿠키 삭제 실패:', error);
+          }
+        },
+      },
     }
-  } catch (error) {
-    console.error('[Supabase] 서버 컴포넌트 클라이언트 생성 오류:', error);
-    // Pages Router에서는 대체 메서드 사용
-    return createLegacyServerClient();
-  }
+  );
+
+  return supabase;
 };
 
 /**
