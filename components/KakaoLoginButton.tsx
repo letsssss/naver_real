@@ -31,6 +31,12 @@ export default function KakaoLoginButton({
         return;
       }
       
+      // 🔍 redirectTo URL 디버깅 로그 추가
+      const callbackUrl = getAuthCallbackUrl();
+      console.log('🔗 redirectTo URL:', callbackUrl);
+      console.log('🌍 현재 환경:', process.env.NODE_ENV);
+      console.log('🏠 현재 호스트:', typeof window !== 'undefined' ? window.location.origin : 'server-side');
+      
       // 실제 카카오 로그인 처리
       console.log(`카카오 ${mode === 'login' ? '로그인' : '회원가입'} 시작...`);
       
@@ -41,7 +47,7 @@ export default function KakaoLoginButton({
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
-          redirectTo: getAuthCallbackUrl(),
+          redirectTo: callbackUrl,
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가
@@ -100,7 +106,7 @@ export default function KakaoLoginButton({
         // 콘솔에 추가 디버깅 정보 출력
         console.group('🔍 카카오 로그인 오류 상세 정보');
         console.log('인증 모드:', mode);
-        console.log('리디렉션 URL:', getAuthCallbackUrl());
+        console.log('리디렉션 URL:', callbackUrl);
         console.log('오류 상태 코드:', error.status);
         console.log('오류 메시지:', error.message);
         console.log('디버그 분류:', debugInfo);
@@ -124,7 +130,7 @@ export default function KakaoLoginButton({
         console.group('✅ 카카오 OAuth 요청 성공');
         console.log('인증 모드:', mode);
         console.log('리디렉션 URL:', data.url);
-        console.log('콜백 URL:', getAuthCallbackUrl());
+        console.log('콜백 URL:', callbackUrl);
         console.log('요청 시간:', new Date().toISOString());
         console.groupEnd();
         
