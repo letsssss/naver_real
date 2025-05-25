@@ -50,8 +50,27 @@ export default function KakaoLoginButton({
       });
 
       if (error) {
-        console.error('카카오 인증 에러:', error.message);
-        toast.error('카카오 인증 중 오류가 발생했습니다.');
+        console.error('카카오 인증 에러:', error);
+        
+        // 카카오 OAuth 구체적 오류 케이스들
+        let message = '';
+        if (error.message.includes('OAuth provider not enabled')) {
+          message = '카카오 로그인이 비활성화되어 있습니다. 관리자에게 문의하세요.';
+        } else if (error.message.includes('redirect_uri')) {
+          message = '리디렉션 URL 설정 오류입니다. 관리자에게 문의하세요.';
+        } else if (error.message.includes('client_id')) {
+          message = '카카오 앱 설정 오류입니다. 관리자에게 문의하세요.';
+        } else if (error.message.includes('scope')) {
+          message = '카카오 권한 설정 오류입니다.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          message = '네트워크 연결을 확인해주세요.';
+        } else if (error.message.includes('timeout')) {
+          message = '카카오 서버 응답이 지연되고 있습니다. 다시 시도해주세요.';
+        } else {
+          message = `카카오 인증 오류: ${error.message}`;
+        }
+        
+        toast.error(message);
         return;
       }
 
@@ -66,15 +85,28 @@ export default function KakaoLoginButton({
         window.location.href = data.url;
       } else {
         console.error('카카오 인증 URL이 없습니다.');
-        toast.error('카카오 인증 처리 중 오류가 발생했습니다.');
+        toast.error('카카오 인증 URL을 받지 못했습니다. 다시 시도해주세요.');
       }
       
       if (onSuccess) {
         onSuccess();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('인증 처리 중 오류 발생:', err);
-      toast.error('카카오 인증 처리 중 오류가 발생했습니다.');
+      
+      // catch 블록 오류 케이스들
+      let message = '';
+      if (err.message.includes('Failed to fetch')) {
+        message = '서버 연결에 실패했습니다. 네트워크를 확인해주세요.';
+      } else if (err.message.includes('CORS')) {
+        message = '브라우저 보안 정책으로 인한 오류입니다.';
+      } else if (err.message.includes('popup')) {
+        message = '팝업이 차단되었습니다. 팝업 차단을 해제해주세요.';
+      } else {
+        message = `카카오 로그인 처리 중 오류: ${err.message}`;
+      }
+      
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
