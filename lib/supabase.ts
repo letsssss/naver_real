@@ -2,7 +2,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase.types';
 import { createServerClient } from '@supabase/ssr';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 
 // env.ts에서 환경변수 가져오기
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/env';
@@ -125,6 +124,8 @@ const supabase = createSupabaseInstance();
  * @supabase/ssr의 createServerClient를 사용하여 쿠키 처리를 완벽하게 지원합니다.
  */
 export const createServerSupabaseClient = () => {
+  // 동적으로 cookies import (Pages Router 호환성을 위해)
+  const { cookies } = require('next/headers');
   const cookieStore = cookies();
 
   const supabase = createServerClient(
