@@ -6,12 +6,10 @@
 // 프로덕션 도메인 (항상 www 포함)
 const PRODUCTION_DOMAIN = 'https://www.easyticket82.com';
 
-// 개발 환경 도메인
-const DEVELOPMENT_DOMAIN = 'http://localhost:3000';
-
 /**
  * 현재 환경에 맞는 기본 도메인을 반환
  * 프로덕션에서는 항상 www.easyticket82.com을 사용
+ * 개발 환경에서는 동적으로 현재 호스트를 감지
  */
 export function getBaseDomain(): string {
   // 프로덕션 환경이거나 배포된 환경에서는 항상 프로덕션 도메인 사용
@@ -21,8 +19,19 @@ export function getBaseDomain(): string {
     return PRODUCTION_DOMAIN;
   }
   
-  // 개발 환경에서는 로컬호스트 사용
-  return DEVELOPMENT_DOMAIN;
+  // ✅ 개발 환경에서는 동적으로 현재 호스트 감지
+  if (typeof window !== 'undefined') {
+    // 클라이언트 사이드: 현재 브라우저의 origin 사용
+    return window.location.origin;
+  }
+  
+  // 서버 사이드: 환경변수나 기본값 사용
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  
+  // 최후의 폴백 (localhost:3000)
+  return 'http://localhost:3000';
 }
 
 /**

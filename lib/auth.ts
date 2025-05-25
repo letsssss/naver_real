@@ -276,23 +276,53 @@ export function getTokenFromHeaders(headers: Headers): string | null {
  * @returns 추출된 토큰 또는 null
  */
 export function getTokenFromCookies(req: Request | NextRequest): string | null {
+  const projectRef = getProjectRef();
+  
   // NextRequest 객체인 경우
   if ('cookies' in req && typeof req.cookies === 'object' && req.cookies.get) {
-    const tokenCookie = req.cookies.get('access_token')?.value ||
-                      req.cookies.get('token')?.value ||
-                      req.cookies.get('sb-access-token')?.value ||
-                      req.cookies.get('sb-jdubrjczdyqqtsppojgu-auth-token')?.value || // ✅ 추가
-                      req.cookies.get(`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`)?.value;
-
-    // 쿠키 디버깅 로그
-    console.log("[getTokenFromCookies] 쿠키 추출 시도:", tokenCookie ? "찾음" : "없음");
+    // 1. 새로운 통일된 쿠키 형식 우선 확인
+    const supabaseAuthCookie = req.cookies.get(`sb-${projectRef}-auth-token`);
+    if (supabaseAuthCookie?.value) {
+      try {
+        const sessionData = JSON.parse(supabaseAuthCookie.value);
+        if (sessionData.access_token) {
+          console.log("[getTokenFromCookies] Supabase 인증 쿠키에서 토큰 추출 성공");
+          return sessionData.access_token;
+        }
+      } catch (parseError) {
+        console.warn("[getTokenFromCookies] Supabase 쿠키 파싱 실패:", parseError);
+      }
+    }
     
-    return tokenCookie || null;
+    // 2. 커스텀 JWT 토큰 확인
+    const authTokenCookie = req.cookies.get('auth-token');
+    if (authTokenCookie?.value) {
+      console.log("[getTokenFromCookies] 커스텀 JWT 토큰 발견");
+      return authTokenCookie.value;
+    }
+    
+    // 3. 기존 호환성을 위한 다른 쿠키 형식들
+    const fallbackTokens = [
+      req.cookies.get('access_token')?.value,
+      req.cookies.get('token')?.value,
+      req.cookies.get('sb-access-token')?.value,
+    ].filter(Boolean);
+    
+    if (fallbackTokens.length > 0) {
+      console.log("[getTokenFromCookies] 호환성 쿠키에서 토큰 발견");
+      return fallbackTokens[0] as string;
+    }
+
+    console.log("[getTokenFromCookies] NextRequest에서 토큰을 찾을 수 없음");
+    return null;
   }
 
   // 일반 Request 객체의 경우
   const cookieHeader = req.headers.get('cookie');
-  if (!cookieHeader) return null;
+  if (!cookieHeader) {
+    console.log("[getTokenFromCookies] 쿠키 헤더가 없음");
+    return null;
+  }
 
   const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
     const [key, value] = cookie.trim().split('=');
@@ -300,20 +330,41 @@ export function getTokenFromCookies(req: Request | NextRequest): string | null {
     return acc;
   }, {} as Record<string, string>);
 
-  // 추가 쿠키 이름 확인
-  const foundToken = (
+  // 1. 새로운 통일된 쿠키 형식 우선 확인
+  const supabaseAuthCookieValue = cookies[`sb-${projectRef}-auth-token`];
+  if (supabaseAuthCookieValue) {
+    try {
+      const sessionData = JSON.parse(supabaseAuthCookieValue);
+      if (sessionData.access_token) {
+        console.log("[getTokenFromCookies] 헤더에서 Supabase 인증 쿠키 토큰 추출 성공");
+        return sessionData.access_token;
+      }
+    } catch (parseError) {
+      console.warn("[getTokenFromCookies] 헤더 Supabase 쿠키 파싱 실패:", parseError);
+    }
+  }
+  
+  // 2. 커스텀 JWT 토큰 확인
+  if (cookies['auth-token']) {
+    console.log("[getTokenFromCookies] 헤더에서 커스텀 JWT 토큰 발견");
+    return cookies['auth-token'];
+  }
+  
+  // 3. 기존 호환성을 위한 다른 쿠키 형식들
+  const fallbackToken = (
     cookies['access_token'] ||
     cookies['token'] ||
     cookies['sb-access-token'] ||
-    cookies['sb-jdubrjczdyqqtsppojgu-auth-token'] || // ✅ 여기도 반드시 포함
-    cookies[`sb-${process.env.SUPABASE_PROJECT_ID}-auth-token`] ||
     null
   );
   
-  // 쿠키 디버깅 로그
-  console.log("[getTokenFromCookies] 헤더에서 쿠키 추출 시도:", foundToken ? "찾음" : "없음");
+  if (fallbackToken) {
+    console.log("[getTokenFromCookies] 헤더에서 호환성 쿠키 토큰 발견");
+    return fallbackToken;
+  }
   
-  return foundToken;
+  console.log("[getTokenFromCookies] 헤더에서 토큰을 찾을 수 없음");
+  return null;
 }
 
 // 디버그용 로그는 주석 처리
@@ -327,7 +378,7 @@ export async function getAuthenticatedUser(request: NextRequest) {
   try {
     console.log("[getAuthenticatedUser] 인증 사용자 확인 시작");
     
-    // 1. 요청에서 직접 토큰 추출
+    // 1. 토큰 추출 (헤더 우선, 쿠키 보조)
     const tokenFromHeader = getTokenFromHeaders(request.headers);
     const tokenFromCookie = getTokenFromCookies(request);
     const token = tokenFromHeader || tokenFromCookie;
@@ -338,65 +389,53 @@ export async function getAuthenticatedUser(request: NextRequest) {
     
     if (!token) {
       console.log("[getAuthenticatedUser] ❌ 인증 토큰을 찾을 수 없습니다");
-      
-      // 마지막 대안: 세션 확인
-      try {
-        console.log("[getAuthenticatedUser] 세션 확인 시도");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (!sessionError && session?.user) {
-          console.log("[getAuthenticatedUser] 세션에서 사용자 발견:", session.user.id);
-          return session.user;
-        } else {
-          console.log("[getAuthenticatedUser] 세션에서 사용자를 찾을 수 없음:", sessionError?.message);
-        }
-      } catch (sessionError) {
-        console.error("[getAuthenticatedUser] 세션 확인 중 오류:", sessionError);
-      }
-      
       return null;
     }
     
     // 토큰 디버깅 (보안을 위해 일부만 출력)
     console.log("[getAuthenticatedUser] 토큰 발견:", token.substring(0, 15) + "...");
     
-    // 2. 기존 Supabase 클라이언트에 토큰 직접 전달
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error) {
-      console.error("[getAuthenticatedUser] ❌ 사용자 인증 실패:", error.message);
+    // 2. Supabase를 통한 사용자 인증
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser(token);
       
-      // 토큰으로 직접 유효성 검사 시도
-      try {
-        console.log("[getAuthenticatedUser] 토큰 직접 검증 시도");
-        const decoded = verifyAccessToken(token);
-        
-        // 더 안전한 타입 가드 추가
-        if (decoded && typeof decoded === 'object') {
-          // userId나 sub 속성이 있는지 확인
-          const userId = typeof decoded.sub === 'string' ? decoded.sub : 
-                         typeof decoded.userId === 'string' ? decoded.userId : null;
-          
-          if (userId) {
-            console.log("[getAuthenticatedUser] 토큰에서 사용자 ID 추출:", userId);
-            
-            // 간이 사용자 객체 반환
-            return {
-              id: userId,
-              email: typeof decoded.email === 'string' ? decoded.email : null,
-              role: typeof decoded.role === 'string' ? decoded.role : 'USER'
-            };
-          }
-        }
-      } catch (verifyError) {
-        console.error("[getAuthenticatedUser] 토큰 검증 오류:", verifyError);
+      if (!error && user) {
+        console.log("[getAuthenticatedUser] ✅ Supabase 인증 성공:", user.id);
+        return user;
+      } else {
+        console.log("[getAuthenticatedUser] Supabase 인증 실패:", error?.message);
       }
-      
-      return null;
+    } catch (supabaseError) {
+      console.error("[getAuthenticatedUser] Supabase 인증 중 오류:", supabaseError);
     }
     
-    console.log("[getAuthenticatedUser] ✅ 사용자 인증 성공:", user.id);
-    return user;
+    // 3. 커스텀 JWT 토큰 검증 시도
+    try {
+      console.log("[getAuthenticatedUser] 커스텀 JWT 토큰 검증 시도");
+      const decoded = verifyAccessToken(token);
+      
+      if (decoded && typeof decoded === 'object') {
+        // userId나 sub 속성이 있는지 확인
+        const userId = typeof decoded.sub === 'string' ? decoded.sub : 
+                       typeof decoded.userId === 'string' ? decoded.userId : null;
+        
+        if (userId) {
+          console.log("[getAuthenticatedUser] ✅ JWT 토큰에서 사용자 ID 추출:", userId);
+          
+          // 간이 사용자 객체 반환
+          return {
+            id: userId,
+            email: typeof decoded.email === 'string' ? decoded.email : null,
+            role: typeof decoded.role === 'string' ? decoded.role : 'USER'
+          };
+        }
+      }
+    } catch (verifyError) {
+      console.error("[getAuthenticatedUser] JWT 토큰 검증 오류:", verifyError);
+    }
+    
+    console.log("[getAuthenticatedUser] ❌ 모든 인증 방법 실패");
+    return null;
   } catch (error) {
     console.error("[getAuthenticatedUser] ❌ 인증 처리 중 오류 발생:", error);
     return null;

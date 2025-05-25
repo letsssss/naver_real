@@ -9,15 +9,59 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // 개발 환경 확인 함수
 const isDevelopment = () => !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
 
-// Edge 브라우저를 포함한 모든 브라우저에서 쿠키를 올바르게 설정하는 헬퍼 함수
-function setAuthCookie(response: NextResponse, name: string, value: string, httpOnly: boolean = true) {
-  response.cookies.set(name, value, {
-    httpOnly,
+// ✅ Supabase 프로젝트 ID 추출 함수
+function getProjectRef(): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let projectRef = 'jdubrjczdyqqtsppojgu'; // 기본값 (fallback)
+  
+  if (supabaseUrl) {
+    const urlMatch = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
+    if (urlMatch && urlMatch[1]) {
+      projectRef = urlMatch[1];
+    }
+  }
+  
+  return projectRef;
+}
+
+// ✅ 통일된 쿠키 설정 함수
+function setAuthCookies(response: NextResponse, session: any, customToken: string) {
+  const projectRef = getProjectRef();
+  const maxAge = 60 * 60 * 24 * 7; // 7일
+  
+  // 1. Supabase 표준 쿠키 (미들웨어에서 인식)
+  response.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: session.expires_at,
+    user: session.user
+  }), {
+    httpOnly: false, // 클라이언트에서도 접근 가능
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7일 (초)
+    maxAge,
     path: '/',
   });
+  
+  // 2. 커스텀 JWT 토큰 (API 요청용)
+  response.cookies.set('auth-token', customToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge,
+    path: '/',
+  });
+  
+  // 3. 인증 상태 표시 (클라이언트에서 확인용)
+  response.cookies.set('auth-status', 'authenticated', {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge,
+    path: '/',
+  });
+  
+  console.log(`✅ 쿠키 설정 완료: sb-${projectRef}-auth-token, auth-token, auth-status`);
 }
 
 // OPTIONS 메서드 처리
@@ -47,7 +91,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "내부 서버 오류가 발생했습니다." }, { status: 500 });
       }
       
-      console.log("Supabase 정상 초기화 확인, auth.signInWithPassword 함수 유무:", !!supabase.auth.signInWithPassword);
+      console.log("🔐 로그인 시도:", email);
       
       // Supabase 로그인 시도
       const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
@@ -56,11 +100,11 @@ export async function POST(request: Request) {
       });
 
       if (supabaseError) {
-        console.log("Supabase 로그인 실패:", supabaseError.message);
+        console.log("❌ Supabase 로그인 실패:", supabaseError.message);
         return NextResponse.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
       }
 
-      console.log("Supabase 로그인 성공:", supabaseData);
+      console.log("✅ Supabase 로그인 성공:", supabaseData.user.email);
       
       // Supabase에서 사용자 정보 조회
       const { data: userData, error: userError } = await supabase
@@ -70,27 +114,28 @@ export async function POST(request: Request) {
         .single();
       
       if (userError || !userData) {
-        console.log("Supabase에서 사용자 정보를 찾을 수 없음:", supabaseData.user.id);
+        console.log("❌ 사용자 정보 조회 실패:", supabaseData.user.id);
         return NextResponse.json({ error: "사용자 정보를 조회할 수 없습니다." }, { status: 404 });
       }
       
-      console.log("DB에서 사용자 찾음:", userData.email);
+      console.log("✅ DB에서 사용자 찾음:", userData.email);
       
-      // JWT 토큰 생성
-      const token = jwt.sign({ userId: userData.id }, JWT_SECRET, { expiresIn: '7d' });
+      // JWT 토큰 생성 (API 요청용)
+      const customToken = jwt.sign({ 
+        userId: userData.id,
+        email: userData.email,
+        role: userData.role 
+      }, JWT_SECRET, { expiresIn: '7d' });
       
-      // 리프레시 토큰 생성
+      // 리프레시 토큰 생성 및 저장
       const refreshToken = generateRefreshToken(userData.id);
-
-      // 리프레시 토큰을 Supabase 데이터베이스에 저장
       const { error: updateError } = await supabase
         .from('users')
         .update({ refresh_token: refreshToken })
         .eq('id', userData.id);
       
       if (updateError) {
-        console.log("리프레시 토큰 저장 실패:", updateError.message);
-        // 오류가 발생해도 로그인 프로세스는 계속 진행
+        console.log("⚠️ 리프레시 토큰 저장 실패:", updateError.message);
       }
 
       // 응답 객체 생성
@@ -103,33 +148,29 @@ export async function POST(request: Request) {
           email: userData.email,
           role: userData.role
         },
-        token,
+        token: customToken,
         supabaseSession: supabaseData?.session
       });
 
-      // 쿠키 설정 (헬퍼 함수 사용)
-      setAuthCookie(response, 'auth-token', token);
-      setAuthCookie(response, 'auth-status', 'authenticated', false);
-      
-      // Supabase 세션 토큰이 있으면 쿠키에 저장
-      if (supabaseData?.session) {
-        setAuthCookie(response, 'supabase-token', supabaseData.session.access_token);
-      }
+      // ✅ 통일된 쿠키 설정
+      setAuthCookies(response, supabaseData.session, customToken);
       
       // 캐시 방지 헤더 추가
       response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
       
+      console.log("🎉 로그인 완료:", userData.email);
       return response;
+      
     } catch (dbError) {
-      console.error("데이터베이스 오류:", dbError);
+      console.error("💥 데이터베이스 오류:", dbError);
       return NextResponse.json({ 
         error: "로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." 
       }, { status: 500 });
     }
   } catch (error) {
-    console.error("로그인 중 오류 발생:", error);
+    console.error("💥 로그인 중 오류 발생:", error);
     return NextResponse.json({ error: "로그인 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

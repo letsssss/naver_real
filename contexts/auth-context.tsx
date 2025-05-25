@@ -316,118 +316,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 로딩 상태 설정
       setLoading(true);
       
-      console.log('Supabase 인증 시작:', email);
+      console.log('🔐 로그인 시작:', email);
       
-      // 브라우저 클라이언트 사용 (쿠키 자동 관리)
-      const browserClient = createBrowserClient();
-      
-      // Supabase 클라이언트를 이용한 직접 로그인
-      const { data, error } = await browserClient.auth.signInWithPassword({
-        email: email.toLowerCase(),
-        password,
+      // ✅ 서버 API를 통한 로그인 (통일된 쿠키 설정)
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include', // 쿠키 포함
       });
       
-      if (error) {
-        console.error('Supabase 로그인 오류:', error.message);
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        console.error('❌ 로그인 실패:', result.error);
         setLoading(false);
         return {
           success: false,
-          message: error.message || "이메일 또는 비밀번호가 올바르지 않습니다."
+          message: result.error || "로그인에 실패했습니다."
         };
       }
       
-      if (!data.user) {
-        console.error('사용자 정보가 없습니다.');
-        setLoading(false);
-        return {
-          success: false,
-          message: "로그인은 성공했지만 사용자 정보를 찾을 수 없습니다."
-        };
-      }
+      console.log('✅ 서버 로그인 성공:', result.user.email);
       
-      console.log('Supabase 로그인 성공:', data.user.id);
-      
-      // ✅ 로그인 성공 후 세션 수동 동기화
-      const sessionResult = await browserClient.auth.getSession();
-      console.log("✅ 로그인 직후 세션 확인:", sessionResult);
-      
-      // 세션 연장 및 새로고침 시도
-      try {
-        const { data: refreshData, error: refreshError } = await browserClient.auth.refreshSession();
-        if (refreshError) {
-          console.error('세션 갱신 오류:', refreshError);
-        } else {
-          console.log('세션 갱신 성공:', refreshData.session ? '세션 있음' : '세션 없음');
-          if (refreshData.session) {
-            // 갱신된 세션 정보로 업데이트
-            data.session = refreshData.session;
-          }
-        }
-      } catch (refreshError) {
-        console.error('세션 갱신 중 예외 발생:', refreshError);
-      }
-      
-      // 세션 정보 및 쿠키 로깅
-      if (typeof document !== 'undefined') {
-        console.log('로그인 후 브라우저 쿠키:');
-        const allCookies = document.cookie.split(';').map(c => c.trim());
-        console.log(`총 ${allCookies.length}개의 쿠키 발견`);
-        allCookies.forEach(cookie => {
-          console.log(' -', cookie);
-        });
-        
-        // Supabase 관련 쿠키는 자동으로 설정됨 (auth-helpers에 의해)
-        console.log('✅ Supabase 쿠키는 auth-helpers에 의해 자동으로 설정됩니다');
-      }
-      
-      // 세션 정보 다시 확인
+      // ✅ 브라우저 클라이언트로 세션 확인
+      const browserClient = createBrowserClient();
       const { data: sessionData } = await browserClient.auth.getSession();
-      console.log('현재 세션 정보:', sessionData.session ? '세션 있음' : '세션 없음');
       
       if (sessionData.session) {
-        console.log('세션 액세스 토큰 (처음 20자):', sessionData.session.access_token.substring(0, 20));
-        console.log('세션 만료 시간:', new Date(sessionData.session.expires_at! * 1000).toLocaleString());
+        console.log('✅ Supabase 세션 확인됨:', sessionData.session.user.email);
         
-        // 액세스 토큰도 따로 저장 (API 요청에 사용 가능)
+        // 로컬 스토리지에 토큰 저장 (API 요청용)
+        safeLocalStorageSet("token", result.token);
         safeLocalStorageSet("access_token", sessionData.session.access_token);
-        
-        // ✅ 추가: Notification API에서 쓰는 키들로도 저장
-        safeLocalStorageSet("token", sessionData.session.access_token);
         safeLocalStorageSet("supabase_token", sessionData.session.access_token);
         
-        // ✅ Supabase 세션 객체 저장 - 미들웨어와 함께 쿠키 자동 갱신됨
-        console.log('✅ 세션 객체 확인 완료 - 쿠키는 미들웨어에 의해 관리됩니다');
+        console.log('💾 토큰 저장 완료');
+      } else {
+        console.warn('⚠️ Supabase 세션이 없습니다. 쿠키 확인 필요');
       }
       
-      // 사용자 정보 구성
+      // 사용자 정보 구성 (서버 응답 우선)
       const userData: User = {
-        id: data.user.id,
-        email: data.user.email || email,
-        name: data.user.user_metadata?.name || "사용자",
-        role: data.user.user_metadata?.role || "USER",
-        createdAt: data.user.created_at || data.user.user_metadata?.createdAt || new Date().toISOString()
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name || "사용자",
+        role: result.user.role || "USER",
+        createdAt: new Date().toISOString()
       };
       
       // 사용자 정보 저장
       safeLocalStorageSet("user", JSON.stringify(userData));
       setUser(userData);
       
-      // Supabase 세션 상태 다시 확인
-      await checkAuthStatus();
+      // 쿠키 확인 로깅
+      if (typeof document !== 'undefined') {
+        const cookies = document.cookie.split(';').map(c => c.trim());
+        console.log('🍪 로그인 후 쿠키 목록:');
+        cookies.forEach(cookie => {
+          if (cookie.includes('auth') || cookie.includes('sb-')) {
+            console.log(' -', cookie.substring(0, 50) + '...');
+          }
+        });
+      }
       
       setLoading(false);
       
-      // ✅ 로그인 후 페이지 새로고침 (서버가 새 세션을 인식하도록)
+      // ✅ 페이지 새로고침으로 미들웨어가 새 세션을 인식하도록 함
       if (typeof window !== 'undefined') {
         setTimeout(() => {
-          router.refresh(); // Next.js의 라우터 갱신 (캐시된 페이지 리프레시)
-          console.log('✅ 세션 인식을 위해 페이지를 새로고침합니다');
+          router.refresh();
+          console.log('🔄 미들웨어 세션 인식을 위해 페이지 새로고침');
         }, 500);
       }
       
       return { success: true };
+      
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("💥 로그인 오류:", error);
       setLoading(false);
       return {
         success: false,
