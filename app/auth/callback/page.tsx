@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabaseClient';
+import { createBrowserClient } from '@/lib/supabase';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -13,6 +13,9 @@ export default function AuthCallbackPage() {
       try {
         console.log('🔄 OAuth 콜백 처리 시작...');
         console.log('현재 URL:', window.location.href);
+        
+        // 통일된 브라우저 클라이언트 사용
+        const supabase = createBrowserClient();
         
         // URL에서 code 파라미터 확인 (query string)
         const urlParams = new URLSearchParams(window.location.search);
