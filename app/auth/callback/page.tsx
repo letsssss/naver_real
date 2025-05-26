@@ -25,6 +25,9 @@ export default function AuthCallback() {
           return;
         }
 
+        console.log('✅ '+code);
+
+        return;
         const { data, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           setError(`인증 처리 중 오류: ${sessionError.message}`);
@@ -35,18 +38,18 @@ export default function AuthCallback() {
           setError('로그인에 실패했습니다. 다시 시도해 주세요.');
           return;
         }
-
+        console.log('✅ 11------------------------11');
         // ✅ 세션 수동 설정
         await supabase.auth.setSession({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         });
-
+        console.log('✅ 22------------------------22');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
           console.log('✅ 소셜 로그인: 세션이 성공적으로 설정되었습니다');
         }
-
+        console.log('✅ 33------------------------33');
         const authMode = localStorage.getItem('kakao_auth_mode') || 'login';
         const { data: userData, error: userError } = await supabase.auth.getUser();
 
