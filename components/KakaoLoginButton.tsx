@@ -46,7 +46,6 @@ export default function KakaoLoginButton({
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'response_type': 'code', // ✅ Authorization Code Grant 방식 강제
-            'code_challenge_method': 'S256', // ✅ PKCE 방식 강제
             'prompt': 'login', // 강제 로그인 화면 표시
             'single_account': 'true' // 하나의 계정만 허용하도록 플래그 추가
           }
