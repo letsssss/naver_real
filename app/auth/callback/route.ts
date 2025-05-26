@@ -1,6 +1,6 @@
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { type CookieOptions, createServerClient } from "@supabase/ssr";
 
 export async function GET(request: Request) {
   console.log('🔄 OAuth 콜백 라우트 시작');
@@ -20,29 +20,13 @@ export async function GET(request: Request) {
     console.log('✅ Authorization code 발견, 세션 교환 시작');
     
     try {
-      const cookieStore = await cookies();
+      // Next.js 14 호환 방식으로 Supabase 클라이언트 생성
+      const supabase = createRouteHandlerClient({ cookies });
       
-      // Next.js 14 버그 해결: cookies lazy evaluation 강제 실행
+      // Next.js 14 버그 해결: cookies 강제 로드
       console.log('🍪 쿠키 강제 로드 (Next.js 14 버그 해결)');
+      const cookieStore = await cookies();
       cookieStore.getAll();
-      
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value;
-            },
-            set(name: string, value: string, options: CookieOptions) {
-              cookieStore.set({ name, value, ...options });
-            },
-            remove(name: string, options: CookieOptions) {
-              cookieStore.delete({ name, ...options });
-            },
-          },
-        }
-      );
 
       console.log('🔑 Supabase 클라이언트 생성 완료, 세션 교환 시작');
       
