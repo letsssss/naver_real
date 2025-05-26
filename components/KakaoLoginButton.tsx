@@ -14,12 +14,16 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
     console.log('카카오 로그인 시작...');
     console.log('환경:', process.env.NODE_ENV);
     
+    const redirectUrl = process.env.NODE_ENV === 'production'
+      ? "https://www.easyticket82.com/auth/callback"
+      : "http://localhost:3000/auth/callback";
+    
+    console.log('사용할 redirectTo URL:', redirectUrl);
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        redirectTo: process.env.NODE_ENV === 'production'
-          ? "https://www.easyticket82.com/auth/callback"
-          : "http://localhost:3000/auth/callback",
+        redirectTo: redirectUrl,
       },
     });
     
