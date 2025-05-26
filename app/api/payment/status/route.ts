@@ -3,20 +3,20 @@ import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const searchParams = req.nextUrl.searchParams;
-    const payment_id = searchParams.get('payment_id');
+    const { searchParams } = new URL(req.url);
+    const paymentId = searchParams.get('paymentId');
 
-    console.log(`🔍 결제 상태 조회 요청: payment_id=${payment_id}`);
+    console.log(`🔍 결제 상태 조회 요청: paymentId=${paymentId}`);
 
-    if (!payment_id) {
-      console.warn('❌ payment_id 파라미터 누락');
+    if (!paymentId) {
+      console.warn('❌ paymentId 파라미터 누락');
       return NextResponse.json({ 
         success: false, 
-        message: 'payment_id 파라미터가 필요합니다' 
+        message: 'paymentId는 필수 입력 항목입니다' 
       }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // 💡 테이블 구조 확인 (디버깅용)
     try {
@@ -30,14 +30,14 @@ export async function GET(req: NextRequest) {
       console.error("⚠️ 테이블 정보 확인 중 오류:", tableErr);
     }
     
-    console.log("🔎 Supabase 조회 시작 - 대상 ID:", payment_id);
+    console.log("🔎 Supabase 조회 시작 - 대상 ID:", paymentId);
     
-    // ⭐️ 중요: payment_id -> id 필드로 수정 (웹훅과 일치시킴)
-    // Supabase에서 id 필드로 결제 상태 조회 (payment_id 아님!)
+    // ⭐️ 중요: paymentId -> id 필드로 수정 (웹훅과 일치시킴)
+    // Supabase에서 id 필드로 결제 상태 조회 (paymentId 아님!)
     const { data, error } = await supabase
       .from('payments')
       .select('status, transaction_id, updated_at')
-      .eq('id', payment_id) // payment_id -> id로 변경
+      .eq('id', paymentId) // paymentId -> id로 변경
       .single();
 
     // 💬 전체 응답 결과 로깅 (디버깅용)
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!data) {
-      console.warn(`⚠️ 결제 정보 없음: payment_id=${payment_id}`);
+      console.warn(`⚠️ 결제 정보 없음: paymentId=${paymentId}`);
       return NextResponse.json({
         success: false,
         message: '해당 결제 정보를 찾을 수 없습니다',
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
       }, { status: 404 });
     }
 
-    console.log(`✅ 조회된 결제 상태: payment_id=${payment_id}, status=${data?.status}, updated_at=${data?.updated_at}`);
+    console.log(`✅ 조회된 결제 상태: paymentId=${paymentId}, status=${data?.status}, updated_at=${data?.updated_at}`);
     
     // 추가 디버깅 정보
     console.log("📦 응답 데이터 전체:", {
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     const responseData = {
       success: true,
-      payment_id,
+      paymentId,
       status: data.status,
       transaction_id: data.transaction_id,
       updated_at: data.updated_at

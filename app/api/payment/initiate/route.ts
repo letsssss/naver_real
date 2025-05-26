@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server'; // 서버 Supabase 클�
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const body = await req.json();
 
     const { userId, postId, amount, phoneNumber, selectedSeats } = body;

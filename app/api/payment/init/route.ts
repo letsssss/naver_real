@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // 이미 존재하는 payment_id인지 확인
     const { data: existingPayment } = await supabase
