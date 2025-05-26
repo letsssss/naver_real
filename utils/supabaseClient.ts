@@ -44,7 +44,8 @@ const getSupabase = (): SupabaseClient | null => {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: true,
+        flowType: 'pkce'
       }
     });
     
