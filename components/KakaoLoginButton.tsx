@@ -11,6 +11,9 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
   const supabase = createClientComponentClient();
 
   async function signInWithKakao() {
+    console.log('카카오 로그인 시작...');
+    console.log('환경:', process.env.NODE_ENV);
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
@@ -20,8 +23,17 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
       },
     });
     
+    console.log('카카오 OAuth 응답:', { data, error });
+    
     if (error) {
       console.error('카카오 로그인 오류:', error);
+      console.error('오류 상세:', {
+        message: error.message,
+        status: error.status
+      });
+      alert(`카카오 로그인 오류: ${error.message}`);
+    } else {
+      console.log('카카오 OAuth 성공:', data);
     }
   }
 
