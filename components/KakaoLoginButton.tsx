@@ -14,8 +14,8 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        redirectTo: process.env.NEXT_PUBLIC_VERCEL_URL
-          ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/auth/callback`
+        redirectTo: process.env.NODE_ENV === 'production'
+          ? "https://www.easyticket82.com/auth/callback"
           : "http://localhost:3000/auth/callback",
       },
     });
