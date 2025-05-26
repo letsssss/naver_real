@@ -21,6 +21,11 @@ export async function GET(request: Request) {
     
     try {
       const cookieStore = await cookies();
+      
+      // Next.js 14 버그 해결: cookies lazy evaluation 강제 실행
+      console.log('🍪 쿠키 강제 로드 (Next.js 14 버그 해결)');
+      cookieStore.getAll();
+      
       const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -42,6 +47,9 @@ export async function GET(request: Request) {
       console.log('🔑 Supabase 클라이언트 생성 완료, 세션 교환 시작');
       
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      
+      // 세션 교환 후에도 쿠키 다시 로드
+      cookieStore.getAll();
       
       console.log('📊 세션 교환 결과:', {
         hasData: !!data,
