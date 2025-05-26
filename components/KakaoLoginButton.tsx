@@ -12,18 +12,13 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
 
   async function signInWithKakao() {
     console.log('카카오 로그인 시작...');
-    console.log('환경:', process.env.NODE_ENV);
     
-    const redirectUrl = process.env.NODE_ENV === 'production'
-      ? "https://www.easyticket82.com/auth/callback"
-      : "http://localhost:3000/auth/callback";
-    
-    console.log('사용할 redirectTo URL:', redirectUrl);
-    
+    // Supabase 공식 권장 방식: 기본 콜백 URL 사용
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        redirectTo: redirectUrl,
+        // Supabase 기본 콜백 URL로 설정하고, 로그인 후 메인 페이지로 리디렉션
+        redirectTo: `https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback?next=${encodeURIComponent(window.location.origin)}`,
       },
     });
     
@@ -31,10 +26,6 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
     
     if (error) {
       console.error('카카오 로그인 오류:', error);
-      console.error('오류 상세:', {
-        message: error.message,
-        status: error.status
-      });
       alert(`카카오 로그인 오류: ${error.message}`);
     } else {
       console.log('카카오 OAuth 성공:', data);
