@@ -15,8 +15,13 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        if (typeof window === 'undefined' || !window.location.hash) {
-          setError('인증 정보를 찾을 수 없습니다.');
+        if (typeof window === 'undefined') return;
+
+        // ✅ code 쿼리 파라미터가 없는 경우
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (!code) {
+          setError('인증 코드가 전달되지 않았습니다.');
           return;
         }
 
@@ -31,13 +36,12 @@ export default function AuthCallback() {
           return;
         }
 
-        // ✅ 세션 수동 설정 (쿠키 강제 저장)
+        // ✅ 세션 수동 설정
         await supabase.auth.setSession({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         });
 
-        // 세션 설정 후 상태 확인
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
           console.log('✅ 소셜 로그인: 세션이 성공적으로 설정되었습니다');
@@ -163,4 +167,4 @@ export default function AuthCallback() {
       )}
     </div>
   );
-} 
+}
