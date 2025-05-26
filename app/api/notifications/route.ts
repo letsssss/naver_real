@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 export const runtime = 'nodejs';
 
 console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
@@ -336,7 +336,7 @@ export async function PATCH(req: Request) {
       error
     );
   }
-=======
+
 import { NextResponse } from 'next/server';
 import { 
   supabase, 
@@ -345,7 +345,7 @@ import {
   formatUserId, 
   transformers,
   getSupabaseClient
-} from '@/lib/supabase';
+} from "@lib/supabase";
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 
 // 표준 응답 헤더 정의
@@ -838,5 +838,4 @@ export async function PATCH(req: Request) {
       error
     );
   }
->>>>>>> 02455941ea48b4852a803f920f801b393d47d7cb
-} 
+}
