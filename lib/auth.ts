@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 import { compare, hash } from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextAuthOptions } from 'next-auth';
@@ -576,7 +576,7 @@ function setCookie(name: string, value: string, days: number) {
   
   const maxAge = days * 24 * 60 * 60;
   document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax;`;
-=======
+
 import { compare, hash } from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextAuthOptions } from 'next-auth';
@@ -1099,5 +1099,4 @@ export function setSecureCookie(
     path: '/',
     maxAge,
   });
->>>>>>> 02455941ea48b4852a803f920f801b393d47d7cb
-} 
+}
