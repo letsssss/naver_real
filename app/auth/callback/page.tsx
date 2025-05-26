@@ -14,6 +14,7 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      alert("인증 콜백 처리 중입니다...");
       try {
         if (typeof window === 'undefined') return;
 
@@ -25,9 +26,6 @@ export default function AuthCallback() {
           return;
         }
 
-        console.log('✅ '+code);
-
-        return;
         const { data, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           setError(`인증 처리 중 오류: ${sessionError.message}`);
