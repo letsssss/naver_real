@@ -40,6 +40,9 @@ export default function KakaoLoginButton({
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
+          redirectTo: process.env.NODE_ENV === 'production' 
+            ? 'https://www.easyticket82.com/auth/callback'
+            : 'http://localhost:3000/auth/callback',
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'prompt': 'login', // 강제 로그인 화면 표시
