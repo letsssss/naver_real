@@ -6,9 +6,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import KakaoLoginButton from "@/components/KakaoLoginButton"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
+import KakaoLoginButton from "@/components/KakaoLoginButton"
 
 export default function LoginPage({
   searchParams,
@@ -73,7 +73,7 @@ export default function LoginPage({
             </div>
           </div>
 
-          <KakaoLoginButton mode="login" />
+          <KakaoLoginButton />
 
           <Link href="/signup" className="block">
             <button className="w-full py-3 border border-gray-300 rounded-md text-center text-gray-700">

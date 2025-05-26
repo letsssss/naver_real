@@ -1,31 +1,39 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { type CookieOptions, createServerClient } from "@supabase/ssr";
 
 export async function GET(request: Request) {
-  console.log('🔄 OAuth 콜백 라우트 시작');
-  
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  // if "next" is in param, use it as the redirect URL
   const next = searchParams.get("next") ?? "/";
-  
-  console.log('📋 콜백 파라미터:', { code: code ? '존재함' : '없음', next });
 
   if (code) {
-    console.log('✅ Authorization code 발견, 세션 교환 시작');
-    
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    
-    if (!error && data.session) {
-      console.log('✅ 세션 생성 성공:', data.session.user.email);
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            cookieStore.set({ name, value, ...options });
+          },
+          remove(name: string, options: CookieOptions) {
+            cookieStore.delete({ name, ...options });
+          },
+        },
+      }
+    );
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
-    } else {
-      console.error('❌ 세션 생성 실패:', error);
-      return NextResponse.redirect(`${origin}/auth/auth-code-error?error=${encodeURIComponent(error?.message || 'Unknown error')}`);
     }
   }
 
-  console.error('❌ Authorization code가 없음');
-  return NextResponse.redirect(`${origin}/auth/auth-code-error?error=missing_code`);
+  // return the user to an error page with instructions
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
 } 
