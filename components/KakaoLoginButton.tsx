@@ -43,6 +43,7 @@ export default function KakaoLoginButton({
           redirectTo: process.env.NODE_ENV === 'production' 
             ? 'https://www.easyticket82.com/auth/callback'
             : 'http://localhost:3000/auth/callback',
+          skipBrowserRedirect: true, // ✅ 수동 리디렉션으로 Authorization Code Grant 강제
           scopes: 'profile_nickname profile_image account_email', // email 스코프 추가
           queryParams: {
             'response_type': 'code', // ✅ Authorization Code Grant 방식 강제
@@ -115,6 +116,11 @@ export default function KakaoLoginButton({
 
       if (data?.url) {
         console.log('✅ 카카오 인증 페이지로 리디렉션:', data.url);
+        console.log('🔍 URL 분석:', {
+          hasCode: data.url.includes('response_type=code'),
+          hasImplicit: data.url.includes('response_type=token'),
+          fullUrl: data.url
+        });
         
         // 카카오 인증 페이지로 리디렉션하기 전에 로컬 스토리지에 모드 저장
         if (typeof window !== 'undefined') {
@@ -129,6 +135,7 @@ export default function KakaoLoginButton({
         console.log('요청 시간:', new Date().toISOString());
         console.groupEnd();
         
+        // ✅ 수동 리디렉션으로 Authorization Code Grant 강제
         window.location.href = data.url;
       } else {
         console.error('❌ 카카오 인증 URL이 없습니다.');
