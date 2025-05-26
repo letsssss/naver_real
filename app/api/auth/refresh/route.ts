@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTokenFromHeaders, verifyAccessToken, generateAccessToken } from "@/lib/auth";
+import { getTokenFromHeaders, verifyAccessToken, generateAccessToken, setSecureCookie } from "@/lib/auth";
 import { supabase } from '@/lib/supabase';
 
 // OPTIONS 메서드 처리
@@ -87,22 +87,10 @@ export async function POST(request: Request) {
     });
     
     // 쿠키에 토큰 설정
-    response.cookies.set('auth-token', newToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7일 (초 단위)
-      path: '/',
-    });
+    setSecureCookie(response, 'auth-token', newToken);
     
     // auth-status 쿠키 설정 (클라이언트에서 접근 가능)
-    response.cookies.set('auth-status', 'authenticated', {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7일 (초 단위)
-      path: '/',
-    });
+    setSecureCookie(response, 'auth-status', 'authenticated', { httpOnly: false });
     
     return response;
   } catch (error) {

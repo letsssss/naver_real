@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { comparePassword, generateAccessToken, generateRefreshToken } from "@/lib/auth"
+import { comparePassword, generateAccessToken, generateRefreshToken, setSecureCookie } from "@/lib/auth"
 import jwt from "jsonwebtoken"
 import { supabase } from "@/lib/supabase"
 
@@ -9,6 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // 개발 환경 확인 함수
 const isDevelopment = () => !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
 
+<<<<<<< HEAD
 // ✅ Supabase 프로젝트 ID 추출 함수
 function getProjectRef(): string {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -62,6 +63,11 @@ function setAuthCookies(response: NextResponse, session: any, customToken: strin
   });
   
   console.log(`✅ 쿠키 설정 완료: sb-${projectRef}-auth-token, auth-token, auth-status`);
+=======
+// Edge 브라우저를 포함한 모든 브라우저에서 쿠키를 올바르게 설정하는 헬퍼 함수
+function setAuthCookie(response: NextResponse, name: string, value: string, httpOnly: boolean = true) {
+  setSecureCookie(response, name, value, { httpOnly });
+>>>>>>> 02455941ea48b4852a803f920f801b393d47d7cb
 }
 
 // OPTIONS 메서드 처리

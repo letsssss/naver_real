@@ -9,6 +9,7 @@ import { Search } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
+import { fetchData } from '@/utils/api'
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -160,11 +161,10 @@ export default function TicketsPage() {
       if (user && user.id) {
         try {
           const timestamp = Date.now();
-          const purchaseResponse = await fetch(`/api/purchase?userId=${user.id}&t=${timestamp}`, {
+          const purchaseResponse = await fetchData(`/api/purchase?userId=${user.id}&t=${timestamp}`, {
             headers: {
               'Cache-Control': 'no-cache, no-store, must-revalidate',
             },
-            credentials: 'include',
             cache: 'no-store'
           });
           
@@ -294,11 +294,10 @@ export default function TicketsPage() {
     
     try {
       const timestamp = Date.now();
-      const response = await fetch(`/api/purchase?userId=${user.id}&t=${timestamp}`, {
+      const response = await fetchData(`/api/purchase?userId=${user.id}&t=${timestamp}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
-        credentials: 'include',
         cache: 'no-store'
       });
       
