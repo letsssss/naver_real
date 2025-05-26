@@ -13,6 +13,7 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
   async function signInWithKakao() {
     console.log('카카오 로그인 시작...');
     
+    
     // Supabase 공식 문서 방식: 커스텀 콜백 사용
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
