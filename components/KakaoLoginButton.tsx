@@ -41,8 +41,8 @@ export default function KakaoLoginButton({
         provider: 'kakao',
         options: {
           redirectTo: process.env.NODE_ENV === 'production' 
-            ? 'https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback'
-            : 'http://localhost:3000/auth/callback',
+            ? 'https://www.easyticket82.com'
+            : 'http://localhost:3000',
           flow: 'pkce' // ✅ PKCE 플로우 사용 (Supabase 자동 처리)
         } as any
       });
