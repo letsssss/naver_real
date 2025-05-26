@@ -20,15 +20,6 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    
-    console.log('카카오 OAuth 응답:', { data, error });
-    
-    if (error) {
-      console.error('카카오 로그인 오류:', error);
-      alert(`카카오 로그인 오류: ${error.message}`);
-    } else {
-      console.log('카카오 OAuth 성공:', data);
-    }
   }
 
   const buttonText = text || (mode === 'login' ? '카카오로 로그인' : '카카오로 회원가입');
