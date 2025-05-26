@@ -13,12 +13,11 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
   async function signInWithKakao() {
     console.log('카카오 로그인 시작...');
     
-    // Supabase 공식 권장 방식: 기본 콜백 URL 사용
+    // Supabase 공식 권장 방식: 기본 콜백 URL만 사용 (next 파라미터 제거)
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        // Supabase 기본 콜백 URL로 설정하고, 로그인 후 메인 페이지로 리디렉션
-        redirectTo: `https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback?next=${encodeURIComponent(window.location.origin)}`,
+        redirectTo: "https://jdubrjczdyqqtsppojgu.supabase.co/auth/v1/callback",
       },
     });
     
