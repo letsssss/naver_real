@@ -162,17 +162,15 @@ export const fetchOngoingSales = async (
     // 이미 구매 정보가 있는 ID 목록 생성
     const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
     
-<<<<<<< HEAD
     // 구매 정보가 없는 상품만 필터링
     const remainingPosts = data.posts.filter((post: any) => !existingPostIds.includes(post.id));
-=======
-    const purchaseResponse = await fetchData(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
+
+    const purchaseResponse_ = await fetchData(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
       headers: {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
       }
     });
->>>>>>> 02455941ea48b4852a803f920f801b393d47d7cb
     
     // 구매 정보가 없는 상품 처리
     const additionalSales = remainingPosts.map((post: any, idx: number) => {
