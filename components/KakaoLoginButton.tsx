@@ -2,7 +2,12 @@
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-export default function KakaoLoginButton() {
+interface KakaoLoginButtonProps {
+  mode?: 'login' | 'signup';
+  text?: string;
+}
+
+export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginButtonProps) {
   const supabase = createClientComponentClient();
 
   async function signInWithKakao() {
@@ -20,6 +25,8 @@ export default function KakaoLoginButton() {
     }
   }
 
+  const buttonText = text || (mode === 'login' ? '카카오로 로그인' : '카카오로 회원가입');
+
   return (
     <button
       onClick={signInWithKakao}
@@ -32,7 +39,7 @@ export default function KakaoLoginButton() {
           fill="currentColor"
         />
       </svg>
-      카카오로 로그인
+      {buttonText}
     </button>
   );
 } 
