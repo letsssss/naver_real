@@ -14,7 +14,7 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      alert("인증 콜백 처리 중입니다...");
+      
       try {
         if (typeof window === 'undefined') return;
 
@@ -36,18 +36,18 @@ export default function AuthCallback() {
           setError('로그인에 실패했습니다. 다시 시도해 주세요.');
           return;
         }
-        console.log('✅ 11------------------------11');
+        
         // ✅ 세션 수동 설정
         await supabase.auth.setSession({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         });
-        console.log('✅ 22------------------------22');
+        
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
           console.log('✅ 소셜 로그인: 세션이 성공적으로 설정되었습니다');
         }
-        console.log('✅ 33------------------------33');
+        
         const authMode = localStorage.getItem('kakao_auth_mode') || 'login';
         const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -126,14 +126,14 @@ export default function AuthCallback() {
             window.dispatchEvent(authEvent);
           }
 
-          setTimeout(() => {
-            router.push('/');
-            setTimeout(() => {
-              if (typeof window !== 'undefined') {
-                window.location.href = '/';
-              }
-            }, 100);
-          }, 1000);
+          // setTimeout(() => {
+          //   router.push('/');
+          //   setTimeout(() => {
+          //     if (typeof window !== 'undefined') {
+          //       window.location.href = '/';
+          //     }
+          //   }, 100);
+          // }, 1000);
         } else {
           setError('로그인 처리 중 오류가 발생했습니다.');
         }
