@@ -21,7 +21,8 @@ export async function POST(
     .select(`
       *,
       post:posts(*),
-      buyer:users!purchases_buyer_id_fkey(id, name, phone_number)
+      buyer:users!purchases_buyer_id_fkey(id, name, phone_number),
+      seller:users!purchases_seller_id_fkey(id, name, phone_number)
     `)
     .eq("id", id)
     .single();
@@ -45,34 +46,55 @@ export async function POST(
     return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { status: 500 });
   }
 
-  // 🔔 취켓팅 완료 시 구매자에게 알림톡 발송
+  // 🔔 취켓팅 완료 시 구매자와 판매자에게 알림톡 발송
   if (status === 'COMPLETED') {
     try {
       console.log("📱 취켓팅 완료 알림톡 발송 시작");
       
       const buyerData = purchaseData.buyer;
+      const sellerData = purchaseData.seller;
       const postData = purchaseData.post;
+      const productName = postData?.title || postData?.event_name || '티켓';
+      const orderNumber = purchaseData.order_number || purchaseData.id.toString();
       
+      // 구매자에게 취켓팅 완료 알림톡 발송
       if (buyerData && buyerData.phone_number) {
-        const productName = postData?.title || postData?.event_name || '티켓';
-        const orderNumber = purchaseData.order_number || purchaseData.id.toString();
-        
         console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 취켓팅 완료 알림톡 발송`);
         
-        const result = await sendTicketConfirmedNotification(
+        const buyerResult = await sendTicketConfirmedNotification(
           buyerData.phone_number,
           buyerData.name || '구매자',
           orderNumber,
           productName
         );
         
-        if (result.success) {
-          console.log("✅ 취켓팅 완료 알림톡 발송 성공");
+        if (buyerResult.success) {
+          console.log("✅ 구매자 취켓팅 완료 알림톡 발송 성공");
         } else {
-          console.error("❌ 취켓팅 완료 알림톡 발송 실패:", result.error);
+          console.error("❌ 구매자 취켓팅 완료 알림톡 발송 실패:", buyerResult.error);
         }
       } else {
-        console.log("⚠️ 구매자 전화번호 없음: 취켓팅 완료 알림톡 발송 건너뜀");
+        console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+      }
+      
+      // 판매자에게 취켓팅 완료 알림톡 발송
+      if (sellerData && sellerData.phone_number) {
+        console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 취켓팅 완료 알림톡 발송`);
+        
+        const sellerResult = await sendTicketConfirmedNotification(
+          sellerData.phone_number,
+          sellerData.name || '판매자',
+          orderNumber,
+          `[취켓팅 완료] ${productName}`
+        );
+        
+        if (sellerResult.success) {
+          console.log("✅ 판매자 취켓팅 완료 알림톡 발송 성공");
+        } else {
+          console.error("❌ 판매자 취켓팅 완료 알림톡 발송 실패:", sellerResult.error);
+        }
+      } else {
+        console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
       }
       
     } catch (kakaoError) {
