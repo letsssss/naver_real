@@ -90,15 +90,22 @@ export default function AuthCallback() {
 
         // 🔧 세션 존재 여부와 관계없이 로그인 성공 처리
         if (data.session && data.session.user) {
-          localStorage.setItem('user', JSON.stringify({
+          console.log('💾 카카오 로그인: 토큰 저장 시작...');
+          
+          // 사용자 정보 저장
+          const userInfo = {
             id: data.session.user.id,
             email: data.session.user.email,
             name: data.session.user.user_metadata?.full_name || '사용자',
-          }));
-
+          };
+          
+          localStorage.setItem('user', JSON.stringify(userInfo));
           localStorage.setItem('supabase_token', data.session.access_token);
           localStorage.setItem('token', data.session.access_token);
           localStorage.setItem('auth_status', 'authenticated');
+          
+          console.log('✅ 기본 토큰 저장 완료');
+          console.log('저장된 토큰 미리보기:', data.session.access_token.substring(0, 20) + '...');
 
           try {
             setStatusMessage("추가 인증 정보 가져오는 중...");
@@ -117,10 +124,22 @@ export default function AuthCallback() {
               const jwtData = await jwtResponse.json();
               if (jwtData.token) {
                 localStorage.setItem('token', jwtData.token);
+                console.log('✅ 커스텀 JWT 토큰으로 업데이트 완료');
               }
+            } else {
+              console.warn('⚠️ 커스텀 JWT 토큰 가져오기 실패, Supabase 토큰 사용');
             }
           } catch (jwtError) {
             console.error('JWT 토큰 가져오기 오류:', jwtError);
+            console.log('🔄 Supabase 토큰으로 계속 진행');
+          }
+          
+          // 토큰 저장 확인
+          const savedToken = localStorage.getItem('token');
+          if (savedToken) {
+            console.log('✅ 최종 토큰 저장 확인됨:', savedToken.substring(0, 20) + '...');
+          } else {
+            console.error('❌ 토큰 저장 실패!');
           }
         }
 

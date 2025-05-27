@@ -78,38 +78,54 @@ export const getAuthToken = (): string => {
 
   let authToken = '';
 
-  // 1. Supabase localStorage 토큰 우선 탐색
-  const supabaseKey = Object.keys(localStorage).find(key =>
-    key.startsWith('sb-') && key.endsWith('-auth-token')
-  );
+  console.log('🔍 토큰 검색 시작...');
+  console.log('현재 localStorage 키 목록:', Object.keys(localStorage));
 
-  if (supabaseKey) {
-    try {
-      const supabaseData = localStorage.getItem(supabaseKey);
-      if (supabaseData) {
-        try {
-          // 먼저 JSON으로 파싱 시도
-          const parsed = JSON.parse(supabaseData);
-          if (parsed.access_token) {
-            authToken = parsed.access_token;
-            console.log("✅ Supabase localStorage에서 JSON 파싱으로 토큰 발견");
-          }
-        } catch (jsonError) {
-          // 만약 JSON이 아니면 직접 토큰으로 사용
-          if (supabaseData.startsWith('eyJ')) {
-            authToken = supabaseData;
-            console.log("✅ Supabase localStorage에서 JWT 토큰 직접 발견");
-          } else {
-            console.error("❌ Supabase localStorage 파싱 실패:", jsonError);
-          }
-        }
-      }
-    } catch (e) {
-      console.error("❌ Supabase localStorage 접근 실패:", e);
+  // 1. 일반적인 토큰 키들 확인
+  const commonTokenKeys = ['token', 'access_token', 'supabase_token', 'auth-token'];
+  for (const key of commonTokenKeys) {
+    const tokenValue = localStorage.getItem(key);
+    if (tokenValue && tokenValue.startsWith('eyJ')) {
+      authToken = tokenValue;
+      console.log(`✅ ${key}에서 JWT 토큰 발견`);
+      break;
     }
   }
 
-  // 2. auth-token 키 확인
+  // 2. Supabase localStorage 토큰 우선 탐색
+  if (!authToken) {
+    const supabaseKey = Object.keys(localStorage).find(key =>
+      key.startsWith('sb-') && key.endsWith('-auth-token')
+    );
+
+    if (supabaseKey) {
+      try {
+        const supabaseData = localStorage.getItem(supabaseKey);
+        if (supabaseData) {
+          try {
+            // 먼저 JSON으로 파싱 시도
+            const parsed = JSON.parse(supabaseData);
+            if (parsed.access_token) {
+              authToken = parsed.access_token;
+              console.log("✅ Supabase localStorage에서 JSON 파싱으로 토큰 발견");
+            }
+          } catch (jsonError) {
+            // 만약 JSON이 아니면 직접 토큰으로 사용
+            if (supabaseData.startsWith('eyJ')) {
+              authToken = supabaseData;
+              console.log("✅ Supabase localStorage에서 JWT 토큰 직접 발견");
+            } else {
+              console.error("❌ Supabase localStorage 파싱 실패:", jsonError);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("❌ Supabase localStorage 접근 실패:", e);
+      }
+    }
+  }
+
+  // 3. auth-token 키 확인
   if (!authToken) {
     const authTokenKey = Object.keys(localStorage).find(key => key.includes('auth-token'));
     
@@ -137,17 +153,6 @@ export const getAuthToken = (): string => {
     }
   }
 
-  // 3. fallback: 일반 토큰 키 확인
-  if (!authToken) {
-    authToken = localStorage.getItem('token') ||
-                localStorage.getItem('access_token') ||
-                localStorage.getItem('supabase_token') ||
-                '';
-    if (authToken) {
-      console.log("✅ 일반 localStorage 키에서 토큰 발견:", authToken);
-    }
-  }
-
   // 4. fallback: document.cookie에서 access_token 확인
   if (!authToken && typeof document !== 'undefined') {
     const match = document.cookie.match(/access_token=([^;]+)/);
@@ -159,8 +164,38 @@ export const getAuthToken = (): string => {
     }
   }
 
+  // 5. Supabase 쿠키 확인
+  if (!authToken && typeof document !== 'undefined') {
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name && name.includes('sb-') && name.includes('auth-token') && value) {
+        try {
+          const decodedValue = decodeURIComponent(value);
+          if (decodedValue.startsWith('eyJ')) {
+            authToken = decodedValue;
+            console.log(`🍪 Supabase 쿠키 ${name}에서 토큰 발견`);
+            break;
+          }
+        } catch (e) {
+          console.error(`❌ 쿠키 ${name} 디코딩 실패:`, e);
+        }
+      }
+    }
+  }
+
   if (!authToken) {
     console.warn("❌ 최종적으로 토큰을 찾을 수 없음");
+    console.log("현재 localStorage 전체 내용:");
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        const value = localStorage.getItem(key);
+        console.log(`  ${key}: ${value?.substring(0, 50)}...`);
+      }
+    }
+  } else {
+    console.log("✅ 최종 토큰 발견:", authToken.substring(0, 20) + "...");
   }
 
   return authToken;
