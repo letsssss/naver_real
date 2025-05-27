@@ -20,7 +20,7 @@ const messageService = new SolapiMessageService(apiKey, apiSecret);
 export const TEMPLATE_IDS = {
   MESSAGE_RECEIVED: 'KA01TP250508063617110QiNaxKtR9hh', // 새 메시지 알림
   PURCHASE_COMPLETED: 'KA01TP250527062936945b1jw7p4JGYO', // 구매 완료 알림 (결제 완료)
-  TICKET_CONFIRMED: 'KA01TP230505085130773ZHclHN4i674', // 티켓 확정 알림
+  TICKET_CONFIRMED: 'KA01TP250527070141848BAQWt8wxefl', // 티켓 확정 알림 (취켓팅 완료)
 };
 
 /**
@@ -117,23 +117,20 @@ export async function sendPurchaseCompletedNotification(
 }
 
 /**
- * 티켓 확정 알림톡 발송
+ * 티켓 확정 알림톡 발송 (취켓팅 완료)
  */
 export async function sendTicketConfirmedNotification(
   to: string,
   name: string,
-  ticketNumber: string,
-  eventName: string,
-  dateTime: string
+  orderNumber: string,
+  productName: string
 ) {
   return sendKakaoNotification(
     to,
     TEMPLATE_IDS.TICKET_CONFIRMED,
     {
-      '#{이름}': name || '고객',
-      '#{티켓번호}': ticketNumber,
-      '#{공연명}': eventName,
-      '#{일시}': dateTime
+      '#{상품}': productName,
+      '#{주문번호}': orderNumber
     }
   );
 } 
