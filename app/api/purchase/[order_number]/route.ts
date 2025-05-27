@@ -4,6 +4,7 @@ export const preferredRegion = 'auto';  // ✅ 자동 라우팅
 
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase"
+import { sendOrderConfirmedNotification } from '@/services/kakao-notification-service'
 
 // ✅ CORS 헤더를 상수로 정의하여 중복 제거
 const corsHeaders = {
@@ -185,6 +186,79 @@ export async function POST(
     // 구매확정 조건 - 더 안전한 비교 방식 사용
     if ((updatedStatus || '').toUpperCase().trim() === 'CONFIRMED') {
       console.log("✅ CONFIRMED 조건 통과 - 수수료 계산 시작");
+      
+      // 🔔 구매 확정 시 알림톡 발송
+      try {
+        console.log("📱 구매 확정 알림톡 발송 시작");
+        
+        // 구매 정보와 관련 데이터 조회
+        const { data: purchaseWithDetails, error: detailsError } = await supabase
+          .from("purchases")
+          .select(`
+            *,
+            post:posts(*),
+            buyer:users!purchases_buyer_id_fkey(id, name, phone_number),
+            seller:users!purchases_seller_id_fkey(id, name, phone_number)
+          `)
+          .eq("order_number", order_number)
+          .single();
+
+        if (!detailsError && purchaseWithDetails) {
+          const buyerData = purchaseWithDetails.buyer;
+          const sellerData = purchaseWithDetails.seller;
+          const postData = purchaseWithDetails.post;
+          const productName = postData?.title || postData?.event_name || '티켓';
+          const orderNumber = purchaseWithDetails.order_number || purchaseWithDetails.id.toString();
+          
+          // 구매자에게 구매 확정 알림톡 발송
+          if (buyerData && buyerData.phone_number) {
+            console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 구매 확정 알림톡 발송`);
+            
+            const buyerResult = await sendOrderConfirmedNotification(
+              buyerData.phone_number,
+              buyerData.name || '구매자',
+              orderNumber,
+              productName
+            );
+            
+            if (buyerResult.success) {
+              console.log("✅ 구매자 구매 확정 알림톡 발송 성공");
+            } else {
+              console.error("❌ 구매자 구매 확정 알림톡 발송 실패:", buyerResult.error);
+            }
+          } else {
+            console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+          }
+          
+          // 판매자에게 구매 확정 알림톡 발송
+          if (sellerData && sellerData.phone_number) {
+            console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 구매 확정 알림톡 발송`);
+            
+            const sellerResult = await sendOrderConfirmedNotification(
+              sellerData.phone_number,
+              sellerData.name || '판매자',
+              orderNumber,
+              `[구매 확정] ${productName}`
+            );
+            
+            if (sellerResult.success) {
+              console.log("✅ 판매자 구매 확정 알림톡 발송 성공");
+            } else {
+              console.error("❌ 판매자 구매 확정 알림톡 발송 실패:", sellerResult.error);
+            }
+          } else {
+            console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+          }
+        } else {
+          console.error("❌ 구매 상세 정보 조회 실패:", detailsError);
+        }
+        
+      } catch (kakaoError) {
+        console.error("❌ 구매 확정 알림톡 발송 중 오류:", kakaoError);
+        // 알림톡 발송 실패해도 구매 확정 프로세스는 계속 진행
+      }
+      
+      // 수수료 계산 로직
       try {
         console.log("\n===== 간소화된 수수료 계산 시작 (테스트) =====");
         console.log("✅ 구매확정 요청 → 수수료 계산 시작");
