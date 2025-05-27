@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase";
-import { sendTicketConfirmedNotification, sendOrderConfirmedNotification } from '@/services/kakao-notification-service';
+import { sendTicketConfirmedNotification, sendOrderConfirmedNotification, sendOrderCancelledNotification } from '@/services/kakao-notification-service';
 
 export async function POST(
   req: Request,
@@ -156,6 +156,63 @@ export async function POST(
       
     } catch (kakaoError) {
       console.error("❌ 구매 확정 알림톡 발송 중 오류:", kakaoError);
+      // 알림톡 발송 실패해도 상태 업데이트는 성공으로 처리
+    }
+  }
+
+  // 🔔 거래 취소 시 구매자와 판매자에게 알림톡 발송
+  if (status === 'CANCELLED') {
+    try {
+      console.log("📱 거래 취소 알림톡 발송 시작");
+      
+      const buyerData = purchaseData.buyer;
+      const sellerData = purchaseData.seller;
+      const postData = purchaseData.post;
+      const productName = postData?.title || postData?.event_name || '티켓';
+      const orderNumber = purchaseData.order_number || purchaseData.id.toString();
+      
+      // 구매자에게 거래 취소 알림톡 발송
+      if (buyerData && buyerData.phone_number) {
+        console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 거래 취소 알림톡 발송`);
+        
+        const buyerResult = await sendOrderCancelledNotification(
+          buyerData.phone_number,
+          buyerData.name || '구매자',
+          orderNumber,
+          productName
+        );
+        
+        if (buyerResult.success) {
+          console.log("✅ 구매자 거래 취소 알림톡 발송 성공");
+        } else {
+          console.error("❌ 구매자 거래 취소 알림톡 발송 실패:", buyerResult.error);
+        }
+      } else {
+        console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+      }
+      
+      // 판매자에게 거래 취소 알림톡 발송
+      if (sellerData && sellerData.phone_number) {
+        console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 거래 취소 알림톡 발송`);
+        
+        const sellerResult = await sendOrderCancelledNotification(
+          sellerData.phone_number,
+          sellerData.name || '판매자',
+          orderNumber,
+          `[거래 취소] ${productName}`
+        );
+        
+        if (sellerResult.success) {
+          console.log("✅ 판매자 거래 취소 알림톡 발송 성공");
+        } else {
+          console.error("❌ 판매자 거래 취소 알림톡 발송 실패:", sellerResult.error);
+        }
+      } else {
+        console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+      }
+      
+    } catch (kakaoError) {
+      console.error("❌ 거래 취소 알림톡 발송 중 오류:", kakaoError);
       // 알림톡 발송 실패해도 상태 업데이트는 성공으로 처리
     }
   }
