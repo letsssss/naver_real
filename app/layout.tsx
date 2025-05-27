@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { GoogleAnalytics } from "@next/third-parties/google"
+import { Analytics } from '@vercel/analytics/react'
 import "./globals.css"
 import "./output.css"
 import { FeedbackForm } from "@/components/feedback-form"
@@ -47,6 +48,7 @@ export default function RootLayout({
           <FeedbackForm />
           <Toaster position="top-center" />
           <GoogleAnalytics gaId="G-XXXXXXXXXX" />
+          <Analytics />
         </AuthProvider>
       </body>
     </html>
