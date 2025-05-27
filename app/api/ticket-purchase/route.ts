@@ -3,6 +3,9 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
 import { adminSupabase, supabase } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabase";
+import { verifyToken } from "@/lib/auth";
+import { sendPurchaseCompletedNotification } from '@/services/kakao-notification-service';
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -354,6 +357,73 @@ export async function POST(request: NextRequest) {
     } catch (notificationError) {
       console.error("알림 생성 과정에서 오류 발생:", notificationError);
       // 오류가 발생해도 계속 진행
+    }
+
+    // 🔔 구매 완료 솔라피 알림톡 발송
+    try {
+      console.log("📱 구매 완료 알림톡 발송 시작");
+      
+      // 구매자와 판매자 정보 조회
+      const { data: buyerData, error: buyerError } = await adminSupabase
+        .from('users')
+        .select('name, phone_number')
+        .eq('id', authUser.id)
+        .single();
+      
+      const { data: sellerData, error: sellerError } = await adminSupabase
+        .from('users')
+        .select('name, phone_number')
+        .eq('id', authorId)
+        .single();
+      
+      const productName = postData.title || postData.event_name || '티켓';
+      const priceText = totalPrice > 0 ? `${totalPrice.toLocaleString()}원` : '가격 미정';
+      
+      // 구매자에게 구매 완료 알림톡 발송
+      if (buyerData && buyerData.phone_number) {
+        console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 구매 완료 알림톡 발송`);
+        
+        const buyerResult = await sendPurchaseCompletedNotification(
+          buyerData.phone_number,
+          buyerData.name || '구매자',
+          orderNumber || purchase.id.toString(),
+          productName,
+          priceText
+        );
+        
+        if (buyerResult.success) {
+          console.log("✅ 구매자 알림톡 발송 성공");
+        } else {
+          console.error("❌ 구매자 알림톡 발송 실패:", buyerResult.error);
+        }
+      } else {
+        console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+      }
+      
+      // 판매자에게 새 주문 알림톡 발송
+      if (sellerData && sellerData.phone_number) {
+        console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 새 주문 알림톡 발송`);
+        
+        const sellerResult = await sendPurchaseCompletedNotification(
+          sellerData.phone_number,
+          sellerData.name || '판매자',
+          orderNumber || purchase.id.toString(),
+          `[새 주문] ${productName}`,
+          priceText
+        );
+        
+        if (sellerResult.success) {
+          console.log("✅ 판매자 알림톡 발송 성공");
+        } else {
+          console.error("❌ 판매자 알림톡 발송 실패:", sellerResult.error);
+        }
+      } else {
+        console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+      }
+      
+    } catch (kakaoError) {
+      console.error("❌ 솔라피 알림톡 발송 중 오류:", kakaoError);
+      // 알림톡 발송 실패해도 구매 프로세스는 계속 진행
     }
 
     // 구매 정보 응답

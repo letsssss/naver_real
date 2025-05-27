@@ -19,7 +19,7 @@ const messageService = new SolapiMessageService(apiKey, apiSecret);
  */
 export const TEMPLATE_IDS = {
   MESSAGE_RECEIVED: 'KA01TP250508063617110QiNaxKtR9hh', // 새 메시지 알림
-  PURCHASE_COMPLETED: 'KA01TP231103085130773ZHclHN4i674', // 구매 완료 알림
+  PURCHASE_COMPLETED: 'KA01TP250527062936945b1jw7p4JGYO', // 구매 완료 알림 (결제 완료)
   TICKET_CONFIRMED: 'KA01TP230505085130773ZHclHN4i674', // 티켓 확정 알림
 };
 
@@ -110,10 +110,8 @@ export async function sendPurchaseCompletedNotification(
     to,
     TEMPLATE_IDS.PURCHASE_COMPLETED,
     {
-      '#{이름}': name || '고객',
-      '#{주문번호}': orderNumber,
-      '#{상품명}': productName,
-      '#{가격}': price
+      '#{상품}': productName,
+      '#{주문번호}': orderNumber
     }
   );
 }
