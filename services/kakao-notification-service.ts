@@ -21,6 +21,7 @@ export const TEMPLATE_IDS = {
   MESSAGE_RECEIVED: 'KA01TP250508063617110QiNaxKtR9hh', // 새 메시지 알림
   PURCHASE_COMPLETED: 'KA01TP250527062936945b1jw7p4JGYO', // 구매 완료 알림 (결제 완료)
   TICKET_CONFIRMED: 'KA01TP250527070141848BAQWt8wxefl', // 티켓 확정 알림 (취켓팅 완료)
+  ORDER_CONFIRMED: 'KA01TP250527071135667PUs7RoqR0uY', // 주문 확정 알림 (구매 확정)
 };
 
 /**
@@ -128,6 +129,25 @@ export async function sendTicketConfirmedNotification(
   return sendKakaoNotification(
     to,
     TEMPLATE_IDS.TICKET_CONFIRMED,
+    {
+      '#{상품}': productName,
+      '#{주문번호}': orderNumber
+    }
+  );
+}
+
+/**
+ * 주문 확정 알림톡 발송 (구매 확정)
+ */
+export async function sendOrderConfirmedNotification(
+  to: string,
+  name: string,
+  orderNumber: string,
+  productName: string
+) {
+  return sendKakaoNotification(
+    to,
+    TEMPLATE_IDS.ORDER_CONFIRMED,
     {
       '#{상품}': productName,
       '#{주문번호}': orderNumber
