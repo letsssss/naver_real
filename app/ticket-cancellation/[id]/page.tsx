@@ -384,21 +384,30 @@ export default function TicketCancellationDetail() {
         }
         
         // ✅ 2. 기존 setTicketData에 값 반영
-        // 신고 정보 가져오기 (예시 데이터 - 실제로는 API에서 가져와야 함)
+        // 신고 정보 가져오기 (실제 API에서 가져오기)
         let reportData = null;
         
         try {
-          // 판매자 신고 이력 조회 (실제 API 호출로 대체 필요)
-          // 예시: 특정 판매자 ID에 대해서만 신고 이력 표시
-          if (sellerId === "1d187f43-ac94-47c0-b40b-df1dabda820d" || sellerId === "problem_seller_id") {
-            reportData = {
-              hasReports: true,
-              count: 2,
-              severity: "medium" as const,
-              lastReportDate: "2024.05.15",
-              reasons: ["가격 불일치", "응답 지연"],
-              status: "검토중" as const
-            };
+          // 판매자 신고 이력 조회 API 호출
+          if (sellerId) {
+            const reportResponse = await fetch(`/api/seller-reports?sellerId=${sellerId}`);
+            if (reportResponse.ok) {
+              const reportResult = await reportResponse.json();
+              console.log("판매자 신고 이력:", reportResult);
+              
+              if (reportResult.hasReports) {
+                reportData = {
+                  hasReports: reportResult.hasReports,
+                  count: reportResult.count,
+                  severity: reportResult.severity,
+                  lastReportDate: reportResult.lastReportDate,
+                  reasons: reportResult.reasons,
+                  status: reportResult.status
+                };
+              }
+            } else {
+              console.error("신고 이력 조회 실패:", reportResponse.status);
+            }
           }
         } catch (error) {
           console.error("신고 정보 조회 오류:", error);
