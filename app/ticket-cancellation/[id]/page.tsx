@@ -21,6 +21,7 @@ import KakaoPay from "@/components/payment/KakaoPay"
 import KGInicis from "@/components/payment/KGInicis"
 import { createBrowserClient } from "@/lib/supabase"
 import SuccessRateBadge from "@/components/SuccessRateBadge"
+import ReportHistory from "@/components/ReportHistory"
 
 // 티켓 시트 타입 정의
 interface SeatOption {
@@ -55,6 +56,14 @@ interface TicketData {
     totalCancellationTicketings?: number;
   };
   seatOptions: SeatOption[];
+  reports?: {
+    hasReports: boolean;
+    count: number;
+    severity: "low" | "medium" | "high";
+    lastReportDate: string;
+    reasons: string[];
+    status: "검토중" | "해결됨" | "무효처리";
+  };
 }
 
 export default function TicketCancellationDetail() {
@@ -375,6 +384,26 @@ export default function TicketCancellationDetail() {
         }
         
         // ✅ 2. 기존 setTicketData에 값 반영
+        // 신고 정보 가져오기 (예시 데이터 - 실제로는 API에서 가져와야 함)
+        let reportData = null;
+        
+        try {
+          // 판매자 신고 이력 조회 (실제 API 호출로 대체 필요)
+          // 예시: 특정 판매자 ID에 대해서만 신고 이력 표시
+          if (sellerId === "1d187f43-ac94-47c0-b40b-df1dabda820d" || sellerId === "problem_seller_id") {
+            reportData = {
+              hasReports: true,
+              count: 2,
+              severity: "medium" as const,
+              lastReportDate: "2024.05.15",
+              reasons: ["가격 불일치", "응답 지연"],
+              status: "검토중" as const
+            };
+          }
+        } catch (error) {
+          console.error("신고 정보 조회 오류:", error);
+        }
+        
         setTicketData({
           id: postData.id,
           title: postData.title || '티켓 제목',
@@ -397,7 +426,8 @@ export default function TicketCancellationDetail() {
             responseRate: sellerDetail.responseRate,
             totalCancellationTicketings: totalCancellationTicketings || 0
           },
-          seatOptions: seatOptions
+          seatOptions: seatOptions,
+          reports: reportData
         });
         
         setError(null);
@@ -862,6 +892,14 @@ export default function TicketCancellationDetail() {
                     </div>
                   )}
                 </div>
+
+                {/* 신고 이력 섹션 - 신고가 있는 경우에만 표시 */}
+                {ticketData.reports && (
+                  <ReportHistory 
+                    reports={ticketData.reports} 
+                    className="mt-4" 
+                  />
+                )}
               </div>
             </div>
 
