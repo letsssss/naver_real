@@ -306,10 +306,7 @@ export default function TicketCancellationDetail() {
         
         console.log("최종 선택된 판매자 ID:", sellerId);
         
-        // Supabase 클라이언트 생성 (모든 요청에서 공통으로 사용)
-        const supabase = createBrowserClient();
-        
-        // 🚀 성능 최적화: 모든 API 호출을 병렬 처리
+        // 🚀 성능 최적화: 모든 API 호출을 fetch로 통일 (Supabase 직접 호출 제거)
         const [
           sellerStatsResult,
           avgRatingResult,
@@ -319,19 +316,11 @@ export default function TicketCancellationDetail() {
           // 1. 판매자 통계 API
           sellerId ? fetch(`/api/seller-stats?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null),
           
-          // 2. 평균 별점 조회
-          sellerId ? supabase
-            .from("seller_avg_rating")
-            .select("avg_rating, review_count")
-            .eq("seller_id", sellerId)
-            .maybeSingle() : Promise.resolve({ data: null }),
+          // 2. 평균 별점 조회 API로 변경
+          sellerId ? fetch(`/api/seller-rating?sellerId=${sellerId}`).then(res => res.ok ? res.json() : { data: null }) : Promise.resolve({ data: null }),
           
-          // 3. 취켓팅 통계 조회
-          sellerId ? supabase
-            .from("cancellation_ticketing_stats_view")
-            .select("confirmed_count, cancelled_count")
-            .eq("seller_id", sellerId)
-            .maybeSingle() : Promise.resolve({ data: null }),
+          // 3. 취켓팅 통계 조회 API로 변경
+          sellerId ? fetch(`/api/stats/cancellation/${sellerId}`).then(res => res.ok ? res.json() : { data: null }) : Promise.resolve({ data: null }),
           
           // 4. 신고 이력 조회
           sellerId ? fetch(`/api/seller-reports?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null)
@@ -353,15 +342,15 @@ export default function TicketCancellationDetail() {
         }
         
         // 평균 별점 결과 처리
-        const avgRating = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.data?.avg_rating) || 0;
-        const reviewCount = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.data?.review_count) || 0;
+        const avgRating = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.avg_rating) || 0;
+        const reviewCount = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.review_count) || 0;
         
         // 취켓팅 통계 결과 처리
         let totalCancellationTicketings = 0;
         let cancellationSuccessRate = 90; // 기본값
-        if (cancelStatsResult.status === 'fulfilled' && cancelStatsResult.value?.data) {
-          const confirmed = cancelStatsResult.value.data.confirmed_count || 0;
-          const cancelled = cancelStatsResult.value.data.cancelled_count || 0;
+        if (cancelStatsResult.status === 'fulfilled' && cancelStatsResult.value) {
+          const confirmed = cancelStatsResult.value.confirmed_count || 0;
+          const cancelled = cancelStatsResult.value.cancelled_count || 0;
           totalCancellationTicketings = confirmed + cancelled;
           
           // 성공률 계산 (SuccessRateBadge에서 사용할 값)
