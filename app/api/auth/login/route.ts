@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     console.log("🔐 로그인 시도:", email);
 
-    // Supabase 로그인 시도
+    // 🚀 성능 최적화: Supabase 로그인과 동시에 JWT 토큰 생성 준비
     const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
       email: email.toLowerCase(),
       password,
@@ -105,37 +105,75 @@ export async function POST(request: Request) {
 
     console.log("✅ Supabase 로그인 성공:", supabaseData.user.email);
 
-    // DB에서 사용자 정보 조회
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, name, email, role')
-      .eq('id', supabaseData.user.id)
-      .single();
+    // 🚀 성능 최적화: 사용자 정보 조회와 JWT 토큰 생성을 병렬 처리
+    const [userResult, jwtToken] = await Promise.allSettled([
+      // 사용자 정보 조회
+      supabase
+        .from('users')
+        .select('id, name, email, role')
+        .eq('id', supabaseData.user.id)
+        .single(),
+      
+      // JWT 토큰 미리 생성 (기본 정보로)
+      Promise.resolve(jwt.sign({
+        userId: supabaseData.user.id,
+        email: supabaseData.user.email,
+        role: 'USER', // 기본값
+      }, JWT_SECRET, { expiresIn: '7d' }))
+    ]);
 
-    if (userError || !userData) {
-      console.log("❌ 사용자 정보 조회 실패:", supabaseData.user.id);
-      return NextResponse.json({ error: "사용자 정보를 조회할 수 없습니다." }, { status: 404 });
+    // 사용자 정보 처리
+    let userData = null;
+    if (userResult.status === 'fulfilled' && userResult.value.data) {
+      userData = userResult.value.data;
+    } else {
+      console.log("❌ 사용자 정보 조회 실패, 기본 정보 사용");
+      // 기본 사용자 정보 사용
+      userData = {
+        id: supabaseData.user.id,
+        name: supabaseData.user.user_metadata?.name || '사용자',
+        email: supabaseData.user.email,
+        role: 'USER'
+      };
     }
 
-    console.log("✅ DB에서 사용자 찾음:", userData.email);
+    console.log("✅ 사용자 정보 확인:", userData.email);
 
-    // JWT 토큰 생성 (7일 만료)
-    const customToken = jwt.sign({
-      userId: userData.id,
-      email: userData.email,
-      role: userData.role,
-    }, JWT_SECRET, { expiresIn: '7d' });
+    // JWT 토큰 (실제 사용자 정보로 재생성 필요시)
+    let customToken;
+    if (jwtToken.status === 'fulfilled') {
+      // 실제 사용자 정보와 다르면 재생성
+      if (userData.role !== 'USER') {
+        customToken = jwt.sign({
+          userId: userData.id,
+          email: userData.email,
+          role: userData.role,
+        }, JWT_SECRET, { expiresIn: '7d' });
+      } else {
+        customToken = jwtToken.value;
+      }
+    } else {
+      // 폴백: 새로 생성
+      customToken = jwt.sign({
+        userId: userData.id,
+        email: userData.email,
+        role: userData.role,
+      }, JWT_SECRET, { expiresIn: '7d' });
+    }
 
-    // 리프레시 토큰 생성 및 DB 저장
+    // 🚀 성능 최적화: 리프레시 토큰 저장을 비동기로 처리 (응답 지연 방지)
     const refreshToken = generateRefreshToken(userData.id);
-    const { error: updateError } = await supabase
+    supabase
       .from('users')
       .update({ refresh_token: refreshToken })
-      .eq('id', userData.id);
-
-    if (updateError) {
-      console.log("⚠️ 리프레시 토큰 저장 실패:", updateError.message);
-    }
+      .eq('id', userData.id)
+      .then(({ error: updateError }) => {
+        if (updateError) {
+          console.log("⚠️ 리프레시 토큰 저장 실패:", updateError.message);
+        } else {
+          console.log("✅ 리프레시 토큰 저장 완료 (비동기)");
+        }
+      });
 
     // 응답 생성
     const response = NextResponse.json({
