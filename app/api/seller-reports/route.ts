@@ -84,12 +84,12 @@ export async function GET(request: NextRequest) {
     const reasons = [...new Set(allReports.map(report => report.reason))]
     const lastReportDate = allReports[0]?.created_at
     
-    // 심각도 계산 (신고 건수 기준)
-    let severity: 'low' | 'medium' | 'high' = 'low'
+    // 심각도 계산 (신고 건수 기준) - 1건부터 경고 표시
+    let severity: 'low' | 'medium' | 'high' = 'medium' // 기본값을 medium으로 변경
     if (reportCount >= 5) {
       severity = 'high'
-    } else if (reportCount >= 2) {
-      severity = 'medium'
+    } else if (reportCount >= 1) {
+      severity = 'medium' // 1건부터 주황색으로 표시
     }
 
     // 상태 결정 (가장 최근 신고의 상태 기준)
