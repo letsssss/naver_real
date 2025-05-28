@@ -38,68 +38,70 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Supabase 클라이언트 생성
+    // Supabase 클라이언트 생성 (한 번만)
     const supabase = createAdminClient();
     
-    // 1. 판매자 프로필 정보 조회
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select(`
-        id,
-        name,
-        email,
-        profile_image,
-        rating,
-        response_rate
-      `)
-      .eq("id", sellerId)
-      .single();
+    // 🚀 성능 최적화: 모든 쿼리를 병렬 처리
+    const [profileResult, salesResult, purchasesResult] = await Promise.allSettled([
+      // 1. 판매자 프로필 정보 조회
+      supabase
+        .from("profiles")
+        .select("id, name, email, profile_image, rating, response_rate")
+        .eq("id", sellerId)
+        .single(),
+      
+      // 2. 판매자 판매 통계 조회 (완료된 것만)
+      supabase
+        .from("posts")
+        .select("id", { count: 'exact' })
+        .eq("author_id", sellerId)
+        .in("status", ['completed', 'COMPLETED']),
+      
+      // 3. 판매자의 구매(취켓팅) 통계 조회 (완료된 것만)
+      supabase
+        .from("purchases")
+        .select("id", { count: 'exact' })
+        .eq("seller_id", sellerId)
+        .in("status", ['completed', 'COMPLETED'])
+    ]);
     
-    if (profileError) {
-      console.error("판매자 프로필 조회 오류:", profileError);
+    // 결과 처리 - 실패한 요청도 안전하게 처리
+    let profileData = null;
+    let completedSales = 0;
+    let completedTicketing = 0;
+    
+    // 프로필 데이터 처리
+    if (profileResult.status === 'fulfilled' && profileResult.value.data) {
+      profileData = profileResult.value.data;
+    } else {
+      console.error("판매자 프로필 조회 실패:", profileResult.status === 'rejected' ? profileResult.reason : 'No data');
       return NextResponse.json(
         { error: "판매자 정보를 찾을 수 없습니다" },
         { status: 404 }
       );
     }
     
-    // 2. 판매자 판매 통계 조회
-    const { data: salesData, error: salesError } = await supabase
-      .from("posts")
-      .select("id, status")
-      .eq("author_id", sellerId);
-    
-    if (salesError) {
-      console.error("판매 통계 조회 오류:", salesError);
+    // 판매 통계 처리
+    if (salesResult.status === 'fulfilled') {
+      completedSales = salesResult.value.count || 0;
+    } else {
+      console.error("판매 통계 조회 실패:", salesResult.reason);
     }
     
-    // 3. 판매자의 구매(취켓팅) 통계 조회
-    const { data: purchasesData, error: purchasesError } = await supabase
-      .from("purchases")
-      .select("id, status, post_id")
-      .eq("seller_id", sellerId);
-    
-    if (purchasesError) {
-      console.error("구매 통계 조회 오류:", purchasesError);
+    // 구매 통계 처리
+    if (purchasesResult.status === 'fulfilled') {
+      completedTicketing = purchasesResult.value.count || 0;
+    } else {
+      console.error("구매 통계 조회 실패:", purchasesResult.reason);
     }
     
-    // 4. 판매 완료 수 계산
-    const completedSales = (salesData || []).filter(sale => 
-      sale.status === 'completed' || sale.status === 'COMPLETED'
-    ).length;
-    
-    // 5. 취켓팅 완료 수 계산
-    const completedTicketing = (purchasesData || []).filter(purchase => 
-      purchase.status === 'completed' || purchase.status === 'COMPLETED'
-    ).length;
-    
-    // 6. 전체 거래 완료 수 계산
+    // 전체 거래 완료 수 계산
     const totalCompletedTransactions = completedSales + completedTicketing;
     
-    // 7. 응답률 가져오기 (프로필에서)
+    // 응답률 가져오기 (프로필에서)
     const responseRate = profileData.response_rate || 98; // 기본값 98%
     
-    // 8. 결과 반환
+    // 결과 반환
     return NextResponse.json({
       seller: {
         id: sellerId,
