@@ -226,10 +226,10 @@ export default function TicketCancellationDetail() {
         // 날짜 및 가격 정보 파싱
         let eventDate = '', eventTime = '', eventVenue = '', seatOptions = [];
         let eventPrice = postData.price || 0;
+        let contentObj = null;
         
         try {
           // 게시글 내용에서 정보 파싱 (JSON 구조)
-          let contentObj;
           
           if (typeof postData.content === 'string') {
             try {
@@ -426,6 +426,7 @@ export default function TicketCancellationDetail() {
           image: postData.image || '/placeholder-image.png',
           status: 'FOR_SALE',
           successRate: 80,
+          description: contentObj?.description || postData.content || '상세 설명이 없습니다.',
           seller: {
             id: sellerId,
             name: postData.author?.name || '판매자 정보 없음',
