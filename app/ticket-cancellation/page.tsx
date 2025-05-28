@@ -315,6 +315,12 @@ export default function TicketCancellationPage() {
                 <div className="invisible">로딩 중...</div>
               )}
               <button
+                onClick={() => alert('취켓팅 구해요 기능 준비 중입니다!')}
+                className="px-4 py-2 bg-[#FF2F6E] text-white rounded-xl hover:bg-[#E02B63] transition-colors whitespace-nowrap"
+              >
+                취켓팅 구해요
+              </button>
+              <button
                 onClick={() => router.push("/sell")}
                 className="px-4 py-2 bg-[#0061FF] text-white rounded-xl hover:bg-[#0052D6] transition-colors whitespace-nowrap"
               >
