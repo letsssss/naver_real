@@ -309,12 +309,12 @@ export default function MyPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <AccountBalance balance={120000} onWithdraw={() => setIsWithdrawModalOpen(true)} />
+          <AccountBalance balance={0} onWithdraw={() => setIsWithdrawModalOpen(true)} />
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-6 border-l-4 border-[#FF2F6E]">
               <h2 className="text-lg font-medium text-gray-700 mb-1">포인트</h2>
-              <p className="text-2xl font-bold text-[#FF2F6E]">3,500P</p>
+              <p className="text-2xl font-bold text-[#FF2F6E]">0P</p>
               <div className="flex justify-between items-center mt-4">
                 <Link
                   href="/mypage/point-history"
@@ -322,7 +322,7 @@ export default function MyPage() {
                 >
                   적립/사용 내역
                 </Link>
-                <p className="text-xs text-gray-500">30일 후 소멸 예정: 500P</p>
+                <p className="text-xs text-gray-500">30일 후 소멸 예정: 0P</p>
               </div>
             </div>
           </div>
@@ -330,7 +330,7 @@ export default function MyPage() {
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-6 border-l-4 border-[#FFD600]">
               <h2 className="text-lg font-medium text-gray-700 mb-1">쿠폰</h2>
-              <p className="text-2xl font-bold text-[#FFD600]">2장</p>
+              <p className="text-2xl font-bold text-[#FFD600]">0장</p>
               <div className="flex justify-between items-center mt-4">
                 <Link href="/mypage/coupons" className="text-sm text-gray-500 hover:text-[#FFD600] transition-colors">
                   쿠폰함 보기
@@ -459,7 +459,7 @@ export default function MyPage() {
         </div>
       </main>
       <WithdrawSection 
-        balance={120000} 
+        balance={0} 
         isOpen={isWithdrawModalOpen} 
         onOpenChange={setIsWithdrawModalOpen} 
       />
