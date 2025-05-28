@@ -22,6 +22,7 @@ import KGInicis from "@/components/payment/KGInicis"
 import { createBrowserClient } from "@/lib/supabase"
 import SuccessRateBadge from "@/components/SuccessRateBadge"
 import ReportHistory from "@/components/ReportHistory"
+import SellerReportButton from "@/components/SellerReportButton"
 
 // 티켓 시트 타입 정의
 interface SeatOption {
@@ -908,6 +909,11 @@ export default function TicketCancellationDetail() {
                     reports={ticketData.reports} 
                     className="mt-4" 
                   />
+                )}
+
+                {/* 판매자 신고 버튼 추가 */}
+                {ticketData.seller.id && (
+                  <SellerReportButton sellerId={ticketData.seller.id} />
                 )}
               </div>
             </div>

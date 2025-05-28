@@ -15,57 +15,63 @@ export async function GET(request: NextRequest) {
 
     const supabase = createBrowserClient()
 
-    // 1. 해당 판매자의 게시물들을 먼저 조회
-    const { data: posts, error: postsError } = await supabase
-      .from('posts')
-      .select('id')
-      .eq('author_id', sellerId)
-
-    if (postsError) {
-      console.error('게시물 조회 오류:', postsError)
-      return NextResponse.json(
-        { error: '게시물 조회 중 오류가 발생했습니다.' },
-        { status: 500 }
-      )
-    }
-
-    if (!posts || posts.length === 0) {
-      // 게시물이 없으면 신고도 없음
-      return NextResponse.json({
-        hasReports: false,
-        count: 0,
-        reports: []
-      })
-    }
-
-    const postIds = posts.map(post => post.id)
-
-    // 2. 해당 게시물들에 대한 신고 조회
-    const { data: reports, error: reportsError } = await supabase
+    // 판매자에 대한 직접 신고 조회 (seller_id 필드 사용)
+    const { data: sellerReports, error: sellerReportsError } = await supabase
       .from('reports')
       .select(`
         id,
         reason,
         status,
         created_at,
-        post_id,
+        type,
         reporter:reporter_id (
           id,
           name
         )
       `)
-      .in('post_id', postIds)
+      .eq('seller_id', sellerId)
       .order('created_at', { ascending: false })
 
-    if (reportsError) {
-      console.error('신고 조회 오류:', reportsError)
-      return NextResponse.json(
-        { error: '신고 조회 중 오류가 발생했습니다.' },
-        { status: 500 }
-      )
+    // seller_id 필드가 없는 경우를 대비해 게시물 기반 신고도 조회
+    let postBasedReports = []
+    if (!sellerReports || sellerReports.length === 0) {
+      // 1. 해당 판매자의 게시물들을 먼저 조회
+      const { data: posts, error: postsError } = await supabase
+        .from('posts')
+        .select('id')
+        .eq('author_id', sellerId)
+
+      if (!postsError && posts && posts.length > 0) {
+        const postIds = posts.map(post => post.id)
+
+        // 2. 해당 게시물들에 대한 신고 조회
+        const { data: reports, error: reportsError } = await supabase
+          .from('reports')
+          .select(`
+            id,
+            reason,
+            status,
+            created_at,
+            post_id,
+            type,
+            reporter:reporter_id (
+              id,
+              name
+            )
+          `)
+          .in('post_id', postIds)
+          .order('created_at', { ascending: false })
+
+        if (!reportsError && reports) {
+          postBasedReports = reports
+        }
+      }
     }
 
-    if (!reports || reports.length === 0) {
+    // 두 종류의 신고를 합치기
+    const allReports = [...(sellerReports || []), ...postBasedReports]
+
+    if (allReports.length === 0) {
       return NextResponse.json({
         hasReports: false,
         count: 0,
@@ -74,9 +80,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. 신고 데이터 가공
-    const reportCount = reports.length
-    const reasons = [...new Set(reports.map(report => report.reason))]
-    const lastReportDate = reports[0]?.created_at
+    const reportCount = allReports.length
+    const reasons = [...new Set(allReports.map(report => report.reason))]
+    const lastReportDate = allReports[0]?.created_at
     
     // 심각도 계산 (신고 건수 기준)
     let severity: 'low' | 'medium' | 'high' = 'low'
@@ -87,7 +93,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 상태 결정 (가장 최근 신고의 상태 기준)
-    const latestStatus = reports[0]?.status || 'pending'
+    const latestStatus = allReports[0]?.status || 'pending'
     let status: '검토중' | '해결됨' | '무효처리' = '검토중'
     
     switch (latestStatus) {
@@ -108,12 +114,13 @@ export async function GET(request: NextRequest) {
       lastReportDate: lastReportDate ? new Date(lastReportDate).toLocaleDateString('ko-KR') : '',
       reasons,
       status,
-      reports: reports.map(report => ({
+      reports: allReports.map(report => ({
         id: report.id,
         reason: report.reason,
         status: report.status,
         createdAt: report.created_at,
-        postId: report.post_id,
+        postId: report.post_id || null,
+        type: report.type || 'seller',
         reporter: report.reporter
       }))
     })
