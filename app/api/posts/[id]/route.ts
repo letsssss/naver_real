@@ -55,60 +55,47 @@ export async function GET(
       ));
     }
     
-    // 사용자 정보 디버깅
-    console.log("API - post 데이터:", post);
-    console.log("API - post.user_id:", post.user_id);
-    console.log("API - post.author_id:", post.author_id);
-    
-    // users 관계 확인
-    console.log("API - post.users 객체:", post.users);
-    
-    // 사용자 정보 직접 조회 시도 (관계 쿼리가 작동하지 않을 경우)
-    if (!post.users && (post.user_id || post.author_id)) {
-      const userId = post.author_id || post.user_id;
-      console.log("API - 사용자 정보 직접 조회 시도. userId:", userId);
-      
-      try {
-        // 어드민 클라이언트로 조회 시도 (더 많은 권한)
-        const { data: userData, error: userError } = await adminSupabase
-          .from('users')
-          .select('id, name, profile_image')
-          .eq('id', userId)
-          .single();
-        
-        if (!userError && userData) {
-          console.log("API - 사용자 직접 조회 성공(어드민):", userData);
-          post.users = userData;
-        } else {
-          console.log("API - 어드민 조회 실패, 일반 클라이언트로 재시도:", userError);
-          
-          // 일반 클라이언트로 다시 시도
-          const { data: regUserData, error: regUserError } = await supabase
-            .from('users')
-            .select('id, name, profile_image')
-            .eq('id', userId)
-            .single();
-          
-          if (!regUserError && regUserData) {
-            console.log("API - 사용자 직접 조회 성공(일반):", regUserData);
-            post.users = regUserData;
-          } else {
-            console.log("API - 사용자 직접 조회 모두 실패:", regUserError);
-          }
-        }
-      } catch (err) {
-        console.error("API - 사용자 조회 중 예외 발생:", err);
-      }
-    }
-    
-    // 조회수 증가
-    const { error: updateError } = await supabase
+    // 🚀 성능 최적화: 조회수 업데이트를 비동기로 처리 (응답 지연 방지)
+    supabase
       .from('posts')
       .update({ view_count: (post.view_count || 0) + 1 } as any)
-      .eq('id', id);
+      .eq('id', id)
+      .then(({ error: updateError }) => {
+        if (updateError) {
+          console.error('조회수 업데이트 오류:', updateError);
+        }
+      });
     
-    if (updateError) {
-      console.error('조회수 업데이트 오류:', updateError);
+    // 🚀 성능 최적화: 사용자 정보 조회 간소화
+    let authorInfo = {
+      id: post.author_id || post.user_id || '',
+      name: '판매자 정보 없음',
+      image: ''
+    };
+    
+    // 관계 쿼리가 성공한 경우
+    if (post.users) {
+      authorInfo = {
+        id: post.users.id || post.author_id || post.user_id || '',
+        name: post.users.name || '판매자 정보 없음',
+        image: post.users.profile_image || ''
+      };
+    } else if (post.author_id || post.user_id) {
+      // 관계 쿼리 실패 시 단일 조회 (중복 제거)
+      const userId = post.author_id || post.user_id;
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, name, profile_image')
+        .eq('id', userId)
+        .single();
+      
+      if (userData) {
+        authorInfo = {
+          id: userData.id,
+          name: userData.name || '판매자 정보 없음',
+          image: userData.profile_image || ''
+        };
+      }
     }
     
     // 응답 형태 변환
@@ -127,11 +114,7 @@ export async function GET(
       ticketPrice: post.ticket_price || 0,
       contactInfo: post.contact_info || '',
       isDeleted: post.is_deleted || false,
-      author: {
-        id: post.users?.id || post.author_id || post.user_id || '',
-        name: post.users?.name || '',
-        image: post.users?.profile_image || '',
-      },
+      author: authorInfo,
       _count: {
         comments: 0 // 댓글 기능은 아직 구현되지 않음
       }
