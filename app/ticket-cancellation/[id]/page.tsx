@@ -358,11 +358,18 @@ export default function TicketCancellationDetail() {
         
         // 취켓팅 통계 결과 처리
         let totalCancellationTicketings = 0;
+        let cancellationSuccessRate = 90; // 기본값
         if (cancelStatsResult.status === 'fulfilled' && cancelStatsResult.value?.data) {
           const confirmed = cancelStatsResult.value.data.confirmed_count || 0;
           const cancelled = cancelStatsResult.value.data.cancelled_count || 0;
           totalCancellationTicketings = confirmed + cancelled;
-          console.log("취켓팅 통계:", { confirmed, cancelled, total: totalCancellationTicketings });
+          
+          // 성공률 계산 (SuccessRateBadge에서 사용할 값)
+          if (totalCancellationTicketings > 0) {
+            cancellationSuccessRate = Math.round((confirmed / totalCancellationTicketings) * 100);
+          }
+          
+          console.log("취켓팅 통계:", { confirmed, cancelled, total: totalCancellationTicketings, successRate: cancellationSuccessRate });
         }
         
         // 신고 정보 결과 처리
@@ -391,7 +398,7 @@ export default function TicketCancellationDetail() {
           originalPrice: eventPrice,
           image: postData.image || '/placeholder-image.png',
           status: 'FOR_SALE',
-          successRate: 80,
+          successRate: cancellationSuccessRate,
           description: contentObj?.description || postData.content || '상세 설명이 없습니다.',
           seller: {
             id: sellerId,
@@ -776,7 +783,7 @@ export default function TicketCancellationDetail() {
                     className="object-cover"
                   />
                   <div className="absolute top-4 right-4">
-                    <SuccessRateBadge sellerId={ticketData.seller.id} />
+                    <SuccessRateBadge staticRate={ticketData.successRate} />
                   </div>
                 </div>
               </div>
