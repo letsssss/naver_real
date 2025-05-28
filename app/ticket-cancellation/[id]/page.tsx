@@ -306,114 +306,80 @@ export default function TicketCancellationDetail() {
         
         console.log("최종 선택된 판매자 ID:", sellerId);
         
-        // 판매자 상세 정보를 API에서 가져오기
-        let sellerDetail = {
+        // Supabase 클라이언트 생성 (모든 요청에서 공통으로 사용)
+        const supabase = createBrowserClient();
+        
+        // 🚀 성능 최적화: 모든 API 호출을 병렬 처리
+        const [
+          sellerStatsResult,
+          avgRatingResult,
+          cancelStatsResult,
+          reportResult
+        ] = await Promise.allSettled([
+          // 1. 판매자 통계 API
+          sellerId ? fetch(`/api/seller-stats?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null),
+          
+          // 2. 평균 별점 조회
+          sellerId ? supabase
+            .from("seller_avg_rating")
+            .select("avg_rating, review_count")
+            .eq("seller_id", sellerId)
+            .maybeSingle() : Promise.resolve({ data: null }),
+          
+          // 3. 취켓팅 통계 조회
+          sellerId ? supabase
+            .from("cancellation_ticketing_stats_view")
+            .select("confirmed_count, cancelled_count")
+            .eq("seller_id", sellerId)
+            .maybeSingle() : Promise.resolve({ data: null }),
+          
+          // 4. 신고 이력 조회
+          sellerId ? fetch(`/api/seller-reports?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null)
+        ]);
+        
+        // 결과 처리 - 실패한 요청도 안전하게 처리
+        const sellerDetail = {
           successfulSales: 0,
           responseRate: 0
         };
         
-        // Supabase 클라이언트 생성 (모든 요청에서 공통으로 사용)
-        const supabase = createBrowserClient();
-        
-        try {
-          if (sellerId) {
-            // 새로운 seller-stats API 사용
-            const sellerResponse = await fetch(`/api/seller-stats?sellerId=${sellerId}`);
-            if (sellerResponse.ok) {
-              const sellerData = await sellerResponse.json();
-              console.log("판매자 통계 정보:", sellerData);
-              
-              if (sellerData.seller) {
-                sellerDetail = {
-                  successfulSales: sellerData.seller.successfulSales || 0,
-                  responseRate: sellerData.seller.responseRate || 0
-                };
-              }
-            } else {
-              console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
-            }
-            
-            // cancellation_ticketing_stats_view에서 데이터 가져오기
-            const { data: cancelStats } = await supabase
-              .from("cancellation_ticketing_stats_view")
-              .select("confirmed_count, cancelled_count")
-              .eq("seller_id", sellerId)
-              .maybeSingle();
-              
-            // 총 건수 계산
-            const confirmed = cancelStats?.confirmed_count || 0;
-            const cancelled = cancelStats?.cancelled_count || 0;
-            const total = confirmed + cancelled;
-            
-            console.log("취켓팅 통계:", { confirmed, cancelled, total });
-          }
-        } catch (error) {
-          console.error("판매자 통계 API 호출 오류:", error);
-          // 에러가 발생해도 게시물 데이터는 계속 표시
+        // 판매자 통계 결과 처리
+        if (sellerStatsResult.status === 'fulfilled' && sellerStatsResult.value?.seller) {
+          sellerDetail.successfulSales = sellerStatsResult.value.seller.successfulSales || 0;
+          sellerDetail.responseRate = sellerStatsResult.value.seller.responseRate || 0;
+          console.log("판매자 통계 정보:", sellerStatsResult.value);
+        } else {
+          console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
         }
         
-        // ✅ 1. Supabase에서 별점과 리뷰 수 가져오기
-        const { data: avgRatingData, error: ratingError } = await supabase
-          .from("seller_avg_rating")
-          .select("avg_rating, review_count")
-          .eq("seller_id", sellerId)
-          .maybeSingle()
-
-        const avgRating = avgRatingData?.avg_rating || 0
-        const reviewCount = avgRatingData?.review_count || 0
+        // 평균 별점 결과 처리
+        const avgRating = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.data?.avg_rating) || 0;
+        const reviewCount = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.data?.review_count) || 0;
         
-        // 취켓팅 통계 기본값 (API에서 가져오지 못한 경우)
+        // 취켓팅 통계 결과 처리
         let totalCancellationTicketings = 0;
-        
-        try {
-          // cancellation_ticketing_stats_view에서 데이터 가져오기
-          const { data: cancelStats } = await supabase
-            .from("cancellation_ticketing_stats_view")
-            .select("confirmed_count, cancelled_count")
-            .eq("seller_id", sellerId)
-            .maybeSingle();
-            
-          // 총 건수 계산
-          const confirmed = cancelStats?.confirmed_count || 0;
-          const cancelled = cancelStats?.cancelled_count || 0;
+        if (cancelStatsResult.status === 'fulfilled' && cancelStatsResult.value?.data) {
+          const confirmed = cancelStatsResult.value.data.confirmed_count || 0;
+          const cancelled = cancelStatsResult.value.data.cancelled_count || 0;
           totalCancellationTicketings = confirmed + cancelled;
-          
-          console.log("취켓팅 통계 (개별 호출):", { confirmed, cancelled, total: totalCancellationTicketings });
-        } catch (error) {
-          console.error("취켓팅 통계 조회 오류:", error);
-          // 오류 발생 시 기본값 유지
+          console.log("취켓팅 통계:", { confirmed, cancelled, total: totalCancellationTicketings });
+        }
+        
+        // 신고 정보 결과 처리
+        let reportData = null;
+        if (reportResult.status === 'fulfilled' && reportResult.value?.hasReports) {
+          reportData = {
+            hasReports: reportResult.value.hasReports,
+            count: reportResult.value.count,
+            severity: reportResult.value.severity,
+            lastReportDate: reportResult.value.lastReportDate,
+            reasons: reportResult.value.reasons,
+            status: reportResult.value.status
+          };
+          console.log("판매자 신고 이력:", reportResult.value);
         }
         
         // ✅ 2. 기존 setTicketData에 값 반영
-        // 신고 정보 가져오기 (실제 API에서 가져오기)
-        let reportData = null;
-        
-        try {
-          // 판매자 신고 이력 조회 API 호출
-          if (sellerId) {
-            const reportResponse = await fetch(`/api/seller-reports?sellerId=${sellerId}`);
-            if (reportResponse.ok) {
-              const reportResult = await reportResponse.json();
-              console.log("판매자 신고 이력:", reportResult);
-              
-              if (reportResult.hasReports) {
-                reportData = {
-                  hasReports: reportResult.hasReports,
-                  count: reportResult.count,
-                  severity: reportResult.severity,
-                  lastReportDate: reportResult.lastReportDate,
-                  reasons: reportResult.reasons,
-                  status: reportResult.status
-                };
-              }
-            } else {
-              console.error("신고 이력 조회 실패:", reportResponse.status);
-            }
-          }
-        } catch (error) {
-          console.error("신고 정보 조회 오류:", error);
-        }
-        
         setTicketData({
           id: postData.id,
           title: postData.title || '티켓 제목',
