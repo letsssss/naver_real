@@ -317,6 +317,7 @@ export default function TicketCancellationPage() {
               <button
                 onClick={() => alert('취켓팅 구해요 기능 준비 중입니다!')}
                 className="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors whitespace-nowrap"
+                style={{ backgroundColor: '#ec4899' }}
               >
                 취켓팅 구해요
               </button>
