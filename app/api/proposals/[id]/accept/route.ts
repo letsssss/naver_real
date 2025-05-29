@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -21,7 +21,7 @@ export async function POST(
   console.log('[🎯 제안 수락 API] POST 요청 시작 - 제안 ID:', params.id);
   
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = createServerSupabaseClient();
     const proposalId = params.id;
     
     if (!proposalId) {

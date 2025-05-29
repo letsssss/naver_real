@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   console.log('[내 티켓 요청 API] GET 요청 시작');
   
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = createServerSupabaseClient();
     const url = new URL(req.url);
     const userId = url.searchParams.get('userId');
     
