@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createAdminClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -21,7 +22,8 @@ export async function POST(
   console.log('[🎯 제안 수락 API] POST 요청 시작 - 제안 ID:', params.id);
   
   try {
-    const supabase = createServerSupabaseClient();
+    // 원래 방식대로 일반 작업에는 서버 클라이언트 사용
+    const supabase = createSupabaseServerClient();
     const proposalId = params.id;
     
     if (!proposalId) {
@@ -150,7 +152,7 @@ export async function POST(
 
       console.log('[🎯 제안 수락 API] Purchase INSERT 데이터:', insertData);
       
-      // RLS 우회를 위해 관리자 클라이언트 사용
+      // Purchase 생성에만 관리자 클라이언트 사용 (RLS 우회)
       const adminSupabase = createAdminClient();
       
       const { data: purchaseData, error: purchaseError } = await adminSupabase
