@@ -123,7 +123,6 @@ export default function TicketRequestPage() {
     setIsSubmitting(true)
 
     try {
-      // TODO: API 호출 로직 구현
       const requestData = {
         concertTitle,
         concertDate,
@@ -131,20 +130,32 @@ export default function TicketRequestPage() {
         quantity: parseInt(quantity),
         maxPrice: parseInt(maxPrice),
         description,
-        preferredSeats,
-        urgency,
         userId: user?.id
       }
 
       console.log("취켓팅 구해요 요청:", requestData)
       
-      // 임시로 성공 처리
-      alert("취켓팅 구해요 요청이 등록되었습니다!")
-      router.push("/")
+      // 실제 API 호출
+      const response = await fetch('/api/offers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        alert(result.message || "취켓팅 구해요 요청이 등록되었습니다!")
+        router.push("/")
+      } else {
+        throw new Error(result.error || "요청 등록에 실패했습니다.")
+      }
       
     } catch (error) {
       console.error("요청 등록 실패:", error)
-      alert("요청 등록에 실패했습니다. 다시 시도해주세요.")
+      alert(error instanceof Error ? error.message : "요청 등록에 실패했습니다. 다시 시도해주세요.")
     } finally {
       setIsSubmitting(false)
     }
