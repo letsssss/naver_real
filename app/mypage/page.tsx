@@ -701,9 +701,6 @@ export default function MyPage() {
                                 <h3 className="font-bold text-lg text-gray-900">
                                   {proposal.proposer?.name || '사용자'}
                                 </h3>
-                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                                  인증된 판매자
-                                </span>
                               </div>
                               
                               <div className="flex items-center gap-4 text-sm">
@@ -782,7 +779,7 @@ export default function MyPage() {
                           {proposal.status === 'PENDING' ? (
                             <Button
                               onClick={() => handleAcceptProposal(proposal.id)}
-                              className="bg-green-500 hover:bg-green-600 text-white"
+                              className="bg-green-500 hover:bg-green-600 text-white rounded-lg"
                               size="sm"
                             >
                               수락하기
