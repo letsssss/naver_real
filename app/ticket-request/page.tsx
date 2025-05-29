@@ -76,16 +76,12 @@ export default function TicketRequestPage() {
       errors.concertDate = "공연 날짜를 선택해주세요"
     }
 
-    if (!concertVenue.trim()) {
-      errors.concertVenue = "공연 장소를 입력해주세요"
-    }
-
     if (!quantity || parseInt(quantity) < 1) {
       errors.quantity = "수량을 올바르게 입력해주세요"
     }
 
     if (!maxPrice || parseInt(maxPrice) < 1000) {
-      errors.maxPrice = "최대 희망 가격을 입력해주세요 (최소 1,000원)"
+      errors.maxPrice = "가격을 입력해주세요 (최소 1,000원)"
     }
 
     if (!description.trim() || description.length < 10) {
@@ -240,7 +236,7 @@ export default function TicketRequestPage() {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    공연 장소 <span className="text-red-500">*</span>
+                    공연 장소
                   </label>
                   <Input
                     type="text"
@@ -264,7 +260,7 @@ export default function TicketRequestPage() {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    최대 희망 가격 <span className="text-red-500">*</span>
+                    가격 설정 <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="number"
@@ -275,22 +271,9 @@ export default function TicketRequestPage() {
                     placeholder="100000"
                     className={formErrors.maxPrice ? "border-red-500" : ""}
                   />
-                  <p className="text-gray-500 text-sm mt-1">단위: 원 (매장에서 지불할 최대 금액)</p>
                   {formErrors.maxPrice && (
                     <p className="text-red-500 text-sm mt-1">{formErrors.maxPrice}</p>
                   )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    선호 좌석 정보
-                  </label>
-                  <Input
-                    type="text"
-                    value={preferredSeats}
-                    onChange={(e) => setPreferredSeats(e.target.value)}
-                    placeholder="예: VIP석, 1층 앞쪽, 연석 희망 등"
-                  />
                 </div>
 
                 <div>
