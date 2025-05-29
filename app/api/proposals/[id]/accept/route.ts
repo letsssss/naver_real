@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createServerSupabaseClient, createAdminClient } from '@/lib/supabase';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -150,7 +150,10 @@ export async function POST(
 
       console.log('[🎯 제안 수락 API] Purchase INSERT 데이터:', insertData);
       
-      const { data: purchaseData, error: purchaseError } = await supabase
+      // RLS 우회를 위해 관리자 클라이언트 사용
+      const adminSupabase = createAdminClient();
+      
+      const { data: purchaseData, error: purchaseError } = await adminSupabase
         .from('purchases')
         .insert(insertData)
         .select()
