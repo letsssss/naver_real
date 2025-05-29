@@ -56,6 +56,22 @@ export default function TicketRequestPage() {
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // 천단위 구분 함수
+  const formatPrice = (value: string) => {
+    // 숫자만 추출
+    const numbers = value.replace(/[^\d]/g, '');
+    // 천단위 콤마 추가
+    return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  // 가격 입력 처리
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    // 숫자만 추출하여 저장
+    const numbersOnly = inputValue.replace(/[^\d]/g, '');
+    setMaxPrice(numbersOnly);
+  };
+
   // 인증 확인
   useEffect(() => {
     if (!isLoading && !user) {
@@ -263,32 +279,16 @@ export default function TicketRequestPage() {
                     가격 설정 <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    type="number"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    min="1000"
-                    step="1000"
-                    placeholder="100000"
+                    type="text"
+                    value={formatPrice(maxPrice)}
+                    onChange={handlePriceChange}
+                    placeholder="100,000"
                     className={formErrors.maxPrice ? "border-red-500" : ""}
                   />
+                  <p className="text-gray-500 text-sm mt-1">(최소 1,000원)</p>
                   {formErrors.maxPrice && (
                     <p className="text-red-500 text-sm mt-1">{formErrors.maxPrice}</p>
                   )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    긴급도
-                  </label>
-                  <select 
-                    value={urgency} 
-                    onChange={(e) => setUrgency(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0061FF]"
-                  >
-                    <option value="보통">보통</option>
-                    <option value="급함">급함</option>
-                    <option value="매우 급함">매우 급함</option>
-                  </select>
                 </div>
               </div>
 
