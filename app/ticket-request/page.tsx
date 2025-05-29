@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, X, Calendar, MapPin } from 'lucide-react'
 import { useAuth } from "@/contexts/auth-context"
+import supabase from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -135,15 +136,23 @@ export default function TicketRequestPage() {
 
       console.log("취켓팅 구해요 요청:", requestData)
       
-      // 디버깅: 현재 쿠키 정보 확인
-      console.log("현재 쿠키들:", document.cookie);
-      console.log("localStorage:", localStorage.getItem('supabase.auth.token'));
+      // ✅ Supabase 세션에서 직접 토큰 가져오기 (sell 페이지와 동일한 방식)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      if (!token) {
+        console.error('세션에서 토큰을 찾을 수 없습니다.')
+        throw new Error('로그인이 필요합니다.')
+      }
+
+      console.log('Supabase 세션 토큰 존재 여부:', !!token)
       
-      // 실제 API 호출
+      // 실제 API 호출 (Authorization 헤더 추가)
       const response = await fetch('/api/offers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`  // 👈 sell 페이지와 동일하게 추가
         },
         credentials: 'include', // 쿠키 포함하여 인증 정보 전달
         body: JSON.stringify(requestData)
