@@ -194,7 +194,7 @@ export default function TicketRequestPage() {
                     type="text"
                     value={concertTitle}
                     onChange={(e) => setConcertTitle(e.target.value)}
-                    placeholder="예: 세븐틴 콘서트"
+                    placeholder="공연 제목을 입력하세요"
                     className={formErrors.concertTitle ? "border-red-500" : ""}
                   />
                   {formErrors.concertTitle && (
