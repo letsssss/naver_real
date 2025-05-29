@@ -141,6 +141,7 @@ export default function TicketRequestPage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(requestData)
       });
 

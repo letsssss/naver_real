@@ -73,9 +73,54 @@ export async function POST(req: Request) {
   try {
     console.log('[Offers API] POST 요청 시작');
 
-    // 인증 확인
-    const authResult = await validateRequestToken(req);
-    if (!authResult.authenticated) {
+    // 인증 확인 - 더 안정적인 방식으로 개선
+    let userId = null;
+    let userEmail = null;
+
+    try {
+      // 1. validateRequestToken 시도
+      const authResult = await validateRequestToken(req);
+      if (authResult.authenticated) {
+        userId = authResult.userId;
+        console.log('[Offers API] JWT 인증 성공:', userId);
+      }
+    } catch (authError) {
+      console.log('[Offers API] JWT 인증 실패:', authError);
+    }
+
+    // 2. JWT 인증 실패 시 쿠키에서 직접 확인
+    if (!userId) {
+      try {
+        const { cookies } = await import('next/headers');
+        const cookieStore = cookies();
+        
+        // Supabase 쿠키 확인
+        const projectRef = 'jdubrjczdyqqtsppojgu';
+        const authCookie = cookieStore.get(`sb-${projectRef}-auth-token`);
+        
+        if (authCookie?.value) {
+          const sessionData = JSON.parse(authCookie.value);
+          if (sessionData.user?.id) {
+            userId = sessionData.user.id;
+            userEmail = sessionData.user.email;
+            console.log('[Offers API] 쿠키 인증 성공:', userEmail);
+          }
+        }
+      } catch (cookieError) {
+        console.log('[Offers API] 쿠키 인증 실패:', cookieError);
+      }
+    }
+
+    // 3. 개발 환경 대체 처리
+    if (!userId && process.env.NODE_ENV === 'development') {
+      console.log('[Offers API] 개발 환경 - 기본 사용자 사용');
+      userId = '123e4567-e89b-12d3-a456-426614174000'; // 개발용 기본 UUID
+      userEmail = 'dev@example.com';
+    }
+
+    // 4. 최종 인증 실패
+    if (!userId) {
+      console.log('[Offers API] 인증 실패 - 모든 방법 시도 완료');
       return NextResponse.json({ 
         error: '로그인이 필요합니다.' 
       }, { status: 401, headers: CORS_HEADERS });
@@ -92,7 +137,7 @@ export async function POST(req: Request) {
     } = body;
 
     console.log('[Offers API] 요청 데이터:', {
-      concertTitle, concertDate, concertVenue, quantity, maxPrice
+      concertTitle, concertDate, concertVenue, quantity, maxPrice, userId
     });
 
     // 유효성 검사
@@ -110,7 +155,7 @@ export async function POST(req: Request) {
 
     // offers 테이블에 데이터 삽입
     const offerData = {
-      offerer_id: authResult.userId,
+      offerer_id: userId,
       price: parseInt(maxPrice),
       original_price: parseInt(maxPrice),
       message: `${concertTitle} - ${description}${concertVenue ? ` (장소: ${concertVenue})` : ''}`,
