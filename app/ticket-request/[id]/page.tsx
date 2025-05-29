@@ -467,22 +467,46 @@ export default function TicketRequestDetail() {
                       </label>
                     </div>
 
-                    {/* 취켓팅 요청받기 버튼 */}
+                    {/* 요청에 제안하기 버튼 */}
                     <div className="pt-4">
                       <Button 
                         type="submit"
                         disabled={!selectedSeats.length || !termsAgreed}
-                        className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 text-lg font-medium"
+                        className="w-full bg-[#ec4899] hover:bg-[#db2777] text-white py-3 text-lg font-medium border-none"
+                        style={{ 
+                          backgroundColor: '#ec4899',
+                          color: 'white',
+                          border: 'none'
+                        }}
                       >
-                        취켓팅 요청받기
+                        요청에 제안하기
                       </Button>
+                      <p className="text-sm text-gray-500 text-center mt-3">
+                        제안 후 요청자와 채팅을 통해 상세한 협의를 진행합니다.
+                      </p>
                     </div>
                   </div>
                 </form>
               ) : (
                 // 로그인하지 않은 경우 표시할 내용
-                <div className="text-center py-8 text-gray-500">
-                  로그인 후 이용 가능합니다.
+                <div className="text-center py-8">
+                  <div className="mb-4">
+                    <p className="text-gray-600 mb-4">
+                      이 티켓 요청에 제안하시려면 로그인이 필요합니다.
+                    </p>
+                    <Link href="/login">
+                      <Button 
+                        className="bg-[#ec4899] hover:bg-[#db2777] text-white px-8 py-3 text-lg font-medium border-none"
+                        style={{ 
+                          backgroundColor: '#ec4899',
+                          color: 'white',
+                          border: 'none'
+                        }}
+                      >
+                        로그인하고 제안하기
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>
