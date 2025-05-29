@@ -282,10 +282,9 @@ export default function TicketRequestPage() {
                     type="text"
                     value={formatPrice(maxPrice)}
                     onChange={handlePriceChange}
-                    placeholder="100,000"
+                    placeholder="(최소 1,000원)"
                     className={formErrors.maxPrice ? "border-red-500" : ""}
                   />
-                  <p className="text-gray-500 text-sm mt-1">(최소 1,000원)</p>
                   {formErrors.maxPrice && (
                     <p className="text-red-500 text-sm mt-1">{formErrors.maxPrice}</p>
                   )}
