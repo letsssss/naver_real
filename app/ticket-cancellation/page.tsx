@@ -468,7 +468,11 @@ export default function TicketCancellationPage() {
                     className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all transform hover:-translate-y-1"
                   >
                     <div className="relative">
-                      <Link href={`/ticket-cancellation/${ticket.id}`}>
+                      <Link href={
+                        ticket.category === 'TICKET_REQUEST' 
+                          ? `/ticket-request/${ticket.id}` 
+                          : `/ticket-cancellation/${ticket.id}`
+                      }>
                         <Image
                           src={"/placeholder.svg"}
                           alt={ticket.title}
@@ -494,7 +498,11 @@ export default function TicketCancellationPage() {
                       </div>
                     </div>
                     <div className="p-4">
-                      <Link href={`/ticket-cancellation/${ticket.id}`}>
+                      <Link href={
+                        ticket.category === 'TICKET_REQUEST' 
+                          ? `/ticket-request/${ticket.id}` 
+                          : `/ticket-cancellation/${ticket.id}`
+                      }>
                         <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
                       </Link>
                       <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
@@ -531,7 +539,11 @@ export default function TicketCancellationPage() {
                         </div>
                         <Button
                           className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium w-28 flex items-center justify-center transition-all"
-                          onClick={() => router.push(`/ticket-cancellation/${ticket.id}`)}
+                          onClick={() => router.push(
+                            ticket.category === 'TICKET_REQUEST' 
+                              ? `/ticket-request/${ticket.id}` 
+                              : `/ticket-cancellation/${ticket.id}`
+                          )}
                         >
                           신청하기
                           <ArrowRight className="ml-1 h-3.5 w-3.5" />
