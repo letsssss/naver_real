@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { createBrowserClient } from "@/lib/supabase"
 import { fetchTicketingSuccessRate } from "@/services/statistics-service"
 import SuccessRateBadge from "@/components/SuccessRateBadge"
+import RequestBadge from "@/components/RequestBadge"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ interface Post {
   id: number;
   title: string;
   content: string;
+  category?: string;
   eventName: string;
   eventDate: string;
   eventVenue: string;
@@ -476,7 +478,11 @@ export default function TicketCancellationPage() {
                         />
                       </Link>
                       <div className="absolute top-3 right-3">
-                        <SuccessRateBadge sellerId={ticket.author?.id} />
+                        {ticket.category === 'TICKET_REQUEST' ? (
+                          <RequestBadge />
+                        ) : (
+                          <SuccessRateBadge sellerId={ticket.author?.id} />
+                        )}
                       </div>
                       <div className="absolute bottom-3 left-3">
                         <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
