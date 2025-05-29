@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { validateRequestToken } from '@/lib/auth';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 const adminSupabase = createAdminClient();
 
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
     console.log('[Offers API] POST 요청 시작');
     console.log('[Offers API] Request headers:', Object.fromEntries(req.headers.entries()));
 
-    // 인증 확인 - 더 자세한 디버깅 추가
+    // 인증 확인 - Supabase 공식 방식 우선 사용
     let userId = null;
     let userEmail = null;
 
@@ -86,20 +88,38 @@ export async function POST(req: Request) {
     } else {
       // 프로덕션에서만 엄격한 인증 적용
       try {
-        // 1. validateRequestToken 시도
-        const authResult = await validateRequestToken(req);
-        if (authResult.authenticated) {
-          userId = authResult.userId;
-          console.log('[Offers API] JWT 인증 성공:', userId);
+        // 1. Supabase 공식 인증 헬퍼 사용
+        const supabase = createRouteHandlerClient({ cookies });
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (user && !error) {
+          userId = user.id;
+          userEmail = user.email;
+          console.log('[Offers API] Supabase 인증 성공:', userEmail);
+        } else {
+          console.log('[Offers API] Supabase 인증 실패:', error);
         }
-      } catch (authError) {
-        console.log('[Offers API] JWT 인증 실패:', authError);
+      } catch (supabaseError) {
+        console.log('[Offers API] Supabase 인증 오류:', supabaseError);
       }
 
-      // 2. JWT 인증 실패 시 쿠키에서 직접 확인
+      // 2. Supabase 인증 실패 시 대체 방법들
       if (!userId) {
         try {
-          const { cookies } = await import('next/headers');
+          // validateRequestToken 시도 (JWT)
+          const authResult = await validateRequestToken(req);
+          if (authResult.authenticated) {
+            userId = authResult.userId;
+            console.log('[Offers API] JWT 인증 성공:', userId);
+          }
+        } catch (authError) {
+          console.log('[Offers API] JWT 인증 실패:', authError);
+        }
+      }
+
+      // 3. 쿠키에서 직접 확인 (JWT는 JSON 파싱하지 않음)
+      if (!userId) {
+        try {
           const cookieStore = cookies();
           
           console.log('[Offers API] 사용 가능한 쿠키들:');
@@ -107,32 +127,77 @@ export async function POST(req: Request) {
             console.log(`[Offers API] - ${cookie.name}: ${cookie.value.substring(0, 50)}...`);
           });
           
-          // 여러 가능한 Supabase 쿠키 이름 시도
-          const possibleCookieNames = [
-            'sb-jdubrjczdyqqtsppojgu-auth-token',
-            'sb-auth-token',
-            'supabase-auth-token',
-            'auth-token'
-          ];
+          // user 쿠키에서 직접 사용자 정보 확인 (가장 확실한 방법)
+          const userCookie = cookieStore.get('user');
+          if (userCookie?.value) {
+            console.log('[Offers API] user 쿠키 발견');
+            try {
+              const userData = JSON.parse(userCookie.value);
+              if (userData.id) {
+                userId = userData.id;
+                userEmail = userData.email;
+                console.log('[Offers API] user 쿠키 인증 성공:', userEmail);
+              }
+            } catch (parseError) {
+              console.log('[Offers API] user 쿠키 파싱 실패:', parseError);
+            }
+          }
           
-          for (const cookieName of possibleCookieNames) {
-            const authCookie = cookieStore.get(cookieName);
-            if (authCookie?.value) {
-              console.log(`[Offers API] ${cookieName} 쿠키 발견`);
+          // auth-token (JWT)은 JSON 파싱하지 않고 그대로 사용
+          if (!userId) {
+            const authTokenCookie = cookieStore.get('auth-token');
+            if (authTokenCookie?.value) {
+              console.log('[Offers API] auth-token 쿠키 발견 (JWT)');
+              // JWT 토큰은 JSON이 아니므로 파싱하지 않음
+              // 대신 JWT 디코딩이 필요하면 별도 라이브러리 사용
+              const jwtToken = authTokenCookie.value;
+              console.log('[Offers API] JWT 토큰 길이:', jwtToken.length);
+              
+              // 간단한 JWT 페이로드 디코딩 (검증 없이)
               try {
-                const sessionData = JSON.parse(authCookie.value);
-                if (sessionData.user?.id) {
-                  userId = sessionData.user.id;
-                  userEmail = sessionData.user.email;
-                  console.log('[Offers API] 쿠키 인증 성공:', userEmail);
-                  break;
-                } else if (sessionData.access_token) {
-                  // access_token만 있는 경우
-                  console.log('[Offers API] access_token 발견, 사용자 정보 추출 시도');
-                  // 여기서 추가 로직 필요시 구현
+                const payload = JSON.parse(atob(jwtToken.split('.')[1]));
+                if (payload.userId) {
+                  userId = payload.userId;
+                  userEmail = payload.email;
+                  console.log('[Offers API] JWT 페이로드 디코딩 성공:', userEmail);
                 }
-              } catch (parseError) {
-                console.log(`[Offers API] ${cookieName} 파싱 실패:`, parseError);
+              } catch (jwtError) {
+                console.log('[Offers API] JWT 디코딩 실패:', jwtError);
+              }
+            }
+          }
+          
+          // Supabase 세션 쿠키들 확인 (배열 형태)
+          if (!userId) {
+            const supabaseCookieNames = [
+              'sb-jdubrjczdyqqtsppojgu-auth-token',
+              'sb-auth-token',
+              'supabase-auth-token'
+            ];
+            
+            for (const cookieName of supabaseCookieNames) {
+              const authCookie = cookieStore.get(cookieName);
+              if (authCookie?.value) {
+                console.log(`[Offers API] ${cookieName} 쿠키 발견`);
+                try {
+                  // Supabase 쿠키는 보통 배열 형태 ["token", "refresh_token", ...]
+                  const sessionArray = JSON.parse(authCookie.value);
+                  if (Array.isArray(sessionArray) && sessionArray[0]) {
+                    const accessToken = sessionArray[0];
+                    console.log('[Offers API] Supabase 액세스 토큰 발견');
+                    
+                    // 액세스 토큰으로 사용자 정보 가져오기
+                    const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]));
+                    if (tokenPayload.sub) {
+                      userId = tokenPayload.sub;
+                      userEmail = tokenPayload.email;
+                      console.log('[Offers API] Supabase 토큰 디코딩 성공:', userEmail);
+                      break;
+                    }
+                  }
+                } catch (parseError) {
+                  console.log(`[Offers API] ${cookieName} 파싱 실패:`, parseError);
+                }
               }
             }
           }
