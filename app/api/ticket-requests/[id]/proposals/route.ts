@@ -225,38 +225,70 @@ export async function GET(
           message,
           status,
           created_at,
-          updated_at,
-          proposer:users!proposer_id (
-            id,
-            name,
-            rating,
-            successful_sales,
-            response_rate
-          )
+          updated_at
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: false });
 
       if (detailedError) {
         console.warn('[🎯 제안 API] 상세 정보 조회 실패, 기본 정보만 반환:', detailedError);
-        
-        // 기본 정보에 거래 통계 추가 시도
-        const proposerIds = basicProposals.map(p => p.proposer_id).filter(Boolean);
-        if (proposerIds.length > 0) {
-          const { data: usersData } = await supabase
-            .from('users')
-            .select('id, name, rating, successful_sales, response_rate')
-            .in('id', proposerIds);
-          
-          // 기본 제안에 사용자 정보 매핑
-          proposals = basicProposals.map(proposal => ({
-            ...proposal,
-            proposer: usersData?.find(user => user.id === proposal.proposer_id) || null
-          }));
-        }
+        proposals = basicProposals;
       } else {
-        proposals = detailedProposals;
-        console.log('[🎯 제안 API] 상세 정보 조회 성공');
+        // 각 제안에 대해 실제 웹사이트와 동일한 판매자 정보 조회
+        const proposalsWithSellerInfo = await Promise.all(
+          detailedProposals.map(async (proposal) => {
+            try {
+              // 1. 프로필 정보 (response_rate 포함)
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('id, name, profile_image, response_rate')
+                .eq('id', proposal.proposer_id)
+                .maybeSingle();
+
+              // 2. 판매자 통계 (successful_sales 포함)
+              const { data: statsData } = await supabase
+                .from('seller_stats')
+                .select('successful_sales')
+                .eq('seller_id', proposal.proposer_id)
+                .maybeSingle();
+
+              // 3. 평점 통계
+              const { data: ratingStats } = await supabase
+                .from('seller_rating_stats_view')
+                .select('avg_rating, review_count')
+                .eq('seller_id', proposal.proposer_id)
+                .maybeSingle();
+
+              return {
+                ...proposal,
+                proposer: {
+                  id: profileData?.id || proposal.proposer_id,
+                  name: profileData?.name || '사용자',
+                  profile_image: profileData?.profile_image,
+                  response_rate: profileData?.response_rate,
+                  successful_sales: statsData?.successful_sales || 0,
+                  rating: ratingStats?.avg_rating || 0,
+                  review_count: ratingStats?.review_count || 0
+                }
+              };
+            } catch (error) {
+              console.warn('[🎯 제안 API] 판매자 정보 조회 실패:', proposal.proposer_id, error);
+              return {
+                ...proposal,
+                proposer: {
+                  id: proposal.proposer_id,
+                  name: '사용자',
+                  successful_sales: 0,
+                  rating: 0,
+                  review_count: 0
+                }
+              };
+            }
+          })
+        );
+
+        proposals = proposalsWithSellerInfo;
+        console.log('[🎯 제안 API] 실제 웹사이트와 동일한 데이터 소스로 조회 성공');
       }
     }
 
