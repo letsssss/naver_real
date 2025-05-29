@@ -160,33 +160,102 @@ export async function GET(
       );
     }
 
-    // 제안 목록 조회 (제안자 정보 포함)
-    const { data: proposals, error } = await supabase
+    // 숫자로 변환
+    const postId = parseInt(requestId);
+    if (isNaN(postId)) {
+      return NextResponse.json(
+        { success: false, message: '유효하지 않은 티켓 요청 ID입니다.' },
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    console.log('[🎯 제안 API] 제안 목록 조회 시도 - post_id:', postId);
+
+    // 먼저 해당 포스트가 존재하는지 확인
+    const { data: postCheck, error: postCheckError } = await supabase
+      .from('posts')
+      .select('id, title, category')
+      .eq('id', postId)
+      .eq('category', 'TICKET_REQUEST')
+      .single();
+
+    if (postCheckError || !postCheck) {
+      console.error('[🎯 제안 API] 포스트 확인 오류:', postCheckError);
+      return NextResponse.json(
+        { success: false, message: '해당 티켓 요청을 찾을 수 없습니다.' },
+        { status: 404, headers: CORS_HEADERS }
+      );
+    }
+
+    console.log('[🎯 제안 API] 포스트 확인 성공:', postCheck);
+
+    // 기본 제안 목록부터 조회 (users JOIN 없이)
+    const { data: basicProposals, error: basicError } = await supabase
       .from('proposals')
-      .select(`
-        *,
-        proposer:users!proposer_id (
-          id,
-          name,
-          profile_image,
-          rating
-        )
-      `)
-      .eq('post_id', requestId)
+      .select('*')
+      .eq('post_id', postId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('[🎯 제안 API] 제안 목록 조회 오류:', error);
+    console.log('[🎯 제안 API] 기본 제안 조회 결과:', { 
+      error: basicError, 
+      count: basicProposals?.length || 0,
+      proposals: basicProposals 
+    });
+
+    if (basicError) {
+      console.error('[🎯 제안 API] 기본 제안 조회 오류:', basicError);
       return NextResponse.json(
-        { success: false, message: '제안 목록을 불러올 수 없습니다.' },
+        { success: false, message: '제안 목록 조회 중 오류가 발생했습니다.', error: basicError.message },
         { status: 500, headers: CORS_HEADERS }
       );
     }
 
+    // 제안이 있다면 users 정보와 함께 다시 조회
+    let proposals = basicProposals;
+    if (basicProposals && basicProposals.length > 0) {
+      const { data: detailedProposals, error: detailedError } = await supabase
+        .from('proposals')
+        .select(`
+          id,
+          post_id,
+          proposer_id,
+          section_id,
+          section_name,
+          proposed_price,
+          message,
+          status,
+          created_at,
+          updated_at,
+          proposer:users!proposer_id (
+            id,
+            name,
+            rating
+          )
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: false });
+
+      if (detailedError) {
+        console.warn('[🎯 제안 API] 상세 정보 조회 실패, 기본 정보만 반환:', detailedError);
+        // 기본 정보만 반환
+      } else {
+        proposals = detailedProposals;
+        console.log('[🎯 제안 API] 상세 정보 조회 성공');
+      }
+    }
+
+    console.log(`[🎯 제안 API] 제안 목록 조회 성공 - ${proposals?.length || 0}개 발견`);
+    
     return NextResponse.json(
       { 
         success: true,
-        proposals: proposals || []
+        proposals: proposals || [],
+        count: proposals?.length || 0,
+        debug: {
+          postId,
+          postExists: !!postCheck,
+          hasBasicProposals: !!(basicProposals && basicProposals.length > 0)
+        }
       },
       { headers: CORS_HEADERS }
     );
@@ -196,7 +265,8 @@ export async function GET(
     return NextResponse.json(
       { 
         success: false, 
-        message: '서버 오류가 발생했습니다.'
+        message: '서버 오류가 발생했습니다.',
+        error: process.env.NODE_ENV === 'development' ? String(error) : undefined
       },
       { status: 500, headers: CORS_HEADERS }
     );

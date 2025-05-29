@@ -136,17 +136,25 @@ export default function MyPage() {
       const response = await fetch(`/api/ticket-requests/${ticketId}/proposals`);
       
       if (!response.ok) {
-        throw new Error('제안 목록을 불러오는데 실패했습니다');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('제안 목록 조회 API 오류:', response.status, errorData);
+        throw new Error(errorData.message || '제안 목록을 불러오는데 실패했습니다');
       }
       
       const data = await response.json();
       console.log('제안 목록 조회 성공:', data);
       
-      setProposals(data.proposals || []);
+      if (data.success) {
+        setProposals(data.proposals || []);
+        console.log(`제안 ${data.count || 0}개 로드됨`);
+      } else {
+        console.error('제안 목록 조회 실패:', data.message);
+        throw new Error(data.message || '제안 목록을 불러오는데 실패했습니다');
+      }
       
     } catch (error) {
       console.error('제안 목록 조회 오류:', error);
-      toast.error('제안 목록을 불러오는데 실패했습니다');
+      toast.error(error instanceof Error ? error.message : '제안 목록을 불러오는데 실패했습니다');
     } finally {
       setIsLoadingProposals(false);
     }
