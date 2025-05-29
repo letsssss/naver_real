@@ -415,10 +415,11 @@ export default function TicketRequestDetail() {
                                 : "border-gray-200 hover:border-pink-300"
                             }`}
                             onClick={() => {
+                              // 단일 선택으로 변경
                               if (selectedSeats.includes(seat.id)) {
-                                setSelectedSeats(selectedSeats.filter(id => id !== seat.id))
+                                setSelectedSeats([])
                               } else {
-                                setSelectedSeats([...selectedSeats, seat.id])
+                                setSelectedSeats([seat.id])
                               }
                             }}
                           >
@@ -433,45 +434,8 @@ export default function TicketRequestDetail() {
                         ))}
                       </div>
                       <p className="text-sm text-gray-500 mt-2">
-                        예매 가능한 구역을 선택해주세요. 여러 구역 선택 가능합니다.
+                        예매 가능한 구역을 하나 선택해주세요.
                       </p>
-                    </div>
-
-                    {/* 예매 가능 가격 입력 */}
-                    <div>
-                      <label htmlFor="availablePrice" className="block text-sm font-medium text-gray-700 mb-2">
-                        예매 가능한 가격 <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Input
-                          id="availablePrice"
-                          type="number"
-                          placeholder="예매 가능한 가격을 입력하세요"
-                          className="pr-12"
-                          min="1000"
-                          max={ticketData.maxPrice}
-                        />
-                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">원</span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        요청자 희망 최대 가격: {ticketData.maxPrice.toLocaleString()}원
-                      </p>
-                    </div>
-
-                    {/* 연락처 */}
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                        연락처 <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="010-0000-0000"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        required
-                      />
-                      <p className="text-sm text-gray-500 mt-1">예매 진행 상황을 안내받을 연락처를 입력해주세요.</p>
                     </div>
 
                     {/* 응답 메시지 */}
@@ -485,69 +449,6 @@ export default function TicketRequestDetail() {
                         rows={4}
                         placeholder="요청자에게 전달할 메시지를 입력해주세요 (선택사항)"
                       />
-                    </div>
-
-                    {/* 결제 방법 */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
-                      <div className="space-y-2">
-                        {/* 카카오페이 옵션 */}
-                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "kakaopay" ? "bg-yellow-50 border-yellow-200" : "border-gray-200 hover:border-gray-300"}`}>
-                          <div className="flex items-center">
-                            <input
-                              type="radio"
-                              id="kakaopay"
-                              name="paymentMethod"
-                              value="kakaopay"
-                              checked={selectedPaymentMethod === "kakaopay"}
-                              onChange={() => setSelectedPaymentMethod("kakaopay")}
-                              className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-gray-300"
-                            />
-                            <label htmlFor="kakaopay" className="ml-2 block text-sm text-gray-700 font-medium">
-                              카카오페이
-                            </label>
-                          </div>
-                        </div>
-                        
-                        {/* 토스페이 옵션 */}
-                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "toss" ? "bg-blue-50 border-blue-200" : "border-gray-200 hover:border-gray-300"}`}>
-                          <div className="flex items-center">
-                            <input
-                              type="radio"
-                              id="toss"
-                              name="paymentMethod"
-                              value="toss"
-                              checked={selectedPaymentMethod === "toss"}
-                              onChange={() => setSelectedPaymentMethod("toss")}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                            />
-                            <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
-                              토스페이
-                            </label>
-                          </div>
-                        </div>
-                        
-                        {/* 직접 협의 옵션 */}
-                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "direct" ? "bg-gray-50 border-gray-300" : "border-gray-200 hover:border-gray-300"}`}>
-                          <div className="flex items-center">
-                            <input
-                              type="radio"
-                              id="direct"
-                              name="paymentMethod"
-                              value="direct"
-                              checked={selectedPaymentMethod === "direct"}
-                              onChange={() => setSelectedPaymentMethod("direct")}
-                              className="h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300"
-                            />
-                            <label htmlFor="direct" className="ml-2 block text-sm text-gray-700 font-medium">
-                              요청자와 직접 협의
-                            </label>
-                          </div>
-                          <p className="text-xs text-gray-500 ml-6 mt-1">
-                            채팅으로 결제 방법을 협의하실 수 있습니다.
-                          </p>
-                        </div>
-                      </div>
                     </div>
 
                     {/* 이용약관 동의 */}
@@ -566,18 +467,15 @@ export default function TicketRequestDetail() {
                       </label>
                     </div>
 
-                    {/* 응답하기 버튼 */}
+                    {/* 취켓팅 요청받기 버튼 */}
                     <div className="pt-4">
                       <Button 
                         type="submit"
-                        disabled={!selectedSeats.length || !phoneNumber || !termsAgreed}
+                        disabled={!selectedSeats.length || !termsAgreed}
                         className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 text-lg font-medium"
                       >
-                        이 요청에 응답하기
+                        취켓팅 요청받기
                       </Button>
-                      <p className="text-sm text-gray-500 text-center mt-2">
-                        응답 후 요청자와 채팅을 통해 상세한 협의를 진행합니다.
-                      </p>
                     </div>
                   </div>
                 </form>
