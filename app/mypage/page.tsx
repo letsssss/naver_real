@@ -691,23 +691,58 @@ export default function MyPage() {
                         <div className="flex-1">
                           {/* 제안자 정보 */}
                           <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                              <User className="h-6 w-6 text-gray-600" />
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                              <span className="text-white font-bold text-lg">
+                                {proposal.proposer?.name?.charAt(0) || 'U'}
+                              </span>
                             </div>
-                            <div>
-                              <h3 className="font-semibold">{proposal.proposer?.name || '익명 사용자'}</h3>
-                              <div className="flex items-center gap-2">
-                                <div className="flex text-yellow-400">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star 
-                                      key={i} 
-                                      className={`h-3 w-3 ${i < (proposal.proposer?.rating || 0) ? 'fill-current' : ''}`} 
-                                    />
-                                  ))}
-                                </div>
-                                <span className="text-xs text-gray-500">
-                                  ({proposal.proposer?.rating || 0}.0)
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-bold text-lg text-gray-900">
+                                  {proposal.proposer?.name || '사용자'}
+                                </h3>
+                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                                  인증된 판매자
                                 </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-sm">
+                                {/* 평점 */}
+                                <div className="flex items-center gap-1">
+                                  <div className="flex text-yellow-400">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star 
+                                        key={i} 
+                                        className={`h-3 w-3 ${i < Math.floor(proposal.proposer?.rating || 0) ? 'fill-current' : ''}`} 
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="text-gray-600 font-medium">
+                                    {proposal.proposer?.rating?.toFixed(1) || '0.0'}
+                                  </span>
+                                </div>
+                                
+                                {/* 거래 성사 횟수 - 기존 필드 활용 */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500">계약 성사:</span>
+                                  <span className="font-bold text-blue-600">
+                                    {proposal.proposer?.successful_sales || 0}회
+                                  </span>
+                                </div>
+                                
+                                {/* 성공률 또는 신규 표시 */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-500">상태:</span>
+                                  {proposal.proposer?.response_rate ? (
+                                    <span className="font-bold text-green-600">
+                                      성공률 {proposal.proposer.response_rate}%
+                                    </span>
+                                  ) : (
+                                    <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium">
+                                      신규
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>

@@ -229,7 +229,9 @@ export async function GET(
           proposer:users!proposer_id (
             id,
             name,
-            rating
+            rating,
+            successful_sales,
+            response_rate
           )
         `)
         .eq('post_id', postId)
@@ -237,7 +239,21 @@ export async function GET(
 
       if (detailedError) {
         console.warn('[🎯 제안 API] 상세 정보 조회 실패, 기본 정보만 반환:', detailedError);
-        // 기본 정보만 반환
+        
+        // 기본 정보에 거래 통계 추가 시도
+        const proposerIds = basicProposals.map(p => p.proposer_id).filter(Boolean);
+        if (proposerIds.length > 0) {
+          const { data: usersData } = await supabase
+            .from('users')
+            .select('id, name, rating, successful_sales, response_rate')
+            .in('id', proposerIds);
+          
+          // 기본 제안에 사용자 정보 매핑
+          proposals = basicProposals.map(proposal => ({
+            ...proposal,
+            proposer: usersData?.find(user => user.id === proposal.proposer_id) || null
+          }));
+        }
       } else {
         proposals = detailedProposals;
         console.log('[🎯 제안 API] 상세 정보 조회 성공');
