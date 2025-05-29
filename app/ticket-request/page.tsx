@@ -1,0 +1,364 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { ArrowLeft, X, Calendar, MapPin } from 'lucide-react'
+import { useAuth } from "@/contexts/auth-context"
+
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+
+// 콘서트 데이터 타입 정의
+interface Concert {
+  id: number
+  title: string
+  date: string
+  venue: string
+}
+
+// 에러 타입 정의
+interface FormErrors {
+  concertTitle?: string
+  concertDate?: string
+  concertVenue?: string
+  description?: string
+  maxPrice?: string
+  quantity?: string
+  terms?: string
+  [key: string]: string | undefined
+}
+
+// 임시 공연 데이터
+const concertData: Concert[] = [
+  { id: 1, title: "세븐틴 콘서트", date: "2024-03-20", venue: "잠실종합운동장 주경기장" },
+  { id: 2, title: "방탄소년단 월드투어", date: "2024-04-15", venue: "부산 아시아드 주경기장" },
+  { id: 3, title: "아이유 콘서트", date: "2024-05-01", venue: "올림픽공원 체조경기장" },
+  { id: 4, title: "블랙핑크 인 유어 에어리어", date: "2024-06-10", venue: "고척스카이돔" },
+]
+
+export default function TicketRequestPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  
+  const [concertTitle, setConcertTitle] = useState("")
+  const today = new Date().toISOString().split("T")[0]
+  const [concertDate, setConcertDate] = useState(today)
+  const [concertVenue, setConcertVenue] = useState("")
+  const [quantity, setQuantity] = useState("1")
+  const [maxPrice, setMaxPrice] = useState("")
+  const [description, setDescription] = useState("")
+  const [preferredSeats, setPreferredSeats] = useState("")
+  const [urgency, setUrgency] = useState("보통")
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [isTermsAgreed, setIsTermsAgreed] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 인증 확인
+  useEffect(() => {
+    if (!isLoading && !user) {
+      alert("로그인이 필요합니다.")
+      router.push("/login")
+    }
+  }, [user, isLoading, router])
+
+  // 폼 검증
+  const validateForm = () => {
+    const errors: FormErrors = {}
+
+    if (!concertTitle.trim()) {
+      errors.concertTitle = "공연명을 입력해주세요"
+    }
+
+    if (!concertDate) {
+      errors.concertDate = "공연 날짜를 선택해주세요"
+    }
+
+    if (!concertVenue.trim()) {
+      errors.concertVenue = "공연 장소를 입력해주세요"
+    }
+
+    if (!quantity || parseInt(quantity) < 1) {
+      errors.quantity = "수량을 올바르게 입력해주세요"
+    }
+
+    if (!maxPrice || parseInt(maxPrice) < 1000) {
+      errors.maxPrice = "최대 희망 가격을 입력해주세요 (최소 1,000원)"
+    }
+
+    if (!description.trim() || description.length < 10) {
+      errors.description = "상세 요청사항을 10자 이상 입력해주세요"
+    }
+
+    if (!isTermsAgreed) {
+      errors.terms = "이용약관에 동의해주세요"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  // 폼 제출
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      // TODO: API 호출 로직 구현
+      const requestData = {
+        concertTitle,
+        concertDate,
+        concertVenue,
+        quantity: parseInt(quantity),
+        maxPrice: parseInt(maxPrice),
+        description,
+        preferredSeats,
+        urgency,
+        userId: user?.id
+      }
+
+      console.log("취켓팅 구해요 요청:", requestData)
+      
+      // 임시로 성공 처리
+      alert("취켓팅 구해요 요청이 등록되었습니다!")
+      router.push("/")
+      
+    } catch (error) {
+      console.error("요청 등록 실패:", error)
+      alert("요청 등록에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoading) {
+    return <div>로딩 중...</div>
+  }
+
+  if (!user) {
+    return <div>로그인이 필요합니다.</div>
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <header className="w-full bg-white shadow-sm">
+        <div className="container mx-auto px-4">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button 
+                variant="ghost" 
+                onClick={() => router.back()}
+                className="p-2"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl font-bold text-[#0061FF]">취켓팅 구해요</h1>
+            </div>
+            <Link href="/" className="text-gray-700 hover:text-[#0061FF]">
+              홈으로
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* 메인 컨텐츠 */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-xl shadow-md p-8">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-2">원하는 티켓을 요청하세요</h2>
+              <p className="text-gray-600">구체적인 정보를 입력해주시면 더 빠르게 매칭해드릴 수 있어요!</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* 공연 정보 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <Calendar className="h-5 w-5 mr-2 text-[#0061FF]" />
+                  공연 정보
+                </h3>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    공연명 <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={concertTitle}
+                    onChange={(e) => setConcertTitle(e.target.value)}
+                    placeholder="예: 세븐틴 콘서트"
+                    className={formErrors.concertTitle ? "border-red-500" : ""}
+                  />
+                  {formErrors.concertTitle && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.concertTitle}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      공연 날짜 <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="date"
+                      value={concertDate}
+                      onChange={(e) => setConcertDate(e.target.value)}
+                      min={today}
+                      className={formErrors.concertDate ? "border-red-500" : ""}
+                    />
+                    {formErrors.concertDate && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.concertDate}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      수량 <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      min="1"
+                      max="4"
+                      placeholder="1"
+                      className={formErrors.quantity ? "border-red-500" : ""}
+                    />
+                    {formErrors.quantity && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.quantity}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    공연 장소 <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={concertVenue}
+                    onChange={(e) => setConcertVenue(e.target.value)}
+                    placeholder="예: 잠실종합운동장 주경기장"
+                    className={formErrors.concertVenue ? "border-red-500" : ""}
+                  />
+                  {formErrors.concertVenue && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.concertVenue}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 희망 조건 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center">
+                  <MapPin className="h-5 w-5 mr-2 text-[#0061FF]" />
+                  희망 조건
+                </h3>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    최대 희망 가격 <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    min="1000"
+                    step="1000"
+                    placeholder="100000"
+                    className={formErrors.maxPrice ? "border-red-500" : ""}
+                  />
+                  <p className="text-gray-500 text-sm mt-1">단위: 원 (매장에서 지불할 최대 금액)</p>
+                  {formErrors.maxPrice && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.maxPrice}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    선호 좌석 정보
+                  </label>
+                  <Input
+                    type="text"
+                    value={preferredSeats}
+                    onChange={(e) => setPreferredSeats(e.target.value)}
+                    placeholder="예: VIP석, 1층 앞쪽, 연석 희망 등"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    긴급도
+                  </label>
+                  <select 
+                    value={urgency} 
+                    onChange={(e) => setUrgency(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0061FF]"
+                  >
+                    <option value="보통">보통</option>
+                    <option value="급함">급함</option>
+                    <option value="매우 급함">매우 급함</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 상세 요청사항 */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  상세 요청사항 <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="구체적인 요청사항을 입력해주세요. 예를 들어 선호하는 좌석 위치, 특별한 요구사항 등을 적어주시면 더 정확한 매칭이 가능합니다."
+                  rows={4}
+                  className={formErrors.description ? "border-red-500" : ""}
+                />
+                <p className="text-gray-500 text-sm mt-1">최소 10자 이상 입력해주세요</p>
+                {formErrors.description && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.description}</p>
+                )}
+              </div>
+
+              {/* 약관 동의 */}
+              <div className="space-y-4">
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="terms"
+                    checked={isTermsAgreed}
+                    onCheckedChange={(checked) => setIsTermsAgreed(checked as boolean)}
+                  />
+                  <label htmlFor="terms" className="text-sm">
+                    <span className="text-red-500">*</span> 이용약관 및 개인정보처리방침에 동의합니다
+                  </label>
+                </div>
+                {formErrors.terms && (
+                  <p className="text-red-500 text-sm">{formErrors.terms}</p>
+                )}
+              </div>
+
+              {/* 제출 버튼 */}
+              <div className="pt-6">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 text-lg font-medium"
+                  style={{ backgroundColor: '#ec4899' }}
+                >
+                  {isSubmitting ? "요청 등록 중..." : "취켓팅 구해요 요청하기"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+} 
