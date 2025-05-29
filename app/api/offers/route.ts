@@ -72,59 +72,85 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     console.log('[Offers API] POST 요청 시작');
+    console.log('[Offers API] Request headers:', Object.fromEntries(req.headers.entries()));
 
-    // 인증 확인 - 더 안정적인 방식으로 개선
+    // 인증 확인 - 더 자세한 디버깅 추가
     let userId = null;
     let userEmail = null;
 
-    try {
-      // 1. validateRequestToken 시도
-      const authResult = await validateRequestToken(req);
-      if (authResult.authenticated) {
-        userId = authResult.userId;
-        console.log('[Offers API] JWT 인증 성공:', userId);
-      }
-    } catch (authError) {
-      console.log('[Offers API] JWT 인증 실패:', authError);
-    }
-
-    // 2. JWT 인증 실패 시 쿠키에서 직접 확인
-    if (!userId) {
-      try {
-        const { cookies } = await import('next/headers');
-        const cookieStore = cookies();
-        
-        // Supabase 쿠키 확인
-        const projectRef = 'jdubrjczdyqqtsppojgu';
-        const authCookie = cookieStore.get(`sb-${projectRef}-auth-token`);
-        
-        if (authCookie?.value) {
-          const sessionData = JSON.parse(authCookie.value);
-          if (sessionData.user?.id) {
-            userId = sessionData.user.id;
-            userEmail = sessionData.user.email;
-            console.log('[Offers API] 쿠키 인증 성공:', userEmail);
-          }
-        }
-      } catch (cookieError) {
-        console.log('[Offers API] 쿠키 인증 실패:', cookieError);
-      }
-    }
-
-    // 3. 개발 환경 대체 처리
-    if (!userId && process.env.NODE_ENV === 'development') {
-      console.log('[Offers API] 개발 환경 - 기본 사용자 사용');
-      userId = '123e4567-e89b-12d3-a456-426614174000'; // 개발용 기본 UUID
+    // 개발 환경에서는 우선 허용하고 나중에 검증
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Offers API] 개발 환경 감지 - 기본 사용자 허용');
+      userId = '123e4567-e89b-12d3-a456-426614174000';
       userEmail = 'dev@example.com';
+    } else {
+      // 프로덕션에서만 엄격한 인증 적용
+      try {
+        // 1. validateRequestToken 시도
+        const authResult = await validateRequestToken(req);
+        if (authResult.authenticated) {
+          userId = authResult.userId;
+          console.log('[Offers API] JWT 인증 성공:', userId);
+        }
+      } catch (authError) {
+        console.log('[Offers API] JWT 인증 실패:', authError);
+      }
+
+      // 2. JWT 인증 실패 시 쿠키에서 직접 확인
+      if (!userId) {
+        try {
+          const { cookies } = await import('next/headers');
+          const cookieStore = cookies();
+          
+          console.log('[Offers API] 사용 가능한 쿠키들:');
+          cookieStore.getAll().forEach(cookie => {
+            console.log(`[Offers API] - ${cookie.name}: ${cookie.value.substring(0, 50)}...`);
+          });
+          
+          // 여러 가능한 Supabase 쿠키 이름 시도
+          const possibleCookieNames = [
+            'sb-jdubrjczdyqqtsppojgu-auth-token',
+            'sb-auth-token',
+            'supabase-auth-token',
+            'auth-token'
+          ];
+          
+          for (const cookieName of possibleCookieNames) {
+            const authCookie = cookieStore.get(cookieName);
+            if (authCookie?.value) {
+              console.log(`[Offers API] ${cookieName} 쿠키 발견`);
+              try {
+                const sessionData = JSON.parse(authCookie.value);
+                if (sessionData.user?.id) {
+                  userId = sessionData.user.id;
+                  userEmail = sessionData.user.email;
+                  console.log('[Offers API] 쿠키 인증 성공:', userEmail);
+                  break;
+                } else if (sessionData.access_token) {
+                  // access_token만 있는 경우
+                  console.log('[Offers API] access_token 발견, 사용자 정보 추출 시도');
+                  // 여기서 추가 로직 필요시 구현
+                }
+              } catch (parseError) {
+                console.log(`[Offers API] ${cookieName} 파싱 실패:`, parseError);
+              }
+            }
+          }
+        } catch (cookieError) {
+          console.log('[Offers API] 쿠키 인증 실패:', cookieError);
+        }
+      }
+
+      // 최종 인증 실패 시에만 오류 반환
+      if (!userId) {
+        console.log('[Offers API] 프로덕션 환경에서 인증 실패');
+        return NextResponse.json({ 
+          error: '로그인이 필요합니다.' 
+        }, { status: 401, headers: CORS_HEADERS });
+      }
     }
 
-    // 4. 최종 인증 실패
-    if (!userId) {
-      console.log('[Offers API] 인증 실패 - 모든 방법 시도 완료');
-      return NextResponse.json({ 
-        error: '로그인이 필요합니다.' 
-      }, { status: 401, headers: CORS_HEADERS });
-    }
+    console.log('[Offers API] 최종 사용자 ID:', userId);
 
     const body = await req.json();
     const { 
@@ -163,6 +189,8 @@ export async function POST(req: Request) {
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7일 후 만료
       created_at: new Date().toISOString()
     };
+
+    console.log('[Offers API] 삽입할 데이터:', offerData);
 
     const { data: newOffer, error: insertError } = await adminSupabase
       .from('offers')

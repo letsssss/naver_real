@@ -135,13 +135,17 @@ export default function TicketRequestPage() {
 
       console.log("취켓팅 구해요 요청:", requestData)
       
+      // 디버깅: 현재 쿠키 정보 확인
+      console.log("현재 쿠키들:", document.cookie);
+      console.log("localStorage:", localStorage.getItem('supabase.auth.token'));
+      
       // 실제 API 호출
       const response = await fetch('/api/offers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'include', // 쿠키 포함하여 인증 정보 전달
         body: JSON.stringify(requestData)
       });
 
