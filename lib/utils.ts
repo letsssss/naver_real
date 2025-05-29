@@ -57,3 +57,15 @@ export function formatNumber(num: number): string {
   return num.toLocaleString('ko-KR');
 }
 
+/**
+ * 숫자를 천단위 구분 기호가 있는 가격 형식으로 변환
+ * @param price 변환할 숫자
+ * @returns 포맷팅된 가격 문자열
+ * @example
+ * formatPrice(1000000) // "1,000,000"
+ */
+export function formatPrice(price?: number): string {
+  if (price === undefined || price === null) return "0";
+  return price.toLocaleString('ko-KR');
+}
+
