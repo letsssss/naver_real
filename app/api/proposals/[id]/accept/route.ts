@@ -125,35 +125,54 @@ export async function POST(
         order_number: orderNumber,
         ticket_title: ticketTitle
       });
+
+      // 필수 데이터 검증
+      if (!buyerId || !sellerId) {
+        console.error('[🎯 제안 수락 API] 필수 ID 누락:', { buyerId, sellerId });
+        throw new Error('구매자 또는 판매자 ID가 누락되었습니다.');
+      }
+      
+      const insertData = {
+        post_id: proposal.post_id,
+        buyer_id: buyerId,
+        seller_id: sellerId,
+        total_price: proposal.proposed_price,
+        quantity: 1, // 기본값
+        status: 'CONFIRMED',
+        order_number: orderNumber,
+        ticket_title: ticketTitle,
+        event_date: postData?.event_date || null,
+        event_venue: postData?.event_venue || null, 
+        ticket_price: proposal.proposed_price,
+        payment_method: 'PENDING', // 결제 방법 미정
+        created_at: new Date().toISOString()
+      };
+
+      console.log('[🎯 제안 수락 API] Purchase INSERT 데이터:', insertData);
       
       const { data: purchaseData, error: purchaseError } = await supabase
         .from('purchases')
-        .insert({
-          post_id: proposal.post_id,
-          buyer_id: buyerId,
-          seller_id: sellerId,
-          total_price: proposal.proposed_price,
-          quantity: 1, // 기본값
-          status: 'CONFIRMED',
-          order_number: orderNumber,
-          ticket_title: ticketTitle,
-          event_date: postData?.event_date || null,
-          event_venue: postData?.event_venue || null, 
-          ticket_price: proposal.proposed_price,
-          payment_method: 'PENDING', // 결제 방법 미정
-          created_at: new Date().toISOString()
-        })
+        .insert(insertData)
         .select()
         .single();
 
       if (purchaseError) {
-        console.warn('[🎯 제안 수락 API] Purchase 레코드 생성 실패:', purchaseError);
-        // 치명적이지 않으므로 계속 진행
+        console.error('[🎯 제안 수락 API] Purchase 레코드 생성 실패:', {
+          error: purchaseError,
+          code: purchaseError.code,
+          message: purchaseError.message,
+          details: purchaseError.details,
+          hint: purchaseError.hint
+        });
+        // 에러를 throw하지 않고 로그만 남김 (제안 수락은 성공하도록)
       } else {
         console.log('[🎯 제안 수락 API] Purchase 레코드 생성 성공:', purchaseData.id);
       }
     } catch (purchaseCreateError) {
-      console.warn('[🎯 제안 수락 API] Purchase 생성 중 오류:', purchaseCreateError);
+      console.error('[🎯 제안 수락 API] Purchase 생성 중 예외 발생:', {
+        error: purchaseCreateError,
+        message: purchaseCreateError instanceof Error ? purchaseCreateError.message : String(purchaseCreateError)
+      });
       // 치명적이지 않으므로 계속 진행
     }
 
