@@ -101,7 +101,7 @@ export default function MyPage() {
       setIsLoadingRequests(true);
       console.log('요청중인 취켓팅 조회 시작 - 사용자 ID:', user.id);
       
-      const response = await fetch(`/api/posts?category=TICKET_REQUEST&author_id=${user.id}`);
+      const response = await fetch(`/api/my-ticket-requests?userId=${user.id}`);
       
       if (!response.ok) {
         throw new Error('요청 목록을 불러오는데 실패했습니다');
@@ -110,7 +110,7 @@ export default function MyPage() {
       const data = await response.json();
       console.log('요청중인 취켓팅 조회 성공:', data);
       
-      setRequestedTickets(data.posts || []);
+      setRequestedTickets(data.requests || []);
       
     } catch (error) {
       console.error('요청중인 취켓팅 조회 오류:', error);
@@ -536,7 +536,7 @@ export default function MyPage() {
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-500">제안 받은 수:</span>
                               <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium">
-                                0건
+                                {ticket.proposalCount}건
                               </span>
                             </div>
                           </div>

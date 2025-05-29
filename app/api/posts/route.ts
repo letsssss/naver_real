@@ -203,11 +203,98 @@ async function getPosts(req: Request, page: number, pageSize: number, category?:
   // URL에서 userId 파라미터 추출
   const url = new URL(req.url);
   const userId = url.searchParams.get('userId');
+  const authorId = url.searchParams.get('author_id'); // author_id 파라미터 추가
   const searchQuery = url.searchParams.get('search');  // 검색어 파라미터 추가
   
-  console.log(`[게시물 API] 쿼리 파라미터: page=${page}, limit=${pageSize}, category=${category}, search=${searchQuery}`);
+  console.log(`[게시물 API] 쿼리 파라미터: page=${page}, limit=${pageSize}, category=${category}, author_id=${authorId}, search=${searchQuery}`);
   
-  // 쿼리 빌더 준비 (adminSupabase 사용)
+  // 티켓 요청 목록인 경우 제안 수도 함께 조회
+  if (category === 'TICKET_REQUEST') {
+    console.log('[게시물 API] 티켓 요청 목록 - 제안 수 포함하여 조회');
+    
+    // 제안 수를 포함한 쿼리
+    let query = adminSupabase
+      .from('posts')
+      .select(`
+        *,
+        users (id, name, email),
+        proposals (id)
+      `, { count: 'exact' })
+      .is('is_deleted', false)
+      .eq('category', 'TICKET_REQUEST');
+    
+    // 사용자 ID로 필터링 (author_id 또는 userId 모두 지원)
+    if (authorId || userId) {
+      const filterUserId = authorId || userId;
+      console.log(`[게시물 API] 작성자 ID 필터링: ${filterUserId}`);
+      query = query.eq('author_id', filterUserId);
+    }
+    
+    // 검색어 필터링 추가
+    if (searchQuery && searchQuery.trim()) {
+      console.log(`[게시물 API] 검색어 필터링: ${searchQuery}`);
+      query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
+    }
+    
+    // 최종 쿼리 실행
+    const { data: posts, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    
+    if (error) {
+      console.error('[게시물 API] 티켓 요청 목록 조회 오류:', error);
+      return createErrorResponse(
+        '게시물 목록을 조회하는 중 오류가 발생했습니다.', 
+        'DB_ERROR', 
+        500, 
+        error
+      );
+    }
+    
+    // 응답 데이터 구성 (제안 수 포함)
+    const formattedPosts = posts.map(post => {
+      const postData = post as any;
+      
+      return {
+        id: postData.id,
+        title: postData.title,
+        content: postData.content.substring(0, 200) + (postData.content.length > 200 ? '...' : ''),
+        published: postData.published,
+        createdAt: postData.created_at,
+        updatedAt: postData.updated_at,
+        category: postData.category || null,
+        status: postData.status || 'ACTIVE',
+        eventName: postData.event_name || postData.title,
+        eventDate: postData.event_date || null,
+        eventVenue: postData.event_venue || null,
+        ticketPrice: postData.ticket_price || 0,
+        proposalCount: postData.proposals ? postData.proposals.length : 0, // 제안 수 추가
+        author: postData.users ? {
+          id: postData.users.id,
+          name: postData.users.name,
+          email: postData.users.email
+        } : null
+      };
+    });
+    
+    return createApiResponse({
+      success: true,
+      posts: formattedPosts,
+      pagination: {
+        totalCount: count || 0,
+        totalPages: count ? Math.ceil(count / pageSize) : 0,
+        currentPage: page,
+        pageSize,
+        hasMore: (offset + posts.length) < (count || 0)
+      },
+      filters: {
+        category,
+        search: searchQuery || null
+      }
+    });
+  }
+  
+  // 일반 게시물 목록 조회 (기존 로직)
   let query = adminSupabase
     .from('posts')
     .select(`
