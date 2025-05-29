@@ -332,7 +332,7 @@ export default function TicketCancellationPage() {
       </header>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-visible">
         <section className="container mx-auto flex flex-col items-center justify-center py-16 px-4 relative z-10">
           <div className="mb-4 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm">
             취소표 예매 성공률 {typeof successRate === 'number' ? `${successRate}%` : successRate}
