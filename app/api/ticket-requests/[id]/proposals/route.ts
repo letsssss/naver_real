@@ -99,11 +99,9 @@ export async function POST(
       .insert({
         post_id: parseInt(requestId),
         proposer_id: proposerId,
-        requester_id: requesterId || postData.author_id,
         section_id: selectedSectionId,
         section_name: selectedSectionName,
         proposed_price: parseInt(proposedPrice),
-        max_price: parseInt(maxPrice),
         message: message,
         status: 'PENDING',
         created_at: new Date().toISOString()

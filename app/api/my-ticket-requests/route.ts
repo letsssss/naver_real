@@ -31,16 +31,16 @@ export async function GET(req: NextRequest) {
 
     console.log('[내 티켓 요청 API] 사용자 ID:', userId);
 
-    // 티켓 요청 목록 조회 (제안 수 포함)
-    const { data: ticketRequests, error } = await supabase
+    // 티켓 요청 목록과 각 요청의 제안 수 조회
+    const { data: requests, error } = await supabase
       .from('posts')
       .select(`
         *,
+        users (id, name, email),
         proposals (id)
-      `)
-      .eq('author_id', userId)
+      `, { count: 'exact' })
       .eq('category', 'TICKET_REQUEST')
-      .is('is_deleted', false)
+      .eq('author_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 응답 데이터 구성
-    const formattedRequests = ticketRequests?.map(request => {
+    const formattedRequests = requests?.map(request => {
       let parsedContent = null;
       try {
         parsedContent = typeof request.content === 'string' 
