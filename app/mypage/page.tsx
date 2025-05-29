@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, User, ShoppingBag, Tag } from "lucide-react"
+import { ArrowLeft, User, ShoppingBag, Tag, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -16,6 +16,7 @@ import WithdrawSection from "@/components/WithdrawSection"
 import PurchasesSection from "@/components/PurchasesSection"
 import SalesSection from "@/components/SalesSection"
 import { Loader } from "@/components/ui/loader"
+import { Star } from "lucide-react"
 
 // types 가져오기
 import { Sale, Notification, TransactionStatus, Purchase } from "@/types/mypage"
@@ -64,6 +65,12 @@ export default function MyPage() {
   // 요청중인 취켓팅 관련 상태 추가
   const [requestedTickets, setRequestedTickets] = useState<any[]>([])
   const [isLoadingRequests, setIsLoadingRequests] = useState(false)
+
+  // 제안 목록 모달 관련 상태 추가
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false)
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null)
+  const [proposals, setProposals] = useState<any[]>([])
+  const [isLoadingProposals, setIsLoadingProposals] = useState(false)
 
   // 마운트 확인
   useEffect(() => {
@@ -118,6 +125,69 @@ export default function MyPage() {
     } finally {
       setIsLoadingRequests(false);
     }
+  };
+
+  // 제안 목록 가져오기
+  const fetchProposals = async (ticketId: number) => {
+    try {
+      setIsLoadingProposals(true);
+      console.log('제안 목록 조회 시작 - 티켓 ID:', ticketId);
+      
+      const response = await fetch(`/api/ticket-requests/${ticketId}/proposals`);
+      
+      if (!response.ok) {
+        throw new Error('제안 목록을 불러오는데 실패했습니다');
+      }
+      
+      const data = await response.json();
+      console.log('제안 목록 조회 성공:', data);
+      
+      setProposals(data.proposals || []);
+      
+    } catch (error) {
+      console.error('제안 목록 조회 오류:', error);
+      toast.error('제안 목록을 불러오는데 실패했습니다');
+    } finally {
+      setIsLoadingProposals(false);
+    }
+  };
+
+  // 제안 수락하기
+  const handleAcceptProposal = async (proposalId: number) => {
+    try {
+      console.log('제안 수락 시작 - 제안 ID:', proposalId);
+      
+      const response = await fetch(`/api/proposals/${proposalId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('제안 수락에 실패했습니다');
+      }
+      
+      const data = await response.json();
+      console.log('제안 수락 성공:', data);
+      
+      toast.success('제안이 수락되었습니다!');
+      
+      // 모달 닫기 및 데이터 새로고침
+      setIsProposalModalOpen(false);
+      fetchRequestedTickets();
+      
+    } catch (error) {
+      console.error('제안 수락 오류:', error);
+      toast.error('제안 수락에 실패했습니다');
+    }
+  };
+
+  // 제안 목록 모달 열기
+  const openProposalModal = (ticketId: number) => {
+    setSelectedTicketId(ticketId);
+    setIsProposalModalOpen(true);
+    fetchProposals(ticketId);
   };
 
   // user와 activeTab이 변경될 때 데이터 가져오기
@@ -535,9 +605,13 @@ export default function MyPage() {
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-500">제안 받은 수:</span>
-                              <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium">
+                              <button
+                                onClick={() => openProposalModal(ticket.id)}
+                                className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors cursor-pointer"
+                                disabled={ticket.proposalCount === 0}
+                              >
                                 {ticket.proposalCount}건
-                              </span>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -577,6 +651,108 @@ export default function MyPage() {
         isOpen={isWithdrawModalOpen} 
         onOpenChange={setIsWithdrawModalOpen} 
       />
+
+      {/* 제안 목록 모달 */}
+      {isProposalModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-semibold">받은 제안 목록</h2>
+              <button
+                onClick={() => setIsProposalModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {isLoadingProposals ? (
+                <div className="flex justify-center py-8">
+                  <Loader />
+                </div>
+              ) : proposals.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">받은 제안이 없습니다.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {proposals.map((proposal) => (
+                    <div key={proposal.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                              <User className="h-6 w-6 text-gray-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold">{proposal.proposer?.name || '익명 사용자'}</h3>
+                              <div className="flex items-center gap-2">
+                                <div className="flex text-yellow-400">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star 
+                                      key={i} 
+                                      className={`h-4 w-4 ${i < (proposal.proposer?.rating || 0) ? 'fill-current' : ''}`} 
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-sm text-gray-500">
+                                  ({proposal.proposer?.rating || 0}.0)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2 mb-3">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">구역:</span>
+                              <span className="font-medium">{proposal.section_name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">제안 가격:</span>
+                              <span className="font-medium text-green-600">
+                                {proposal.proposed_price?.toLocaleString()}원
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">제안 일시:</span>
+                              <span className="text-sm">
+                                {new Date(proposal.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {proposal.message && (
+                            <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                              <p className="text-sm text-gray-700">{proposal.message}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="ml-4">
+                          {proposal.status === 'PENDING' ? (
+                            <Button
+                              onClick={() => handleAcceptProposal(proposal.id)}
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                              size="sm"
+                            >
+                              수락하기
+                            </Button>
+                          ) : (
+                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                              {proposal.status === 'ACCEPTED' ? '수락됨' : '거절됨'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
