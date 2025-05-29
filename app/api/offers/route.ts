@@ -31,14 +31,6 @@ export async function GET(req: Request) {
       .from('offers')
       .select(`
         *,
-        posts (
-          id,
-          title,
-          event_name,
-          event_date,
-          event_venue,
-          category
-        ),
         users!offerer_id (
           id,
           name,
@@ -46,6 +38,7 @@ export async function GET(req: Request) {
         )
       `)
       .eq('status', 'PENDING')
+      .is('seller_id', null) // 티켓 요청만 조회 (판매자가 아직 정해지지 않은 것)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -55,11 +48,37 @@ export async function GET(req: Request) {
       }, { status: 500, headers: CORS_HEADERS });
     }
 
-    console.log(`[Offers API] ${offers?.length || 0}개의 요청 조회 성공`);
+    // message 필드의 JSON을 파싱하여 응답 데이터 구성
+    const ticketRequests = offers?.map(offer => {
+      try {
+        const messageData = JSON.parse(offer.message);
+        return {
+          id: offer.id,
+          ...messageData, // concertTitle, concertDate 등이 포함됨
+          maxPrice: offer.price,
+          user: offer.users,
+          status: offer.status,
+          expiresAt: offer.expires_at,
+          createdAt: offer.created_at
+        };
+      } catch (parseError) {
+        console.error('[Offers API] 메시지 파싱 오류:', parseError);
+        return {
+          id: offer.id,
+          concertTitle: '파싱 오류',
+          maxPrice: offer.price,
+          user: offer.users,
+          status: offer.status,
+          createdAt: offer.created_at
+        };
+      }
+    }) || [];
+
+    console.log(`[Offers API] ${ticketRequests.length}개의 티켓 요청 조회 성공`);
 
     return NextResponse.json({ 
       success: true, 
-      offers: offers || [] 
+      requests: ticketRequests 
     }, { headers: CORS_HEADERS });
 
   } catch (error) {
@@ -244,20 +263,55 @@ export async function POST(req: Request) {
       }, { status: 400, headers: CORS_HEADERS });
     }
 
-    // offers 테이블에 데이터 삽입
+    // 🔹 A. quantity 유효성 검사 추가
+    if (!quantity || isNaN(parseInt(quantity)) || parseInt(quantity) <= 0) {
+      return NextResponse.json({ 
+        error: '수량은 1개 이상이어야 합니다.' 
+      }, { status: 400, headers: CORS_HEADERS });
+    }
+
+    // 🔹 B. message JSON stringify 안정화
+    const safeQuantity = Number.isFinite(parseInt(quantity)) ? parseInt(quantity) : 1;
+
+    // offers 테이블에 데이터 삽입 - 티켓 요청을 제안으로 변환
     const offerData = {
-      post_id: null, // 티켓 요청이므로 post_id는 null
-      offerer_id: userId,
-      seller_id: null, // 아직 판매자가 정해지지 않았으므로 null
-      price: parseInt(maxPrice),
-      original_price: parseInt(maxPrice),
-      message: `${concertTitle} - ${description}${concertVenue ? ` (장소: ${concertVenue})` : ''}`,
-      status: 'PENDING',
+      post_id: null, // 특정 포스트에 대한 제안이 아님
+      offerer_id: userId, // 요청한 사용자 = 구매 제안자
+      seller_id: null, // 아직 판매자가 정해지지 않음
+      price: parseInt(maxPrice), // 요청한 최대 가격
+      original_price: parseInt(maxPrice), // 동일하게 설정
+      message: JSON.stringify({
+        type: 'TICKET_REQUEST',
+        concertTitle: concertTitle?.slice(0, 100) || '', // 너무 길면 자르기
+        concertDate,
+        concertVenue: concertVenue?.slice(0, 100) || null,
+        quantity: safeQuantity,
+        description: description?.slice(0, 500) || '',
+        requestedAt: new Date().toISOString()
+      }), // 티켓 요청 정보를 JSON으로 저장
+      status: 'PENDING', // 대기 중 상태
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7일 후 만료
       created_at: new Date().toISOString()
     };
 
     console.log('[Offers API] 삽입할 데이터:', offerData);
+    console.log('[Offers API] 삽입할 데이터 JSON 검증:', {
+      messageLength: offerData.message.length,
+      messageParseable: (() => {
+        try {
+          JSON.parse(offerData.message);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      })(),
+      allFieldsValid: Object.entries(offerData).every(([key, value]) => {
+        if (value === null || value === undefined) return true;
+        if (typeof value === 'string') return value.length < 10000;
+        if (typeof value === 'number') return Number.isFinite(value);
+        return true;
+      })
+    });
 
     const { data: newOffer, error: insertError } = await adminSupabase
       .from('offers')
@@ -266,17 +320,19 @@ export async function POST(req: Request) {
       .single();
 
     if (insertError) {
-      console.error('[Offers API] 🔥 Supabase 삽입 오류 상세:', {
+      console.error('[Offers API] 🔥🔥🔥 Supabase 삽입 오류 상세:', {
         error: insertError,
         code: insertError.code,
         message: insertError.message,
         details: insertError.details,
         hint: insertError.hint,
-        insertData: offerData
+        insertData: offerData,
+        errorString: JSON.stringify(insertError, null, 2)
       });
       return NextResponse.json({ 
         error: '티켓 요청 등록에 실패했습니다.',
-        details: insertError.message 
+        details: insertError.message,
+        code: insertError.code
       }, { status: 500, headers: CORS_HEADERS });
     }
 
