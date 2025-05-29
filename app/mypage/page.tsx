@@ -689,7 +689,8 @@ export default function MyPage() {
                     <div key={proposal.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
+                          {/* 제안자 정보 */}
+                          <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
                               <User className="h-6 w-6 text-gray-600" />
                             </div>
@@ -700,44 +701,49 @@ export default function MyPage() {
                                   {[...Array(5)].map((_, i) => (
                                     <Star 
                                       key={i} 
-                                      className={`h-4 w-4 ${i < (proposal.proposer?.rating || 0) ? 'fill-current' : ''}`} 
+                                      className={`h-3 w-3 ${i < (proposal.proposer?.rating || 0) ? 'fill-current' : ''}`} 
                                     />
                                   ))}
                                 </div>
-                                <span className="text-sm text-gray-500">
+                                <span className="text-xs text-gray-500">
                                   ({proposal.proposer?.rating || 0}.0)
                                 </span>
                               </div>
                             </div>
                           </div>
                           
-                          <div className="space-y-2 mb-3">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">구역:</span>
-                              <span className="font-medium">{proposal.section_name}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">제안 가격:</span>
-                              <span className="font-medium text-green-600">
-                                {proposal.proposed_price?.toLocaleString()}원
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">제안 일시:</span>
-                              <span className="text-sm">
-                                {new Date(proposal.created_at).toLocaleString()}
-                              </span>
+                          {/* 제안 세부사항 - 간격 줄이고 더 명확하게 */}
+                          <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                            <div className="grid grid-cols-1 gap-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-700">구역:</span>
+                                <span className="font-semibold text-gray-900">{proposal.section_name}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-700">제안 가격:</span>
+                                <span className="font-bold text-green-600 text-lg">
+                                  {proposal.proposed_price?.toLocaleString()}원
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-700">제안 일시:</span>
+                                <span className="text-sm text-gray-600">
+                                  {new Date(proposal.created_at).toLocaleString()}
+                                </span>
+                              </div>
                             </div>
                           </div>
                           
+                          {/* 메시지 */}
                           {proposal.message && (
-                            <div className="bg-gray-50 p-3 rounded-lg mb-3">
-                              <p className="text-sm text-gray-700">{proposal.message}</p>
+                            <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-3">
+                              <p className="text-sm text-gray-700">💬 {proposal.message}</p>
                             </div>
                           )}
                         </div>
                         
-                        <div className="ml-4">
+                        {/* 수락 버튼 */}
+                        <div className="ml-4 flex flex-col gap-2">
                           {proposal.status === 'PENDING' ? (
                             <Button
                               onClick={() => handleAcceptProposal(proposal.id)}
@@ -747,7 +753,7 @@ export default function MyPage() {
                               수락하기
                             </Button>
                           ) : (
-                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs text-center">
                               {proposal.status === 'ACCEPTED' ? '수락됨' : '거절됨'}
                             </span>
                           )}
