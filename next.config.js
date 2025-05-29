@@ -1,6 +1,3 @@
-// CommonJS 모듈에서 dotenv 사용
-require('dotenv').config(); // 환경변수 로딩
-
 // 환경 변수 디버깅
 console.log('NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅ 설정됨' : '❌ 설정안됨');
 console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ 설정됨' : '❌ 설정안됨');
@@ -42,38 +39,5 @@ const nextConfig = {
     parallelServerCompiles: true,
   }
 };
-
-function mergeConfig(nextConfig, userConfig) {
-  if (!userConfig) {
-    return;
-  }
-
-  for (const key in userConfig) {
-    if (
-      typeof nextConfig[key] === 'object' &&
-      !Array.isArray(nextConfig[key])
-    ) {
-      nextConfig[key] = {
-        ...nextConfig[key],
-        ...userConfig[key],
-      };
-    } else {
-      nextConfig[key] = userConfig[key];
-    }
-  }
-}
-
-// userConfig 가져오기 시도
-let userConfig = undefined;
-try {
-  userConfig = require('./v0-user-next.config');
-} catch (e) {
-  // ignore error
-  console.log('사용자 설정 로드 실패 (무시됨):', e.message);
-}
-
-if (userConfig) {
-  mergeConfig(nextConfig, userConfig);
-}
 
 module.exports = nextConfig; 
