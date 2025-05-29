@@ -251,12 +251,21 @@ export default function TicketCancellationDetail() {
           eventVenue = contentObj.venue || '';
           eventPrice = contentObj.price || eventPrice;
           
-          // 중요: 구역 정보 처리
+          // 중요: 구역 정보 처리 (개선된 버전)
           if (contentObj.sections && Array.isArray(contentObj.sections)) {
             console.log("구역 정보 발견:", contentObj.sections);
-            seatOptions = contentObj.sections;
+            
+            // ✅ 구조화된 sections 데이터를 SeatOption 형식으로 변환
+            seatOptions = contentObj.sections.map((section, index) => ({
+              id: section.id || index.toString(),
+              label: section.label || section.name || `구역 ${index + 1}`,
+              price: parseInt(section.price) || 0,
+              available: section.available !== false // 기본값은 true
+            })).filter(section => section.price > 0); // 가격이 0보다 큰 것만
+            
+            console.log("변환된 좌석 정보:", seatOptions);
           } else {
-            console.log("구역 정보가 없거나 유효하지 않습니다");
+            console.log("구역 정보가 없거나 유효하지 않습니다. 대체 방법 시도...");
             // 텍스트 기반 섹션 추출 시도 (이전 형식 지원)
             const sectionPattern = /([^:]+): (\d+)원/g;
             let match;

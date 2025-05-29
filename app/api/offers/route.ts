@@ -138,11 +138,12 @@ export async function POST(req: Request) {
       concertVenue, 
       quantity, 
       maxPrice, 
+      sections,  // ✅ sections 데이터 추가
       description 
     } = await req.json();
 
     console.log('[Offers API] 요청 데이터:', {
-      concertTitle, concertDate, concertVenue, quantity, maxPrice,
+      concertTitle, concertDate, concertVenue, quantity, maxPrice, sections,
       userId: user.id
     });
 
@@ -165,13 +166,46 @@ export async function POST(req: Request) {
       }, { status: 400, headers: CORS_HEADERS });
     }
 
+    // ✅ sections 검증 추가
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
+      return NextResponse.json({ 
+        error: '최소 하나의 구역 정보가 필요합니다.' 
+      }, { status: 400, headers: CORS_HEADERS });
+    }
+
+    // 각 구역의 유효성 검증
+    const invalidSection = sections.find(section => 
+      !section.name || !section.price || parseInt(section.price) < 1000
+    );
+    if (invalidSection) {
+      return NextResponse.json({ 
+        error: '모든 구역의 이름과 가격을 올바르게 입력해주세요 (최소 1,000원).' 
+      }, { status: 400, headers: CORS_HEADERS });
+    }
+
     // 4. posts 테이블에 글 등록
     console.log('[Offers API] 1단계: posts 테이블에 티켓 요청 글 생성');
+    
+    // ✅ 구조화된 content 데이터 생성 (sections 포함)
+    const structuredContent = {
+      description: description,
+      sections: sections.map(section => ({
+        id: section.id,
+        label: section.name,
+        price: parseInt(section.price),
+        available: true
+      })),
+      venue: concertVenue || null,
+      date: concertDate,
+      requestType: 'TICKET_REQUEST',
+      quantity: parseInt(quantity)
+    };
+
     const { data: postData, error: postError } = await supabase
       .from('posts')
       .insert({
         title: concertTitle,
-        content: description,
+        content: JSON.stringify(structuredContent),  // ✅ 구조화된 JSON으로 저장
         category: 'TICKET_REQUEST',
         status: 'ACTIVE',
         author_id: user.id,
@@ -214,6 +248,7 @@ export async function POST(req: Request) {
           concertDate,
           concertVenue: concertVenue?.slice(0, 100) || null,
           quantity: parseInt(quantity),
+          sections: sections,  // ✅ sections 정보 추가
           description: description?.slice(0, 500) || '',
           requestedAt: new Date().toISOString()
         }),
