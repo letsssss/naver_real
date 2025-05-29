@@ -380,34 +380,213 @@ export default function TicketRequestDetail() {
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">이 티켓 요청에 응답하기</h2>
               
-              {/* 서비스 안내 */}
-              <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                <div className="flex items-start">
-                  <AlertCircle className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-blue-700 font-medium">티켓 요청 응답 서비스 안내</p>
-                    <p className="text-sm text-blue-600 mb-2">
-                      해당 구매자가 원하는 티켓을 대신 예매해드리는 서비스입니다.
-                    </p>
-                    <p className="text-sm text-blue-600 mb-2">
-                      이지티켓은 판매자와 구매자가 직접 거래하는 C2C 중개 플랫폼입니다. 
-                      운영자는 티켓 예매에 개입하지 않으며, ID/PW 등 개인정보를 요구하거나 수집하지 않습니다.
-                      결제는 에스크로 방식으로 안전하게 보호됩니다.
-                    </p>
-                    <p className="text-sm text-blue-600">
-                      계약 체결 후 3일 이내로 티켓 예매를 완료해야 하며, 실패 시 전액 환불 처리됩니다.
-                    </p>
+              {/* 로그인 필요시 안내 */}
+              {mounted && !currentUserId && (
+                <div className="bg-yellow-50 p-4 rounded-lg mb-6">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 mt-0.5" />
+                    <div>
+                      <p className="text-yellow-700 font-medium">로그인이 필요합니다</p>
+                      <p className="text-sm text-yellow-600">티켓 요청에 응답하시려면 먼저 로그인해주세요.</p>
+                      <Link href="/login">
+                        <Button className="mt-2 bg-yellow-500 hover:bg-yellow-600 text-white">로그인 하러가기</Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="text-center py-12 text-gray-500">
-                구해요 전용 응답 폼 구현 중입니다...
-                <br />
-                <Button className="mt-4 bg-pink-500 hover:bg-pink-600 text-white">
-                  응답하기
-                </Button>
-              </div>
+              {/* 응답 폼 표시 조건 - 로그인한 사용자일 때만 */}
+              {mounted && currentUserId ? (
+                <form>
+                  <div className="space-y-6">
+                    {/* 좌석 선택 */}
+                    <div>
+                      <label htmlFor="seatSelection" className="block text-sm font-medium text-gray-700 mb-2">
+                        응답할 구역 선택 <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3" id="seatSelection">
+                        {ticketData.seatOptions.map((seat) => (
+                          <div
+                            key={seat.id}
+                            className={`border rounded-md p-3 cursor-pointer transition ${
+                              selectedSeats.includes(seat.id)
+                                ? "border-pink-500 bg-pink-50"
+                                : "border-gray-200 hover:border-pink-300"
+                            }`}
+                            onClick={() => {
+                              if (selectedSeats.includes(seat.id)) {
+                                setSelectedSeats(selectedSeats.filter(id => id !== seat.id))
+                              } else {
+                                setSelectedSeats([...selectedSeats, seat.id])
+                              }
+                            }}
+                          >
+                            <p className="font-medium text-pink-600">{seat.label}</p>
+                            <p className="text-sm text-gray-600">
+                              최대 {seat.price.toLocaleString()}원
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {selectedSeats.includes(seat.id) ? "✓ 선택됨" : "클릭하여 선택"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">
+                        예매 가능한 구역을 선택해주세요. 여러 구역 선택 가능합니다.
+                      </p>
+                    </div>
+
+                    {/* 예매 가능 가격 입력 */}
+                    <div>
+                      <label htmlFor="availablePrice" className="block text-sm font-medium text-gray-700 mb-2">
+                        예매 가능한 가격 <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Input
+                          id="availablePrice"
+                          type="number"
+                          placeholder="예매 가능한 가격을 입력하세요"
+                          className="pr-12"
+                          min="1000"
+                          max={ticketData.maxPrice}
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">원</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        요청자 희망 최대 가격: {ticketData.maxPrice.toLocaleString()}원
+                      </p>
+                    </div>
+
+                    {/* 연락처 */}
+                    <div>
+                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                        연락처 <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        placeholder="010-0000-0000"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        required
+                      />
+                      <p className="text-sm text-gray-500 mt-1">예매 진행 상황을 안내받을 연락처를 입력해주세요.</p>
+                    </div>
+
+                    {/* 응답 메시지 */}
+                    <div>
+                      <label htmlFor="responseMessage" className="block text-sm font-medium text-gray-700 mb-2">
+                        응답 메시지
+                      </label>
+                      <textarea
+                        id="responseMessage"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                        rows={4}
+                        placeholder="요청자에게 전달할 메시지를 입력해주세요 (선택사항)"
+                      />
+                    </div>
+
+                    {/* 결제 방법 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">결제 방법</label>
+                      <div className="space-y-2">
+                        {/* 카카오페이 옵션 */}
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "kakaopay" ? "bg-yellow-50 border-yellow-200" : "border-gray-200 hover:border-gray-300"}`}>
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="kakaopay"
+                              name="paymentMethod"
+                              value="kakaopay"
+                              checked={selectedPaymentMethod === "kakaopay"}
+                              onChange={() => setSelectedPaymentMethod("kakaopay")}
+                              className="h-4 w-4 text-yellow-500 focus:ring-yellow-500 border-gray-300"
+                            />
+                            <label htmlFor="kakaopay" className="ml-2 block text-sm text-gray-700 font-medium">
+                              카카오페이
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 토스페이 옵션 */}
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "toss" ? "bg-blue-50 border-blue-200" : "border-gray-200 hover:border-gray-300"}`}>
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="toss"
+                              name="paymentMethod"
+                              value="toss"
+                              checked={selectedPaymentMethod === "toss"}
+                              onChange={() => setSelectedPaymentMethod("toss")}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <label htmlFor="toss" className="ml-2 block text-sm text-gray-700 font-medium">
+                              토스페이
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 직접 협의 옵션 */}
+                        <div className={`p-3 border rounded-lg ${selectedPaymentMethod === "direct" ? "bg-gray-50 border-gray-300" : "border-gray-200 hover:border-gray-300"}`}>
+                          <div className="flex items-center">
+                            <input
+                              type="radio"
+                              id="direct"
+                              name="paymentMethod"
+                              value="direct"
+                              checked={selectedPaymentMethod === "direct"}
+                              onChange={() => setSelectedPaymentMethod("direct")}
+                              className="h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300"
+                            />
+                            <label htmlFor="direct" className="ml-2 block text-sm text-gray-700 font-medium">
+                              요청자와 직접 협의
+                            </label>
+                          </div>
+                          <p className="text-xs text-gray-500 ml-6 mt-1">
+                            채팅으로 결제 방법을 협의하실 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 이용약관 동의 */}
+                    <div className="flex items-start space-x-2">
+                      <input
+                        type="checkbox"
+                        id="terms"
+                        checked={termsAgreed}
+                        onChange={(e) => setTermsAgreed(e.target.checked)}
+                        className="mt-1"
+                        required
+                      />
+                      <label htmlFor="terms" className="text-sm text-gray-700">
+                        <span className="text-red-500 font-bold mr-1">[필수]</span>
+                        티켓 예매 서비스 약관에 동의하며, 3일 이내 예매 완료 의무를 확인합니다.
+                      </label>
+                    </div>
+
+                    {/* 응답하기 버튼 */}
+                    <div className="pt-4">
+                      <Button 
+                        type="submit"
+                        disabled={!selectedSeats.length || !phoneNumber || !termsAgreed}
+                        className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 text-lg font-medium"
+                      >
+                        이 요청에 응답하기
+                      </Button>
+                      <p className="text-sm text-gray-500 text-center mt-2">
+                        응답 후 요청자와 채팅을 통해 상세한 협의를 진행합니다.
+                      </p>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                // 로그인하지 않은 경우 표시할 내용
+                <div className="text-center py-8 text-gray-500">
+                  로그인 후 이용 가능합니다.
+                </div>
+              )}
             </div>
           </div>
         </div>
