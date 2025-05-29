@@ -478,11 +478,14 @@ export default function TicketCancellationPage() {
                         />
                       </Link>
                       <div className="absolute top-3 right-3">
-                        {ticket.category === 'TICKET_REQUEST' ? (
-                          <RequestBadge />
-                        ) : (
-                          <SuccessRateBadge sellerId={ticket.author?.id} />
-                        )}
+                        {(() => {
+                          console.log(`티켓 ${ticket.id} 카테고리:`, ticket.category);
+                          return ticket.category === 'TICKET_REQUEST' ? (
+                            <RequestBadge />
+                          ) : (
+                            <SuccessRateBadge sellerId={ticket.author?.id} />
+                          );
+                        })()}
                       </div>
                       <div className="absolute bottom-3 left-3">
                         <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
