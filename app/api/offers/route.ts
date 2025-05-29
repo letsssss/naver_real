@@ -246,7 +246,9 @@ export async function POST(req: Request) {
 
     // offers 테이블에 데이터 삽입
     const offerData = {
+      post_id: null, // 티켓 요청이므로 post_id는 null
       offerer_id: userId,
+      seller_id: null, // 아직 판매자가 정해지지 않았으므로 null
       price: parseInt(maxPrice),
       original_price: parseInt(maxPrice),
       message: `${concertTitle} - ${description}${concertVenue ? ` (장소: ${concertVenue})` : ''}`,
@@ -264,9 +266,17 @@ export async function POST(req: Request) {
       .single();
 
     if (insertError) {
-      console.error('[Offers API] 삽입 오류:', insertError);
+      console.error('[Offers API] 🔥 Supabase 삽입 오류 상세:', {
+        error: insertError,
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+        insertData: offerData
+      });
       return NextResponse.json({ 
-        error: '티켓 요청 등록에 실패했습니다.' 
+        error: '티켓 요청 등록에 실패했습니다.',
+        details: insertError.message 
       }, { status: 500, headers: CORS_HEADERS });
     }
 
@@ -279,9 +289,15 @@ export async function POST(req: Request) {
     }, { status: 201, headers: CORS_HEADERS });
 
   } catch (error) {
-    console.error('[Offers API] POST 오류:', error);
+    console.error('[Offers API] 🔥 POST 요청 처리 중 치명적 오류 발생:', {
+      error: error,
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      stack: error instanceof Error ? error.stack : '스택 정보 없음',
+      name: error instanceof Error ? error.name : '이름 없음'
+    });
     return NextResponse.json({ 
-      error: '서버 오류가 발생했습니다.' 
+      error: '서버 내부 오류가 발생했습니다.',
+      details: error instanceof Error ? error.message : '알 수 없는 오류'
     }, { status: 500, headers: CORS_HEADERS });
   }
 } 
