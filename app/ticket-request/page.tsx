@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, X, Calendar, MapPin } from 'lucide-react'
+import { ArrowLeft, X, Calendar, MapPin, Trash2 } from 'lucide-react'
 import { useAuth } from "@/contexts/auth-context"
 import supabase from "@/lib/supabase"
 
@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+
+// 구역 정보 타입 정의
+interface SeatSection {
+  id: string
+  name: string
+  price: string
+}
 
 // 콘서트 데이터 타입 정의
 interface Concert {
@@ -29,6 +36,7 @@ interface FormErrors {
   maxPrice?: string
   quantity?: string
   terms?: string
+  sections?: string
   [key: string]: string | undefined
 }
 
@@ -49,13 +57,35 @@ export default function TicketRequestPage() {
   const [concertDate, setConcertDate] = useState(today)
   const [concertVenue, setConcertVenue] = useState("")
   const [quantity, setQuantity] = useState("1")
-  const [maxPrice, setMaxPrice] = useState("")
   const [description, setDescription] = useState("")
   const [preferredSeats, setPreferredSeats] = useState("")
   const [urgency, setUrgency] = useState("보통")
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sections, setSections] = useState<SeatSection[]>([])
+
+  // 구역 추가 함수
+  const addSection = () => {
+    const newSection: SeatSection = {
+      id: Date.now().toString(),
+      name: '',
+      price: ''
+    }
+    setSections([...sections, newSection])
+  }
+
+  // 구역 삭제 함수
+  const removeSection = (id: string) => {
+    setSections(sections.filter(section => section.id !== id))
+  }
+
+  // 구역 정보 업데이트 함수
+  const updateSection = (id: string, field: keyof SeatSection, value: string) => {
+    setSections(sections.map(section => 
+      section.id === id ? { ...section, [field]: value } : section
+    ))
+  }
 
   // 천단위 구분 함수
   const formatPrice = (value: string) => {
@@ -65,12 +95,10 @@ export default function TicketRequestPage() {
     return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
-  // 가격 입력 처리
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputValue = e.target.value;
-    // 숫자만 추출하여 저장
-    const numbersOnly = inputValue.replace(/[^\d]/g, '');
-    setMaxPrice(numbersOnly);
+  // 가격 입력 처리 (구역별)
+  const handleSectionPriceChange = (id: string, value: string) => {
+    const numbersOnly = value.replace(/[^\d]/g, '');
+    updateSection(id, 'price', numbersOnly);
   };
 
   // 인증 확인
@@ -80,6 +108,13 @@ export default function TicketRequestPage() {
       router.push("/login")
     }
   }, [user, isLoading, router])
+
+  // 기본 구역 추가 (페이지 로드 시)
+  useEffect(() => {
+    if (sections.length === 0) {
+      addSection()
+    }
+  }, [])
 
   // 폼 검증
   const validateForm = () => {
@@ -97,8 +132,16 @@ export default function TicketRequestPage() {
       errors.quantity = "수량을 올바르게 입력해주세요"
     }
 
-    if (!maxPrice || parseInt(maxPrice) < 1000) {
-      errors.maxPrice = "가격을 입력해주세요 (최소 1,000원)"
+    // 구역별 가격 검증
+    if (sections.length === 0) {
+      errors.sections = "최소 하나의 구역을 추가해주세요"
+    } else {
+      const hasInvalidSection = sections.some(section => 
+        !section.name.trim() || !section.price || parseInt(section.price) < 1000
+      )
+      if (hasInvalidSection) {
+        errors.sections = "모든 구역의 이름과 가격을 올바르게 입력해주세요 (최소 1,000원)"
+      }
     }
 
     if (!description.trim() || description.length < 10) {
@@ -129,7 +172,8 @@ export default function TicketRequestPage() {
         concertDate,
         concertVenue,
         quantity: parseInt(quantity),
-        maxPrice: parseInt(maxPrice),
+        sections: sections,
+        maxPrice: Math.max(...sections.map(s => parseInt(s.price) || 0)),
         description,
         userId: user?.id
       }
@@ -300,18 +344,78 @@ export default function TicketRequestPage() {
                 </h3>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    가격 설정 <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="text"
-                    value={formatPrice(maxPrice)}
-                    onChange={handlePriceChange}
-                    placeholder="(최소 1,000원)"
-                    className={formErrors.maxPrice ? "border-red-500" : ""}
-                  />
-                  {formErrors.maxPrice && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.maxPrice}</p>
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      구역별 가격 설정 <span className="text-red-500">*</span>
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addSection}
+                      className="text-xs h-8 px-3"
+                    >
+                      구역 추가 +
+                    </Button>
+                  </div>
+                  
+                  {sections.length === 0 ? (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                      <p className="text-gray-500 mb-4">아직 구역이 없습니다.</p>
+                      <Button
+                        type="button"
+                        onClick={addSection}
+                        className="bg-pink-500 hover:bg-pink-600 text-white"
+                        style={{ backgroundColor: '#ec4899' }}
+                      >
+                        첫 번째 구역 추가하기
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                      {sections.map((section, index) => (
+                        <div key={section.id} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-600">구역 {index + 1}</span>
+                            {sections.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeSection(section.id)}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Input
+                              type="text"
+                              value={section.name}
+                              onChange={(e) => updateSection(section.id, 'name', e.target.value)}
+                              placeholder="구역명 (예: R석, S석)"
+                              className="text-sm"
+                            />
+                            
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="text"
+                                value={formatPrice(section.price)}
+                                onChange={(e) => handleSectionPriceChange(section.id, e.target.value)}
+                                placeholder="가격 (최소 1,000원)"
+                                className="text-sm"
+                              />
+                              <span className="text-gray-500 whitespace-nowrap text-sm">원</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {formErrors.sections && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.sections}</p>
                   )}
                 </div>
               </div>
