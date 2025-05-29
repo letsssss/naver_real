@@ -487,7 +487,7 @@ export default function TicketCancellationPage() {
                           return ticket.category === 'TICKET_REQUEST' ? (
                             <RequestBadge />
                           ) : (
-                            <SuccessRateBadge sellerId={ticket.author?.id} />
+                        <SuccessRateBadge sellerId={ticket.author?.id} />
                           );
                         })()}
                       </div>

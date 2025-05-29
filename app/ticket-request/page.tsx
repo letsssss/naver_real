@@ -347,7 +347,7 @@ export default function TicketRequestPage() {
                   <div className="flex justify-between items-center mb-3">
                     <label className="block text-sm font-medium text-gray-700">
                       구역별 가격 설정 <span className="text-red-500">*</span>
-                    </label>
+                  </label>
                     <Button
                       type="button"
                       variant="outline"
@@ -399,8 +399,8 @@ export default function TicketRequestPage() {
                             />
                             
                             <div className="flex items-center gap-2">
-                              <Input
-                                type="text"
+                  <Input
+                    type="text"
                                 value={formatPrice(section.price)}
                                 onChange={(e) => handleSectionPriceChange(section.id, e.target.value)}
                                 placeholder="가격 (최소 1,000원)"

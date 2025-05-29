@@ -61,6 +61,10 @@ export default function MyPage() {
     거래취소: 0,
   })
 
+  // 요청중인 취켓팅 관련 상태 추가
+  const [requestedTickets, setRequestedTickets] = useState<any[]>([])
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false)
+
   // 마운트 확인
   useEffect(() => {
     setMounted(true)
@@ -83,8 +87,38 @@ export default function MyPage() {
       // 페이지 로드 시 구매/판매 현황 데이터 가져오기
       fetchOngoingPurchases(user, setPurchaseStatus, setOngoingPurchases, setIsLoadingPurchases);
       fetchOngoingSales(user, setSaleStatus, setOngoingSales, setOriginalSales, setIsLoadingSales);
+      
+      // 요청중인 취켓팅 데이터 가져오기
+      fetchRequestedTickets();
     }
   }, [user]);
+
+  // 요청중인 취켓팅 데이터 가져오는 함수
+  const fetchRequestedTickets = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoadingRequests(true);
+      console.log('요청중인 취켓팅 조회 시작 - 사용자 ID:', user.id);
+      
+      const response = await fetch(`/api/posts?category=TICKET_REQUEST&author_id=${user.id}`);
+      
+      if (!response.ok) {
+        throw new Error('요청 목록을 불러오는데 실패했습니다');
+      }
+      
+      const data = await response.json();
+      console.log('요청중인 취켓팅 조회 성공:', data);
+      
+      setRequestedTickets(data.posts || []);
+      
+    } catch (error) {
+      console.error('요청중인 취켓팅 조회 오류:', error);
+      toast.error('요청 목록을 불러오는데 실패했습니다');
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
 
   // user와 activeTab이 변경될 때 데이터 가져오기
   useEffect(() => {
@@ -93,6 +127,8 @@ export default function MyPage() {
         fetchOngoingSales(user, setSaleStatus, setOngoingSales, setOriginalSales, setIsLoadingSales);
       } else if (activeTab === 'ongoing-purchases') {
         fetchOngoingPurchases(user, setPurchaseStatus, setOngoingPurchases, setIsLoadingPurchases);
+      } else if (activeTab === 'requested-tickets') {
+        fetchRequestedTickets();
       }
     }
   }, [user, activeTab]);
@@ -413,6 +449,13 @@ export default function MyPage() {
               프로필
             </button>
             <button
+              className={`flex-1 py-4 px-6 text-center ${activeTab === "requested-tickets" ? "bg-gray-100 font-semibold" : ""}`}
+              onClick={() => setActiveTab("requested-tickets")}
+            >
+              <Tag className="inline-block mr-2" />
+              요청중인 취켓팅
+            </button>
+            <button
               className={`flex-1 py-4 px-6 text-center ${activeTab === "ongoing-purchases" ? "bg-gray-100 font-semibold" : ""}`}
               onClick={() => setActiveTab("ongoing-purchases")}
             >
@@ -432,6 +475,77 @@ export default function MyPage() {
             {/* 이 부분은 현재 로그인한 사용자만 볼 수 있는 개인 정보입니다 */}
             {activeTab === "profile" && (
               <ProfileSection user={user} />
+            )}
+
+            {activeTab === "requested-tickets" && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold">요청중인 취켓팅</h2>
+                  <Link href="/ticket-request">
+                    <Button className="bg-pink-500 hover:bg-pink-600 text-white">
+                      새 요청 등록
+                    </Button>
+                  </Link>
+                </div>
+                
+                {isLoadingRequests ? (
+                  <div className="flex justify-center py-8">
+                    <Loader />
+                  </div>
+                ) : requestedTickets.length === 0 ? (
+                  <div className="bg-gray-50 p-4 rounded-lg text-center">
+                    <p className="text-gray-500 mb-4">요청중인 취켓팅이 없습니다.</p>
+                    <Link href="/ticket-request">
+                      <Button variant="outline">첫 요청 등록하기</Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {requestedTickets.map((ticket) => (
+                      <div key={ticket.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="text-lg font-semibold">{ticket.title}</h3>
+                              <span className="bg-pink-100 text-pink-600 px-2 py-1 rounded-full text-xs">
+                                구해요
+                              </span>
+                            </div>
+                            <p className="text-gray-600 text-sm mb-2">
+                              {ticket.event_date && `공연일: ${ticket.event_date}`}
+                              {ticket.event_venue && ` | 장소: ${ticket.event_venue}`}
+                            </p>
+                            <p className="text-gray-500 text-sm">
+                              최대 예산: {ticket.ticket_price?.toLocaleString()}원
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Link href={`/ticket-request/${ticket.id}`}>
+                              <Button variant="outline" size="sm">
+                                상세보기
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 pt-3 border-t">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-500">
+                              등록일: {new Date(ticket.created_at).toLocaleDateString()}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-500">제안 받은 수:</span>
+                              <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium">
+                                0건
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === "ongoing-purchases" && (

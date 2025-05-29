@@ -76,6 +76,12 @@ export default function TicketRequestDetail() {
   const [paymentCancelled, setPaymentCancelled] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAuthor, setIsAuthor] = useState(false)
+  const [responseMessage, setResponseMessage] = useState("")
+
+  // 제안 관련 상태 추가
+  const [proposals, setProposals] = useState<any[]>([])
+  const [proposalsLoading, setProposalsLoading] = useState(false)
+  const [isRequestOwner, setIsRequestOwner] = useState(false)
 
   // 컴포넌트 마운트 확인
   useEffect(() => {
@@ -85,7 +91,7 @@ export default function TicketRequestDetail() {
   // 사용자 ID 설정
   useEffect(() => {
     if (user?.id) {
-      setCurrentUserId(user.id)
+      setCurrentUserId(String(user.id))
     }
   }, [user])
 
@@ -178,6 +184,15 @@ export default function TicketRequestDetail() {
           quantity: contentObj?.quantity || 1
         });
         
+        // 요청자 확인 (로그인한 사용자가 요청 작성자인지)
+        if (currentUserId && postData.author?.id === currentUserId) {
+          setIsRequestOwner(true);
+          console.log('요청자 본인이 접속함 - 제안 목록 로딩 시작');
+          
+          // 제안 목록 로딩
+          fetchProposals();
+        }
+        
         setError(null);
       } catch (error) {
         console.error('티켓 요청 조회 에러:', error);
@@ -188,7 +203,113 @@ export default function TicketRequestDetail() {
     }
     
     fetchRequestData();
-  }, [id, router]);
+  }, [id, router, currentUserId]);
+
+  // 제안 목록 조회 함수
+  const fetchProposals = async () => {
+    if (!id) return;
+    
+    try {
+      setProposalsLoading(true);
+      console.log('제안 목록 조회 시작:', id);
+      
+      const response = await fetch(`/api/ticket-requests/${id}/proposals`);
+      
+      if (!response.ok) {
+        throw new Error('제안 목록을 불러오는데 실패했습니다');
+      }
+      
+      const data = await response.json();
+      console.log('제안 목록 조회 성공:', data);
+      
+      if (data.success) {
+        setProposals(data.proposals || []);
+      }
+      
+    } catch (error) {
+      console.error('제안 목록 조회 오류:', error);
+    } finally {
+      setProposalsLoading(false);
+    }
+  };
+
+  // 제안 제출 핸들러
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!id || !currentUserId || !ticketData) {
+      toast.error("필수 정보가 누락되었습니다.")
+      return
+    }
+
+    if (selectedSeats.length === 0) {
+      toast.error("구역을 선택해주세요.")
+      return
+    }
+
+    if (!termsAgreed) {
+      toast.error("약관에 동의해주세요.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      // 선택된 구역 정보 가져오기
+      const selectedSection = ticketData.seatOptions.find(seat => seat.id === selectedSeats[0])
+      if (!selectedSection) {
+        throw new Error("선택된 구역 정보를 찾을 수 없습니다.")
+      }
+
+      // 제안 데이터 구성
+      const proposalData = {
+        ticketRequestId: parseInt(id),
+        proposerId: currentUserId,
+        selectedSectionId: selectedSection.id,
+        selectedSectionName: selectedSection.label,
+        proposedPrice: selectedSection.price,
+        maxPrice: ticketData.maxPrice,
+        message: responseMessage.trim() || null,
+        ticketTitle: ticketData.title,
+        requesterId: ticketData.requestedBy.id
+      }
+
+      console.log("제안 데이터:", proposalData)
+
+      // API 호출
+      const response = await fetch(`/api/ticket-requests/${id}/proposals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(proposalData),
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '제안 전송에 실패했습니다.')
+      }
+
+      const result = await response.json()
+      console.log("제안 전송 성공:", result)
+
+      // 성공 처리
+      setIsSuccess(true)
+      toast.success("제안이 성공적으로 전송되었습니다!")
+      
+      // 상태 초기화
+      setSelectedSeats([])
+      setResponseMessage("")
+      setTermsAgreed(false)
+
+    } catch (error) {
+      console.error('제안 전송 오류:', error)
+      toast.error(error instanceof Error ? error.message : '제안 전송 중 오류가 발생했습니다.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   // 로딩 중
   if (loading) {
@@ -398,7 +519,7 @@ export default function TicketRequestDetail() {
 
               {/* 응답 폼 표시 조건 - 로그인한 사용자일 때만 */}
               {mounted && currentUserId ? (
-                <form>
+                <form onSubmit={handleSubmit}>
                   <div className="space-y-6">
                     {/* 좌석 선택 */}
                     <div>
@@ -448,6 +569,8 @@ export default function TicketRequestDetail() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                         rows={4}
                         placeholder="요청자에게 전달할 메시지를 입력해주세요 (선택사항)"
+                        value={responseMessage}
+                        onChange={(e) => setResponseMessage(e.target.value)}
                       />
                     </div>
 
