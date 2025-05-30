@@ -65,14 +65,16 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       
       const data = await response.json();
       
-      if (data.order_number) {
-        setOrderNumber(data.order_number);
-        console.log(`📝 상품 ${sale.title}의 주문번호 조회 완료: ${data.order_number}`);
-      } else {
-        console.log(`❌ 상품 ${sale.title}에 대한 주문번호가 없음`);
+      if (!data.order_number) {
+        console.log("해당 게시물에 대한 구매 기록이 없습니다:", data.message);
+        return;
       }
+      
+      // 조회된 주문번호 상태 업데이트
+      setOrderNumber(data.order_number);
+      console.log(`📝 상품 ${sale.title}의 주문번호 조회 완료: ${data.order_number}`);
     } catch (error) {
-      console.error(`❌ 주문번호 조회 중 오류: ${error}`);
+      console.error("주문 정보 조회 오류:", error);
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +122,9 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
       const data = await response.json();
       
       if (!data.order_number) {
-        throw new Error("주문번호가 존재하지 않습니다");
+        console.log("해당 게시물에 대한 구매 기록이 없습니다:", data.message);
+        alert("해당 상품에 대한 거래 기록이 없습니다. 판매중인 상품입니다.");
+        return;
       }
       
       // 조회된 주문번호 상태 업데이트

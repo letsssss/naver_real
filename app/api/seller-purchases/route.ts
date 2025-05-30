@@ -573,8 +573,7 @@ export async function GET(request: NextRequest) {
         .from('proposals')
         .select(`
           *,
-          posts!proposals_post_id_fkey(*),
-          requester:users!proposals_proposer_id_fkey(*)
+          posts!proposals_post_id_fkey(*)
         `)
         .eq('proposer_id', authUser.id)
         .in('status', ['PENDING', 'ACCEPTED', 'REJECTED'])
@@ -657,7 +656,7 @@ export async function GET(request: NextRequest) {
             // 관련 데이터
             post: proposal.posts,
             buyer: null, // 제안 단계에서는 구매자 정보 불필요
-            seller: proposal.requester,
+            seller: null, // requester 제거로 인해 null로 설정
             // 구분을 위한 필드
             transaction_type: 'user_proposal',
             // 제안 관련 추가 정보

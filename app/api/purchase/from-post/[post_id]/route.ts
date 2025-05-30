@@ -28,7 +28,11 @@ export async function GET(
 
   if (!data || !data.order_number) {
     console.warn(`❗ post_id ${postId}에 해당하는 주문번호가 없습니다.`);
-    return NextResponse.json({ error: "주문번호가 존재하지 않습니다" }, { status: 404 });
+    return NextResponse.json({ 
+      order_number: null,
+      message: "해당 게시물에 대한 구매 기록이 없습니다.",
+      post_id: postId 
+    }, { status: 200 });
   }
 
   console.log(`✅ post_id ${postId} → 주문번호: ${data.order_number}`);
