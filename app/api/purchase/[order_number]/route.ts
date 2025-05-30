@@ -39,27 +39,69 @@ export async function GET(
 
   const supabase = createAdminClient()
 
-  // 명시적으로 관계 지정해서 join (중복 관계 오류 해결)
-  const { data, error } = await supabase
+  // 1. 먼저 기존 purchases 테이블에서 조회
+  const { data: purchaseData, error: purchaseError } = await supabase
     .from("purchases")
     .select("*, post:posts(*), buyer:users!purchases_buyer_id_fkey(*)")
     .eq("order_number", order_number)
-    .single()
+    .maybeSingle()
 
-  // 쿼리 결과 로그
-  console.log('🧪 조회된 데이터:', data)
-  console.log('❌ 에러 발생:', error)
+  console.log('🧪 purchases 테이블 조회 결과:', purchaseData)
+  console.log('❌ purchases 테이블 에러:', purchaseError)
 
-  if (error || !data) {
-    console.error("주문번호 조회 오류:", error || "데이터 없음")
-    return NextResponse.json({ error: "해당 주문번호를 찾을 수 없습니다." }, { 
-      status: 404,
-      headers: corsHeaders
-    })
+  // 2. purchases에 데이터가 있으면 바로 반환
+  if (purchaseData && !purchaseError) {
+    return NextResponse.json(purchaseData, { headers: corsHeaders })
   }
+
+  // 3. purchases에 없으면 proposal_transactions에서 조회
+  console.log('🔍 proposal_transactions 테이블에서 조회 시도...')
   
-  // CORS 헤더 추가
-  return NextResponse.json(data, { headers: corsHeaders })
+  const { data: proposalTransactionData, error: proposalError } = await supabase
+    .from("proposal_transactions")
+    .select(`
+      *,
+      posts!proposal_transactions_post_id_fkey(*),
+      buyer:users!proposal_transactions_buyer_id_fkey(*),
+      seller:users!proposal_transactions_seller_id_fkey(*)
+    `)
+    .eq("order_number", order_number)
+    .maybeSingle()
+
+  console.log('🧪 proposal_transactions 조회 결과:', proposalTransactionData)
+  console.log('❌ proposal_transactions 에러:', proposalError)
+
+  if (proposalTransactionData && !proposalError) {
+    // proposal_transactions 데이터를 purchases 형태로 변환
+    const convertedData = {
+      id: proposalTransactionData.id,
+      order_number: proposalTransactionData.order_number,
+      buyer_id: proposalTransactionData.buyer_id,
+      seller_id: proposalTransactionData.seller_id,
+      post_id: proposalTransactionData.post_id,
+      total_price: proposalTransactionData.total_price,
+      selected_seats: proposalTransactionData.selected_seats,
+      quantity: proposalTransactionData.quantity,
+      status: proposalTransactionData.status,
+      created_at: proposalTransactionData.created_at,
+      updated_at: proposalTransactionData.updated_at,
+      payment_method: 'proposal_based', // 제안 기반 거래 표시
+      // 관련 데이터
+      post: proposalTransactionData.posts,
+      buyer: proposalTransactionData.buyer,
+      seller: proposalTransactionData.seller
+    }
+    
+    console.log('✅ proposal_transactions 데이터를 purchases 형태로 변환 완료')
+    return NextResponse.json(convertedData, { headers: corsHeaders })
+  }
+
+  // 4. 둘 다 없으면 404 에러
+  console.error("주문번호 조회 오류: 두 테이블 모두에서 찾을 수 없음")
+  return NextResponse.json({ error: "해당 주문번호를 찾을 수 없습니다." }, { 
+    status: 404,
+    headers: corsHeaders
+  })
 } 
 
 export async function POST(
