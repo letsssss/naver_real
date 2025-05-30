@@ -84,23 +84,7 @@ export async function POST(
       );
     }
 
-    // 4. 같은 포스트의 다른 제안들을 거절 상태로 변경
-    const { error: rejectOthersError } = await supabase
-      .from('proposals')
-      .update({
-        status: 'REJECTED',
-        updated_at: new Date().toISOString()
-      })
-      .eq('post_id', proposal.post_id)
-      .neq('id', proposalId)
-      .eq('status', 'PENDING');
-
-    if (rejectOthersError) {
-      console.warn('[🎯 제안 수락 API] 다른 제안 거절 처리 오류:', rejectOthersError);
-      // 치명적이지 않으므로 계속 진행
-    }
-
-    // 5. 포스트 상태를 거래 진행중으로 변경
+    // 4. 포스트 상태를 거래 진행중으로 변경
     const { error: postUpdateError } = await supabase
       .from('posts')
       .update({
@@ -114,7 +98,7 @@ export async function POST(
       // 치명적이지 않으므로 계속 진행
     }
 
-    // 6. Proposal Transaction 레코드 생성 (별도 테이블)
+    // 5. Proposal Transaction 레코드 생성 (별도 테이블)
     const orderNumber = await createSimpleOrderNumber();
     
     const proposalTransactionData = {

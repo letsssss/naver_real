@@ -19,7 +19,7 @@ export async function GET(
     .eq("post_id", postId)
     .order("created_at", { ascending: false }) // 최신 구매 기준
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("❌ Supabase 오류:", error.message);
