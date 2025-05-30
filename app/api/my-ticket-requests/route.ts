@@ -72,14 +72,22 @@ export async function GET(req: NextRequest) {
       // 수락된 제안이 있을 경우 관련 Proposal Transaction 정보 조회
       let acceptedProposalWithTransaction = null;
       if (acceptedProposal) {
+        console.log('[내 티켓 요청 API] 수락된 제안 발견:', acceptedProposal.id, typeof acceptedProposal.id);
+        
         // 수락된 제안과 연결된 Proposal Transaction 조회
-        const { data: transactionData } = await supabase
+        const { data: transactionData, error: transactionError } = await supabase
           .from('proposal_transactions')
           .select('id, order_number, status, total_price')
-          .eq('proposal_id', acceptedProposal.id)
+          .eq('proposal_id', parseInt(acceptedProposal.id))
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        console.log('[내 티켓 요청 API] Transaction 조회 결과:', { 
+          proposalId: acceptedProposal.id,
+          transactionData, 
+          transactionError 
+        });
 
         acceptedProposalWithTransaction = {
           id: acceptedProposal.id,
