@@ -65,20 +65,33 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
     const userId = url.searchParams.get('userId');
     console.log("🔗 URL userId 파라미터:", userId);
     
-    // 🔥 NEW: 개발 환경에서는 userId 파라미터를 가장 먼저 확인
-    if (process.env.NODE_ENV === 'development' && userId && userId.length > 10) {
-      console.log("🚀 개발 환경: userId 파라미터로 즉시 인증 처리");
+    // 🔥 NEW: userId가 유효한 UUID 형식이면 즉시 인증 처리 (환경 무관)
+    if (userId && userId.length > 30 && userId.includes('-')) {
+      console.log("🚀 userId 파라미터로 즉시 인증 처리 (UUID 형식 확인됨)");
       console.log("쿼리 파라미터에서 유효한 사용자 ID 발견:", userId);
       
       try {
-        return {
-          id: userId,
-          email: 'dev-user@example.com',
-          name: '개발 테스트 사용자',
-          role: 'USER'
-        };
-      } catch (error) {
-        console.error("개발 환경 인증 처리 중 오류:", error);
+        const client = createAdminClient();
+        // 실제 사용자가 존재하는지 확인
+        const { data: userData, error: userError } = await client
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        if (!userError && userData) {
+          console.log("✅ userId로 사용자 정보 조회 성공:", userData.name);
+          return {
+            id: userId,
+            email: userData.email || 'user@example.com',
+            name: userData.name || '사용자',
+            role: userData.role || 'USER'
+          };
+        } else {
+          console.log("❌ userId로 사용자 정보 조회 실패:", userError);
+        }
+      } catch (userQueryError) {
+        console.error("❌ userId 기반 사용자 조회 중 오류:", userQueryError);
       }
     }
     
