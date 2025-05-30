@@ -18,6 +18,16 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
+    // Authorization 헤더 확인
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      logDebug('❌ Authorization 헤더 없음');
+      return NextResponse.json(
+        { error: '인증 토큰이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
     // 쿠키 기반 Supabase 클라이언트 생성
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
