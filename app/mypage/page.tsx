@@ -743,75 +743,12 @@ export default function MyPage() {
                                 최대 예산: {ticket.ticket_price?.toLocaleString()}원
                               </p>
                               
-                              {/* 수락된 제안 정보 표시 */}
-                              {isAccepted && ticket.acceptedProposal && (
-                                <div className="bg-green-100 border border-green-200 rounded-lg p-4 mt-3">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <p className="text-green-800 font-medium text-sm mb-2">
-                                        ✅ 제안이 수락되었습니다
-                                      </p>
-                                      <p className="text-green-700 text-sm mb-1">
-                                        거래 가격: {ticket.acceptedProposal.proposedPrice?.toLocaleString()}원
-                                      </p>
-                                      <p className="text-green-600 text-xs mb-3">
-                                        판매자: {ticket.acceptedProposal.proposerId || '정보 없음'}
-                                      </p>
-                                      
-                                      {/* 진행중인 구매와 동일한 버튼 스타일 */}
-                                      <div className="flex gap-2">
-                                        <Button 
-                                          className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
-                                          variant="outline"
-                                          onClick={() => {
-                                            // TODO: 제안 기반 거래 상세 페이지로 이동
-                                            console.log('거래 상세 보기:', ticket.acceptedProposal.id);
-                                            toast.info('거래 상세 페이지 준비중입니다');
-                                          }}
-                                        >
-                                          <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="16"
-                                            height="16"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          >
-                                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                                          </svg>
-                                          거래 상세 보기
-                                        </Button>
-                                        
-                                        <MessageButton 
-                                          orderNumber={`PROPOSAL-${ticket.acceptedProposal.id}`}
-                                          onClick={() => {
-                                            console.log('메시지 버튼 클릭:', ticket.acceptedProposal.id);
-                                            toast.info('메시지 기능 준비중입니다');
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* 거래 진행 단계 표시 */}
-                                  <div className="mt-3 pt-3 border-t border-green-200">
-                                    <div className="flex justify-between items-center text-xs">
-                                      <span className="text-green-600">💡 다음 단계:</span>
-                                      <span className="text-green-700 font-medium">판매자의 티켓 확보 대기중</span>
-                                    </div>
-                                    <div className="w-full bg-green-200 rounded-full h-2 mt-2">
-                                      <div className="bg-green-500 h-2 rounded-full" style={{ width: '25%' }}></div>
-                                    </div>
-                                    <div className="flex justify-between text-xs text-green-600 mt-1">
-                                      <span>제안 수락</span>
-                                      <span>티켓 확보</span>
-                                      <span>거래 완료</span>
-                                    </div>
-                                  </div>
+                              {/* 수락된 제안 배지 */}
+                              {isAccepted && (
+                                <div className="mb-3">
+                                  <span className="inline-block bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium">
+                                    ✅ 제안이 수락되었습니다
+                                  </span>
                                 </div>
                               )}
                             </div>
