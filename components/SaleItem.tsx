@@ -18,7 +18,7 @@ export type Sale = {
   sortPriority?: number;
   orderNumber?: string;
   ticket_price?: string | number;
-  transaction_type?: 'direct_purchase' | 'proposal_based'; // 거래 유형 추가
+  transaction_type?: 'direct_purchase' | 'proposal_transaction' | 'user_proposal'; // 실제 API 값으로 수정
 };
 
 interface SaleItemProps {
@@ -185,11 +185,11 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
           {/* 거래 유형 배지 추가 */}
           {sale.transaction_type && (
             <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-              sale.transaction_type === 'proposal_based'
+              sale.transaction_type === 'proposal_transaction' || sale.transaction_type === 'user_proposal'
                 ? 'bg-orange-100 text-orange-700 border border-orange-200'
                 : 'bg-blue-100 text-blue-700 border border-blue-200'
             }`}>
-              {sale.transaction_type === 'proposal_based' ? '제안 수락' : '직접 판매'}
+              {sale.transaction_type === 'proposal_transaction' || sale.transaction_type === 'user_proposal' ? '제안 판매' : '직접 판매'}
             </span>
           )}
         </div>
