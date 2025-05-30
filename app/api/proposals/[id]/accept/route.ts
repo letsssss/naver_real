@@ -140,7 +140,7 @@ export async function POST(
         seller_id: sellerId,
         total_price: proposal.proposed_price,
         quantity: 1, // 기본값
-        status: 'CONFIRMED',
+        status: 'PROCESSING',
         order_number: orderNumber,
         ticket_title: ticketTitle,
         event_date: postData?.event_date || null,

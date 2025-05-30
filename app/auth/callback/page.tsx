@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabaseClient';
+import { createBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -25,6 +25,9 @@ export default function AuthCallback() {
           setError('인증 코드가 전달되지 않았습니다.');
           return;
         }
+
+        // auth-context와 동일한 클라이언트 사용
+        const supabase = createBrowserClient();
 
         // 🚀 성능 최적화: 세션 조회와 사용자 정보 조회를 병렬 처리
         const [sessionResult, userResult] = await Promise.allSettled([
@@ -53,117 +56,24 @@ export default function AuthCallback() {
           user: userData?.user ? '있음' : '없음'
         });
         
-        // ✅ 세션이 있는 경우에만 세션 설정
+        // ✅ 세션이 있는 경우 인증 상태 업데이트
         if (sessionData.session && sessionData.session.user) {
-          // 🚀 성능 최적화: 세션 설정을 비동기로 처리 (응답 지연 방지)
-          supabase.auth.setSession({
-            access_token: sessionData.session.access_token,
-            refresh_token: sessionData.session.refresh_token,
-          }).then(() => {
-            console.log('✅ 소셜 로그인: 세션이 성공적으로 설정되었습니다');
-          }).catch(err => {
-            console.warn('⚠️ 세션 설정 실패:', err);
-          });
-        }
-        
-        const authMode = localStorage.getItem('kakao_auth_mode') || 'login';
-        const userEmail = userData?.user?.email;
-
-        // 🚀 성능 최적화: DB 조회와 토큰 저장을 병렬 처리
-        const promises = [];
-
-        // 1. 사용자 DB 조회 (필요한 경우만)
-        if (userEmail && authMode === 'signup') {
-          promises.push(
-            supabase
-              .from('users')
-              .select('*')
-              .eq('email', userEmail)
-              .then(async ({ data: existingUsers, error: dbError }) => {
-                if (!dbError && (!existingUsers || existingUsers.length === 0)) {
-                  const userId = userData.user?.id;
-                  const displayName = userData.user?.user_metadata?.full_name || '사용자';
-
-                  if (userId) {
-                    await supabase.from('users').insert({
-                      id: userId,
-                      email: userEmail,
-                      name: displayName,
-                      role: "USER",
-                    });
-                  }
-                }
-              })
-          );
-        }
-
-        // 2. 토큰 저장 및 JWT 토큰 요청
-        if (sessionData.session && sessionData.session.user) {
-          // 기본 토큰 저장 (즉시 실행)
-          const userInfo = {
-            id: sessionData.session.user.id,
-            email: sessionData.session.user.email,
-            name: sessionData.session.user.user_metadata?.full_name || '사용자',
-          };
+          console.log('✅ 카카오 로그인 성공:', sessionData.session.user.email);
           
-          localStorage.setItem('user', JSON.stringify(userInfo));
-          localStorage.setItem('supabase_token', sessionData.session.access_token);
-          localStorage.setItem('token', sessionData.session.access_token);
-          localStorage.setItem('auth_status', 'authenticated');
+          // auth-context의 checkAuthStatus를 호출하여 일관된 인증 상태 관리
+          await checkAuthStatus();
           
-          console.log('✅ 기본 토큰 저장 완료');
-
-          // JWT 토큰 요청 (병렬 처리)
-          promises.push(
-            fetch('/api/auth/kakao-token', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                supabaseUserId: sessionData.session.user.id,
-                email: sessionData.session.user.email,
-              }),
-            })
-            .then(response => response.ok ? response.json() : null)
-            .then(jwtData => {
-              if (jwtData?.token) {
-                localStorage.setItem('token', jwtData.token);
-                console.log('✅ 커스텀 JWT 토큰으로 업데이트 완료');
-              }
-            })
-            .catch(jwtError => {
-              console.warn('⚠️ JWT 토큰 가져오기 실패:', jwtError);
-            })
-          );
+          setStatusMessage("로그인 완료! 홈페이지로 이동합니다...");
+          
+          // 성공 시 홈페이지로 이동
+          setTimeout(() => {
+            router.push('/');
+          }, 1000);
+          
+        } else {
+          console.error('❌ 세션 또는 사용자 정보가 없습니다');
+          setError('로그인 처리 중 오류가 발생했습니다.');
         }
-
-        // 🚀 모든 비동기 작업을 병렬로 실행
-        if (promises.length > 0) {
-          await Promise.allSettled(promises);
-        }
-
-        // 🔧 인증 상태 확인을 비동기로 처리 (응답 지연 방지)
-        checkAuthStatus().then(() => {
-          console.log('✅ 인증 상태 확인 완료');
-        }).catch(err => {
-          console.warn('⚠️ 인증 상태 확인 실패:', err);
-        });
-        
-        toast.success('로그인 성공!');
-        localStorage.removeItem('kakao_auth_mode');
-
-        if (typeof window !== 'undefined') {
-          const authEvent = new CustomEvent('auth-state-change', {
-            detail: { authenticated: true },
-          });
-          window.dispatchEvent(authEvent);
-        }
-
-        // 홈페이지로 리다이렉트 (더 빠르게)
-        setTimeout(() => {
-          router.push('/');
-        }, 500);
 
       } catch (err) {
         console.error('인증 콜백 처리 중 오류:', err);
