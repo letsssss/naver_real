@@ -15,7 +15,7 @@ export async function POST(
 
   const supabase = createAdminClient();
 
-  // 먼저 현재 구매 정보를 조회
+  // 먼저 purchases 테이블에서 조회
   const { data: purchaseData, error: fetchError } = await supabase
     .from("purchases")
     .select(`
@@ -25,16 +25,49 @@ export async function POST(
       seller:users!purchases_seller_id_fkey(id, name, phone_number)
     `)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (fetchError || !purchaseData) {
-    console.error("구매 정보 조회 실패:", fetchError);
+  let transactionData = purchaseData;
+  let isProposalTransaction = false;
+
+  // purchases에서 못 찾았으면 proposal_transactions에서 조회
+  if (!purchaseData && !fetchError) {
+    const { data: proposalTransactionData, error: proposalFetchError } = await supabase
+      .from("proposal_transactions")
+      .select(`
+        *,
+        post:posts(*),
+        buyer:users!proposal_transactions_buyer_id_fkey(id, name, phone_number),
+        seller:users!proposal_transactions_seller_id_fkey(id, name, phone_number)
+      `)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (proposalFetchError) {
+      console.error("proposal_transactions 조회 실패:", proposalFetchError);
+      return NextResponse.json({ error: "구매 정보를 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    if (!proposalTransactionData) {
+      console.error("구매 정보 조회 실패: 양쪽 테이블에서 모두 찾을 수 없음");
+      return NextResponse.json({ error: "구매 정보를 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    transactionData = proposalTransactionData;
+    isProposalTransaction = true;
+  } else if (fetchError) {
+    console.error("purchases 테이블 조회 실패:", fetchError);
     return NextResponse.json({ error: "구매 정보를 찾을 수 없습니다." }, { status: 404 });
   }
 
-  // 상태 업데이트
+  if (!transactionData) {
+    return NextResponse.json({ error: "구매 정보를 찾을 수 없습니다." }, { status: 404 });
+  }
+
+  // 적절한 테이블에서 상태 업데이트
+  const tableName = isProposalTransaction ? "proposal_transactions" : "purchases";
   const { error } = await supabase
-    .from("purchases")
+    .from(tableName)
     .update({ 
       status,
       updated_at: new Date().toISOString()
@@ -51,11 +84,11 @@ export async function POST(
     try {
       console.log("📱 취켓팅 완료 알림톡 발송 시작");
       
-      const buyerData = purchaseData.buyer;
-      const sellerData = purchaseData.seller;
-      const postData = purchaseData.post;
+      const buyerData = transactionData.buyer;
+      const sellerData = transactionData.seller;
+      const postData = transactionData.post;
       const productName = postData?.title || postData?.event_name || '티켓';
-      const orderNumber = purchaseData.order_number || purchaseData.id.toString();
+      const orderNumber = transactionData.order_number || transactionData.id.toString();
       
       // 구매자에게 취켓팅 완료 알림톡 발송
       if (buyerData && buyerData.phone_number) {
@@ -108,11 +141,11 @@ export async function POST(
     try {
       console.log("📱 구매 확정 알림톡 발송 시작");
       
-      const buyerData = purchaseData.buyer;
-      const sellerData = purchaseData.seller;
-      const postData = purchaseData.post;
+      const buyerData = transactionData.buyer;
+      const sellerData = transactionData.seller;
+      const postData = transactionData.post;
       const productName = postData?.title || postData?.event_name || '티켓';
-      const orderNumber = purchaseData.order_number || purchaseData.id.toString();
+      const orderNumber = transactionData.order_number || transactionData.id.toString();
       
       // 구매자에게 구매 확정 알림톡 발송
       if (buyerData && buyerData.phone_number) {
@@ -165,11 +198,11 @@ export async function POST(
     try {
       console.log("📱 거래 취소 알림톡 발송 시작");
       
-      const buyerData = purchaseData.buyer;
-      const sellerData = purchaseData.seller;
-      const postData = purchaseData.post;
+      const buyerData = transactionData.buyer;
+      const sellerData = transactionData.seller;
+      const postData = transactionData.post;
       const productName = postData?.title || postData?.event_name || '티켓';
-      const orderNumber = purchaseData.order_number || purchaseData.id.toString();
+      const orderNumber = transactionData.order_number || transactionData.id.toString();
       
       // 구매자에게 거래 취소 알림톡 발송
       if (buyerData && buyerData.phone_number) {
