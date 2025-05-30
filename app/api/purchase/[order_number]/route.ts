@@ -155,252 +155,163 @@ export async function POST(
     const supabase = createAdminClient()
     console.log("✅ Supabase Admin 클라이언트 생성 완료");
     
-    // 주문 정보 조회
-    const { data: purchase, error: queryError } = await supabase
+    // 1. 먼저 purchases 테이블에서 조회
+    const { data: purchase, error: purchaseError } = await supabase
       .from("purchases")
       .select("*")
       .eq("order_number", order_number)
-      .single()
+      .maybeSingle()
 
-    if (queryError || !purchase) {
-      console.error("주문 조회 오류:", queryError)
+    let transactionData = purchase;
+    let isProposalTransaction = false;
+
+    // 2. purchases에서 못 찾았으면 proposal_transactions에서 조회
+    if (!purchase && !purchaseError) {
+      const { data: proposalTransaction, error: proposalError } = await supabase
+        .from("proposal_transactions")
+        .select("*")
+        .eq("order_number", order_number)
+        .maybeSingle()
+
+      if (proposalError) {
+        console.error("proposal_transactions 조회 실패:", proposalError);
+        return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { 
+          status: 404,
+          headers: corsHeaders
+        });
+      }
+
+      if (!proposalTransaction) {
+        console.error("주문 조회 오류: 양쪽 테이블에서 모두 찾을 수 없음");
+        return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { 
+          status: 404,
+          headers: corsHeaders
+        });
+      }
+
+      transactionData = proposalTransaction;
+      isProposalTransaction = true;
+    } else if (purchaseError) {
+      console.error("purchases 테이블 조회 실패:", purchaseError);
       return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { 
         status: 404,
         headers: corsHeaders
-      })
+      });
+    }
+
+    if (!transactionData) {
+      return NextResponse.json({ error: "해당 주문을 찾을 수 없습니다." }, { 
+        status: 404,
+        headers: corsHeaders
+      });
     }
 
     // 디버깅: 현재 DB 상태 로깅
-    console.log("📊 DB 상태 확인 - 현재 상태:", purchase.status, "요청 상태:", updatedStatus);
+    console.log("📊 DB 상태 확인 - 현재 상태:", transactionData.status, "요청 상태:", updatedStatus);
 
     // 현재 상태와 동일한 상태로 업데이트하려는 경우
-    if (purchase.status === updatedStatus) {
+    if (transactionData.status === updatedStatus) {
       return NextResponse.json({ 
         message: "상태가 이미 동일합니다.",
-        purchase
+        transaction: transactionData
       }, {
         headers: corsHeaders
       })
     }
 
     // 상태 업데이트 전 로깅
-    console.log("✏️ 상태 업데이트 시작:", purchase.status, "→", updatedStatus);
+    console.log("✏️ 상태 업데이트 시작:", transactionData.status, "→", updatedStatus);
     
-    // 상태 업데이트
-    const { data: updatedPurchase, error: updateError } = await supabase
-      .from("purchases")
+    // 적절한 테이블에서 상태 업데이트
+    const tableName = isProposalTransaction ? "proposal_transactions" : "purchases";
+    const { data: updatedTransaction, error: updateError } = await supabase
+      .from(tableName)
       .update({ 
         status: updatedStatus,
         updated_at: new Date().toISOString()
       })
       .eq("order_number", order_number)
       .select()
-      .single()
+      .maybeSingle()
 
-    console.log("✏️ 상태 업데이트 결과:", updateError ? "실패" : "성공");
-    
     if (updateError) {
-      console.error("상태 업데이트 오류:", updateError)
+      console.error("상태 업데이트 실패:", updateError);
       return NextResponse.json({ error: "상태 업데이트에 실패했습니다." }, { 
         status: 500,
         headers: corsHeaders
-      })
+      });
     }
 
-    // 디버깅: 조건문 진입 직전에 로그 추가 (더 명확하게)
-    console.log("🧭 조건문 진입 시도 - 안전한 비교 방식 체크:", (updatedStatus || '').toUpperCase().trim() === 'CONFIRMED');
-    
-    // 문자열 정확한 비교를 위한 추가 검사
-    const isExactConfirmed = updatedStatus === 'CONFIRMED';
-    const isLowerConfirmed = updatedStatus?.toLowerCase() === 'confirmed';
-    const containsConfirmed = updatedStatus?.includes('CONFIRM');
-    const isSafeConfirmed = (updatedStatus || '').toUpperCase().trim() === 'CONFIRMED';
-    
-    console.log("🔍 문자열 비교 결과:", {
-      updatedStatus,
-      isExactConfirmed,
-      isLowerConfirmed,
-      containsConfirmed,
-      isSafeConfirmed,
-      charCodes: Array.from(String(updatedStatus || '')).map(c => c.charCodeAt(0))
-    });
-    
-    // 구매확정 조건 - 더 안전한 비교 방식 사용
-    if ((updatedStatus || '').toUpperCase().trim() === 'CONFIRMED') {
-      console.log("✅ CONFIRMED 조건 통과 - 수수료 계산 시작");
-      
-      // 🔔 구매 확정 시 알림톡 발송
+    console.log("✏️ 상태 업데이트 결과:", updateError ? "실패" : "성공");
+
+    // 구매 확정 시 알림톡 발송
+    if (updatedStatus === 'CONFIRMED') {
       try {
         console.log("📱 구매 확정 알림톡 발송 시작");
         
-        // 구매 정보와 관련 데이터 조회
-        const { data: purchaseWithDetails, error: detailsError } = await supabase
-          .from("purchases")
-          .select(`
-            *,
-            post:posts(*),
-            buyer:users!purchases_buyer_id_fkey(id, name, phone_number),
-            seller:users!purchases_seller_id_fkey(id, name, phone_number)
-          `)
-          .eq("order_number", order_number)
-          .single();
-
-        if (!detailsError && purchaseWithDetails) {
-          const buyerData = purchaseWithDetails.buyer;
-          const sellerData = purchaseWithDetails.seller;
-          const postData = purchaseWithDetails.post;
-          const productName = postData?.title || postData?.event_name || '티켓';
-          const orderNumber = purchaseWithDetails.order_number || purchaseWithDetails.id.toString();
+        const buyerData = transactionData.buyer;
+        const sellerData = transactionData.seller;
+        const postData = transactionData.post;
+        const productName = postData?.title || postData?.event_name || '티켓';
+        
+        // 구매자에게 구매 확정 알림톡 발송
+        if (buyerData && buyerData.phone_number) {
+          console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 구매 확정 알림톡 발송`);
           
-          // 구매자에게 구매 확정 알림톡 발송
-          if (buyerData && buyerData.phone_number) {
-            console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 구매 확정 알림톡 발송`);
-            
-            const buyerResult = await sendOrderConfirmedNotification(
-              buyerData.phone_number,
-              buyerData.name || '구매자',
-              orderNumber,
-              productName
-            );
-            
-            if (buyerResult.success) {
-              console.log("✅ 구매자 구매 확정 알림톡 발송 성공");
-            } else {
-              console.error("❌ 구매자 구매 확정 알림톡 발송 실패:", buyerResult.error);
-            }
-          } else {
-            console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
-          }
+          const buyerResult = await sendOrderConfirmedNotification(
+            buyerData.phone_number,
+            buyerData.name || '구매자',
+            order_number,
+            productName
+          );
           
-          // 판매자에게 구매 확정 알림톡 발송
-          if (sellerData && sellerData.phone_number) {
-            console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 구매 확정 알림톡 발송`);
-            
-            const sellerResult = await sendOrderConfirmedNotification(
-              sellerData.phone_number,
-              sellerData.name || '판매자',
-              orderNumber,
-              `[구매 확정] ${productName}`
-            );
-            
-            if (sellerResult.success) {
-              console.log("✅ 판매자 구매 확정 알림톡 발송 성공");
-            } else {
-              console.error("❌ 판매자 구매 확정 알림톡 발송 실패:", sellerResult.error);
-            }
+          if (buyerResult.success) {
+            console.log("✅ 구매자 구매 확정 알림톡 발송 성공");
           } else {
-            console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+            console.error("❌ 구매자 구매 확정 알림톡 발송 실패:", buyerResult.error);
           }
         } else {
-          console.error("❌ 구매 상세 정보 조회 실패:", detailsError);
+          console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+        }
+        
+        // 판매자에게 구매 확정 알림톡 발송
+        if (sellerData && sellerData.phone_number) {
+          console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 구매 확정 알림톡 발송`);
+          
+          const sellerResult = await sendOrderConfirmedNotification(
+            sellerData.phone_number,
+            sellerData.name || '판매자',
+            order_number,
+            `[구매 확정] ${productName}`
+          );
+          
+          if (sellerResult.success) {
+            console.log("✅ 판매자 구매 확정 알림톡 발송 성공");
+          } else {
+            console.error("❌ 판매자 구매 확정 알림톡 발송 실패:", sellerResult.error);
+          }
+        } else {
+          console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
         }
         
       } catch (kakaoError) {
         console.error("❌ 구매 확정 알림톡 발송 중 오류:", kakaoError);
-        // 알림톡 발송 실패해도 구매 확정 프로세스는 계속 진행
+        // 알림톡 발송 실패해도 상태 업데이트는 성공으로 처리
       }
-      
-      // 수수료 계산 로직
-      try {
-        console.log("\n===== 간소화된 수수료 계산 시작 (테스트) =====");
-        console.log("✅ 구매확정 요청 → 수수료 계산 시작");
-        
-        // 1. purchaseId 검증 (필수)
-        const purchaseId = purchase.id;
-        if (!purchaseId) {
-          console.error("❌ purchaseId가 없습니다:", purchaseId);
-          throw new Error("purchaseId 없음");
-        }
-        
-        console.log("📌 purchaseId:", purchaseId);
-        console.log("📌 order_number:", order_number);
-        
-        // 2. 단순화된 데이터 조회
-        const { data: purchaseData, error: fetchError } = await supabase
-          .from('purchases')
-          .select('id, total_price')
-          .eq('id', purchaseId)
-          .single();
-        
-        if (fetchError) {
-          console.error("❌ 데이터 조회 실패:", fetchError);
-          throw new Error("데이터 조회 실패");
-        }
-        
-        if (!purchaseData) {
-          console.error("❌ 조회 결과 없음");
-          throw new Error("조회 결과 없음");
-        }
-        
-        // 3. 간단한 수수료 계산
-        const totalPrice = purchaseData.total_price || 0;
-        const feeAmount = Math.floor(totalPrice * 0.1);
-        
-        console.log("📌 총 가격(total_price):", totalPrice);
-        console.log("📌 계산된 수수료(fee_amount):", feeAmount);
-        
-        if (totalPrice <= 0) {
-          console.warn("⚠️ 가격이 0 이하입니다:", totalPrice);
-        }
-        
-        // 4. 수수료 정보 업데이트
-        const feeDueAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
-        
-        const { error: updateError } = await supabase
-          .from('purchases')
-          .update({
-            fee_amount: feeAmount,
-            fee_due_at: feeDueAt.toISOString(),
-            update_test: "수수료계산테스트_" + new Date().toISOString().substring(0, 19)
-          })
-          .eq('id', purchaseId);
-        
-        if (updateError) {
-          console.error("❌ 수수료 업데이트 실패:", updateError);
-          throw new Error("수수료 업데이트 실패");
-        }
-        
-        // 5. 업데이트 확인
-        const { data: verifyResult } = await supabase
-          .from('purchases')
-          .select('id, fee_amount, fee_due_at, update_test')
-          .eq('id', purchaseId)
-          .single();
-        
-        console.log("✅ 수수료 업데이트 성공:", verifyResult);
-        console.log("===== 수수료 계산 완료 =====\n");
-        
-      } catch (error) {
-        console.error("❌❌❌ 수수료 처리 중 오류:", error);
-        console.log("🔍 디버깅 정보:", {
-          purchaseId: purchase?.id,
-          totalPrice: purchase?.total_price,
-          order_number
-        });
-      }
-    } else {
-      console.log("⚠️ CONFIRMED 조건 불일치 - 수수료 계산 건너뜀", {
-        updatedStatus, 
-        isConfirmed: updatedStatus === 'CONFIRMED',
-        type: typeof updatedStatus
-      });
     }
-    
-    // 디버깅: 최종 응답 전 로그
-    console.log("🏁 API 처리 완료 - 상태:", updatedStatus, "수수료 계산 여부:", updatedStatus === 'CONFIRMED');
 
     return NextResponse.json({ 
       message: "상태가 성공적으로 업데이트되었습니다.",
-      purchase: updatedPurchase
+      transaction: updatedTransaction
     }, {
       headers: corsHeaders
-    })
+    });
 
   } catch (error) {
-    console.error("요청 처리 오류:", error)
-    return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { 
+    console.error("❌ 구매확정 API 오류:", error);
+    return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { 
       status: 500,
       headers: corsHeaders
-    })
+    });
   }
 } 
