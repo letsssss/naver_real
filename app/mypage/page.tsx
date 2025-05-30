@@ -705,33 +705,12 @@ export default function MyPage() {
                       
                       return (
                         <div key={ticket.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
-                          isAccepted ? 'border-green-200 bg-green-50' : 
                           hasProposals ? 'border-yellow-200 bg-yellow-50' : ''
                         }`}>
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
                                 <h3 className="text-lg font-semibold">{ticket.title}</h3>
-                                
-                                {/* 상태별 배지 */}
-                                {isAccepted ? (
-                                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                                    거래 진행중
-                                  </span>
-                                ) : hasProposals ? (
-                                  <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">
-                                    제안 {ticket.pendingProposalCount}개
-                                    {hasNewProposals(ticket.id, ticket.proposalCount) && (
-                                      <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs animate-pulse">
-                                        NEW
-                                      </span>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span className="bg-pink-100 text-pink-600 px-2 py-1 rounded-full text-xs">
-                                    구해요
-                                  </span>
-                                )}
                               </div>
                               
                               <p className="text-gray-600 text-sm mb-2">
@@ -792,7 +771,27 @@ export default function MyPage() {
                               )}
                             </div>
                             
-                            <div className="text-right">
+                            <div className="text-right flex flex-col items-end gap-2">
+                              {/* 상태별 배지 - 오른쪽으로 이동 */}
+                              {isAccepted ? (
+                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                                  거래 진행중
+                                </span>
+                              ) : hasProposals ? (
+                                <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">
+                                  제안 {ticket.pendingProposalCount}개
+                                  {hasNewProposals(ticket.id, ticket.proposalCount) && (
+                                    <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs animate-pulse">
+                                      NEW
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="bg-pink-100 text-pink-600 px-2 py-1 rounded-full text-xs">
+                                  구해요
+                                </span>
+                              )}
+                              
                               <div className="flex gap-2">
                                 {isAccepted ? (
                                   // 수락된 제안: 간단한 정보 표시
