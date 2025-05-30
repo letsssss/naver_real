@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -75,7 +76,7 @@ export async function GET(req: NextRequest) {
         console.log('[내 티켓 요청 API] 수락된 제안 발견:', acceptedProposal.id, typeof acceptedProposal.id);
         
         // 수락된 제안과 연결된 Proposal Transaction 조회
-        const { data: transactionData, error: transactionError } = await supabase
+        const { data: transactionData, error: transactionError } = await createAdminClient()
           .from('proposal_transactions')
           .select('id, order_number, status, total_price')
           .eq('proposal_id', parseInt(acceptedProposal.id))
