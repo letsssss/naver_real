@@ -729,12 +729,41 @@ export default function MyPage() {
                               </p>
                               
                               {/* 거래 상세 보기와 메시지 버튼 */}
-                              {isAccepted && ticket.acceptedProposal && ticket.acceptedProposal.transaction && (
+                              {isAccepted && ticket.acceptedProposal && (
                                 <div className="flex gap-2 mt-3">
-                                  <Link href={`/transaction/${ticket.acceptedProposal.transaction.orderNumber}`}>
+                                  {ticket.acceptedProposal.transaction ? (
+                                    // transaction이 있으면 실제 링크로
+                                    <Link href={`/transaction/${ticket.acceptedProposal.transaction.orderNumber}`}>
+                                      <Button 
+                                        className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
+                                        variant="outline"
+                                      >
+                                        <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
+                                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                                        </svg>
+                                        거래 상세 보기
+                                      </Button>
+                                    </Link>
+                                  ) : (
+                                    // transaction이 없으면 준비중 메시지
                                     <Button 
-                                      className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
+                                      className="text-sm bg-gray-50 text-gray-500 border-gray-300 cursor-not-allowed flex items-center gap-1 font-medium" 
                                       variant="outline"
+                                      disabled
+                                      onClick={() => {
+                                        toast.info('거래 상세 페이지 준비중입니다');
+                                      }}
                                     >
                                       <svg
                                         xmlns="http://www.w3.org/2000/svg"
@@ -752,12 +781,12 @@ export default function MyPage() {
                                       </svg>
                                       거래 상세 보기
                                     </Button>
-                                  </Link>
+                                  )}
                                   
                                   <MessageButton 
-                                    orderNumber={ticket.acceptedProposal.transaction.orderNumber}
+                                    orderNumber={ticket.acceptedProposal.transaction?.orderNumber || `PROPOSAL-${ticket.acceptedProposal.id}`}
                                     onClick={() => {
-                                      console.log('메시지 버튼 클릭:', ticket.acceptedProposal.transaction.orderNumber);
+                                      console.log('메시지 버튼 클릭:', ticket.acceptedProposal.transaction?.orderNumber || ticket.acceptedProposal.id);
                                     }}
                                   />
                                 </div>
@@ -796,20 +825,32 @@ export default function MyPage() {
                                   </div>
                                 ) : (
                                   // 진행중인 제안: 기존 로직
-                                  <Link href={`/ticket-request/${ticket.id}`}>
+                                  {hasProposals ? (
+                                    // 제안이 있으면 모달 열기
                                     <Button 
                                       variant="outline" 
                                       size="sm"
                                       className={hasNewProposals(ticket.id, ticket.proposalCount) ? 'border-red-300 text-red-600 hover:bg-red-50' : ''}
+                                      onClick={() => openProposalModal(ticket.id)}
                                     >
-                                      {hasProposals ? '제안 확인' : '상세보기'}
+                                      제안 확인
                                       {hasNewProposals(ticket.id, ticket.proposalCount) && (
                                         <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs">
                                           NEW
                                         </span>
                                       )}
                                     </Button>
-                                  </Link>
+                                  ) : (
+                                    // 제안이 없으면 상세보기 페이지로
+                                    <Link href={`/ticket-request/${ticket.id}`}>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                      >
+                                        상세보기
+                                      </Button>
+                                    </Link>
+                                  )}
                                 )}
                                 
                                 {/* 수락된 거래는 삭제 버튼 숨김 */}
