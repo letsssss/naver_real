@@ -96,7 +96,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
             .from('users')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
           
           if (!userError && userData) {
             // UserData 타입으로 변환
@@ -107,6 +107,15 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
               email: user.email || '',
               name: userDataTyped?.name || user.user_metadata?.name || "",
               role: userDataTyped?.role || user.user_metadata?.role || "USER"
+            };
+          } else if (!userData) {
+            // 사용자 정보가 없는 경우에도 기본 정보로 진행
+            console.log("⚠️ users 테이블에 사용자 정보 없음, 기본 정보 사용");
+            return {
+              id: user.id,
+              email: user.email || '',
+              name: user.user_metadata?.name || "",
+              role: user.user_metadata?.role || "USER"
             };
           }
         }
@@ -144,7 +153,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
               
               if (!userError && userData) {
                 // UserData 타입으로 변환
@@ -196,7 +205,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
                 .from('users')
                 .select('*')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
               
               if (!userError && userData) {
                 // UserData 타입으로 변환
@@ -236,7 +245,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
             .from('users')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
           
           if (!userError && userData) {
             // UserData 타입으로 변환
@@ -272,7 +281,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
             .from('users')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
           
           if (!userError && userData) {
             // UserData 타입으로 변환
@@ -331,7 +340,7 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
           .from('users')
           .select('*')
           .eq('id', supabaseSession.user.id)
-          .single();
+          .maybeSingle();
         
         if (!userError && userData) {
           console.log("Supabase 직접 세션으로 사용자 정보 조회 성공");
