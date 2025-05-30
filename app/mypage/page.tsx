@@ -751,29 +751,47 @@ export default function MyPage() {
                                   <p className="text-green-700 text-sm">
                                     거래 가격: {ticket.acceptedProposal.proposedPrice?.toLocaleString()}원
                                   </p>
-                                  <p className="text-green-600 text-xs mt-1">
-                                    판매자와 연락하여 거래를 진행하세요
+                                  <p className="text-green-600 text-xs mt-1 mb-2">
+                                    채팅, 결제 등 모든 거래 기능을 이용하세요
                                   </p>
+                                  <Button
+                                    onClick={() => setActiveTab('ongoing-purchases')}
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 h-auto"
+                                  >
+                                    📱 진행중인 구매로 이동
+                                  </Button>
                                 </div>
                               )}
                             </div>
                             
                             <div className="text-right">
                               <div className="flex gap-2">
-                                <Link href={`/ticket-request/${ticket.id}`}>
+                                {isAccepted ? (
+                                  // 수락된 제안: 진행중인 구매로 이동
                                   <Button 
-                                    variant="outline" 
+                                    onClick={() => setActiveTab('ongoing-purchases')}
+                                    className="bg-green-500 hover:bg-green-600 text-white"
                                     size="sm"
-                                    className={hasNewProposals(ticket.id, ticket.proposalCount) ? 'border-red-300 text-red-600 hover:bg-red-50' : ''}
                                   >
-                                    {isAccepted ? '거래 상세' : hasProposals ? '제안 확인' : '상세보기'}
-                                    {hasNewProposals(ticket.id, ticket.proposalCount) && (
-                                      <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs">
-                                        NEW
-                                      </span>
-                                    )}
+                                    📱 구매 관리
                                   </Button>
-                                </Link>
+                                ) : (
+                                  // 진행중인 제안: 기존 로직
+                                  <Link href={`/ticket-request/${ticket.id}`}>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className={hasNewProposals(ticket.id, ticket.proposalCount) ? 'border-red-300 text-red-600 hover:bg-red-50' : ''}
+                                    >
+                                      {hasProposals ? '제안 확인' : '상세보기'}
+                                      {hasNewProposals(ticket.id, ticket.proposalCount) && (
+                                        <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs">
+                                          NEW
+                                        </span>
+                                      )}
+                                    </Button>
+                                  </Link>
+                                )}
                                 
                                 {/* 수락된 거래는 삭제 버튼 숨김 */}
                                 {!isAccepted && (
