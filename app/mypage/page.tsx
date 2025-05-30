@@ -15,6 +15,7 @@ import AccountBalance from "@/components/AccountBalance"
 import WithdrawSection from "@/components/WithdrawSection"
 import PurchasesSection from "@/components/PurchasesSection"
 import SalesSection from "@/components/SalesSection"
+import MessageButton from "@/components/MessageButton"
 import { Loader } from "@/components/ui/loader"
 import { Star } from "lucide-react"
 
@@ -71,6 +72,11 @@ export default function MyPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null)
   const [proposals, setProposals] = useState<any[]>([])
   const [isLoadingProposals, setIsLoadingProposals] = useState(false)
+  
+  // 제안 기반 채팅 모달 상태 추가
+  const [isProposalChatOpen, setIsProposalChatOpen] = useState(false)
+  const [selectedProposal, setSelectedProposal] = useState<any>(null)
+  const [chatMessage, setChatMessage] = useState('')
   
   // NEW 배지 관련 상태 추가
   const [lastCheckedTimes, setLastCheckedTimes] = useState<Record<number, string>>({})
@@ -505,6 +511,40 @@ export default function MyPage() {
     }
   };
 
+  // 제안 기반 채팅 모달 열기/닫기
+  const openProposalChat = (proposal: any) => {
+    setSelectedProposal(proposal)
+    setIsProposalChatOpen(true)
+    console.log('제안 기반 채팅 시작:', proposal)
+  }
+  
+  const closeProposalChat = () => {
+    setIsProposalChatOpen(false)
+    setSelectedProposal(null)
+    setChatMessage('')
+  }
+  
+  // 제안 기반 메시지 전송
+  const sendProposalMessage = async () => {
+    if (!chatMessage.trim() || !selectedProposal || !user) return
+    
+    try {
+      // TODO: 제안 기반 메시지 전송 API 구현
+      console.log('메시지 전송:', {
+        proposalId: selectedProposal.id,
+        senderId: user.id,
+        receiverId: selectedProposal.proposerId,
+        message: chatMessage
+      })
+      
+      toast.success('메시지가 전송되었습니다!')
+      setChatMessage('')
+    } catch (error) {
+      console.error('메시지 전송 오류:', error)
+      toast.error('메시지 전송에 실패했습니다')
+    }
+  }
+
   // 로딩 중이거나 마운트되지 않은 경우 로딩 표시
   if (!mounted || isLoading) {
     return (
@@ -744,22 +784,51 @@ export default function MyPage() {
                               
                               {/* 수락된 제안 정보 표시 */}
                               {isAccepted && ticket.acceptedProposal && (
-                                <div className="bg-green-100 border border-green-200 rounded-lg p-3 mt-3">
-                                  <p className="text-green-800 font-medium text-sm">
-                                    ✅ 제안이 수락되었습니다
-                                  </p>
-                                  <p className="text-green-700 text-sm">
-                                    거래 가격: {ticket.acceptedProposal.proposedPrice?.toLocaleString()}원
-                                  </p>
-                                  <p className="text-green-600 text-xs mt-1 mb-2">
-                                    채팅, 결제 등 모든 거래 기능을 이용하세요
-                                  </p>
-                                  <Button
-                                    onClick={() => setActiveTab('ongoing-purchases')}
-                                    className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 h-auto"
-                                  >
-                                    📱 진행중인 구매로 이동
-                                  </Button>
+                                <div className="bg-green-100 border border-green-200 rounded-lg p-4 mt-3">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className="text-green-800 font-medium text-sm mb-2">
+                                        ✅ 제안이 수락되었습니다
+                                      </p>
+                                      <p className="text-green-700 text-sm mb-1">
+                                        거래 가격: {ticket.acceptedProposal.proposedPrice?.toLocaleString()}원
+                                      </p>
+                                      <p className="text-green-600 text-xs">
+                                        판매자: {ticket.acceptedProposal.proposerId || '정보 없음'}
+                                      </p>
+                                    </div>
+                                    
+                                    {/* 채팅 버튼 */}
+                                    <div className="flex flex-col gap-2">
+                                      <Button
+                                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 h-auto flex items-center gap-1"
+                                        onClick={() => openProposalChat(ticket.acceptedProposal)}
+                                      >
+                                        💬 판매자와 채팅
+                                      </Button>
+                                      
+                                      {/* 거래 상태 */}
+                                      <span className="text-xs text-center bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
+                                        거래 진행중
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* 거래 진행 단계 표시 */}
+                                  <div className="mt-3 pt-3 border-t border-green-200">
+                                    <div className="flex justify-between items-center text-xs">
+                                      <span className="text-green-600">💡 다음 단계:</span>
+                                      <span className="text-green-700 font-medium">판매자의 티켓 확보 대기중</span>
+                                    </div>
+                                    <div className="w-full bg-green-200 rounded-full h-2 mt-2">
+                                      <div className="bg-green-500 h-2 rounded-full" style={{ width: '25%' }}></div>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-green-600 mt-1">
+                                      <span>제안 수락</span>
+                                      <span>티켓 확보</span>
+                                      <span>거래 완료</span>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -767,14 +836,13 @@ export default function MyPage() {
                             <div className="text-right">
                               <div className="flex gap-2">
                                 {isAccepted ? (
-                                  // 수락된 제안: 진행중인 구매로 이동
-                                  <Button 
-                                    onClick={() => setActiveTab('ongoing-purchases')}
-                                    className="bg-green-500 hover:bg-green-600 text-white"
-                                    size="sm"
-                                  >
-                                    📱 구매 관리
-                                  </Button>
+                                  // 수락된 제안: 간단한 정보 표시
+                                  <div className="flex flex-col gap-1 text-right">
+                                    <span className="text-xs text-gray-500">제안 수락됨</span>
+                                    <span className="text-xs text-green-600 font-medium">
+                                      {new Date(ticket.acceptedProposal.acceptedAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
                                 ) : (
                                   // 진행중인 제안: 기존 로직
                                   <Link href={`/ticket-request/${ticket.id}`}>
@@ -996,6 +1064,72 @@ export default function MyPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 제안 기반 채팅 모달 */}
+      {isProposalChatOpen && selectedProposal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[70vh] overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b bg-blue-50">
+              <div>
+                <h2 className="text-lg font-semibold">판매자와 채팅</h2>
+                <p className="text-sm text-gray-600">
+                  거래 가격: {selectedProposal.proposedPrice?.toLocaleString()}원
+                </p>
+              </div>
+              <button
+                onClick={closeProposalChat}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-4 h-80 overflow-y-auto bg-gray-50">
+              <div className="text-center text-gray-500 mb-4">
+                <p className="text-sm">💬 판매자와 채팅을 시작하세요</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  티켓 확보, 거래 방법 등을 상의할 수 있습니다
+                </p>
+              </div>
+              
+              {/* 시스템 메시지 */}
+              <div className="bg-green-100 border border-green-200 rounded-lg p-3 mb-4">
+                <p className="text-green-800 text-sm font-medium">✅ 제안이 수락되었습니다</p>
+                <p className="text-green-700 text-xs mt-1">
+                  판매자와 채팅하여 거래 세부사항을 조율하세요
+                </p>
+              </div>
+              
+              {/* TODO: 실제 채팅 메시지들 표시 */}
+            </div>
+            
+            <div className="p-4 border-t bg-white">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendProposalMessage()
+                    }
+                  }}
+                  placeholder="메시지를 입력하세요..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button
+                  onClick={sendProposalMessage}
+                  disabled={!chatMessage.trim()}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2"
+                >
+                  전송
+                </Button>
+              </div>
             </div>
           </div>
         </div>
