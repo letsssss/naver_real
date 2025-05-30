@@ -85,20 +85,8 @@ export const getAuthToken = (): string => {
   let authToken = '';
 
   console.log('🔍 토큰 검색 시작...');
-  console.log('현재 localStorage 키 목록:', Object.keys(localStorage));
 
-  // 1. 카카오 로그인에서 저장하는 주요 키들 우선 확인
-  const primaryTokenKeys = ['token', 'supabase_token', 'access_token'];
-  for (const key of primaryTokenKeys) {
-    const tokenValue = localStorage.getItem(key);
-    if (tokenValue && tokenValue.startsWith('eyJ')) {
-      authToken = tokenValue;
-      console.log(`✅ ${key}에서 JWT 토큰 발견:`, tokenValue.substring(0, 30) + '...');
-      return authToken;
-    }
-  }
-
-  // 2. Supabase localStorage 토큰 확인 (sb-xxx-auth-token 형태)
+  // 1. Supabase localStorage 토큰 확인 (sb-xxx-auth-token 형태)
   const supabaseKey = Object.keys(localStorage).find(key =>
     key.startsWith('sb-') && key.endsWith('-auth-token')
   );
@@ -114,12 +102,16 @@ export const getAuthToken = (): string => {
           const parsed = JSON.parse(supabaseData);
           if (parsed.access_token && parsed.access_token.startsWith('eyJ')) {
             authToken = parsed.access_token;
+            // 토큰을 별도로 저장
+            localStorage.setItem('supabase.auth.token', authToken);
             console.log(`✅ ${supabaseKey}에서 access_token 발견`);
             return authToken;
           }
         } else if (supabaseData.startsWith('eyJ')) {
           // 직접 토큰이 저장된 경우
           authToken = supabaseData;
+          // 토큰을 별도로 저장
+          localStorage.setItem('supabase.auth.token', authToken);
           console.log(`✅ ${supabaseKey}에서 직접 토큰 발견`);
           return authToken;
         }
@@ -129,19 +121,14 @@ export const getAuthToken = (): string => {
     }
   }
 
-  // 3. 모든 localStorage 키를 순회하면서 JWT 토큰 찾기
-  for (const key of Object.keys(localStorage)) {
-    if (key.includes('token') || key.includes('auth')) {
-      const value = localStorage.getItem(key);
-      if (value && value.startsWith('eyJ')) {
-        authToken = value;
-        console.log(`✅ ${key}에서 JWT 토큰 발견`);
-        return authToken;
-      }
-    }
+  // 2. 이미 저장된 토큰 확인
+  const savedToken = localStorage.getItem('supabase.auth.token');
+  if (savedToken && savedToken.startsWith('eyJ')) {
+    console.log('✅ 저장된 토큰 발견');
+    return savedToken;
   }
 
-  // 4. 쿠키에서 토큰 확인
+  // 3. 쿠키에서 토큰 확인
   if (typeof document !== 'undefined') {
     const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
@@ -151,6 +138,8 @@ export const getAuthToken = (): string => {
           const decodedValue = decodeURIComponent(value);
           if (decodedValue.startsWith('eyJ')) {
             authToken = decodedValue;
+            // 토큰을 localStorage에도 저장
+            localStorage.setItem('supabase.auth.token', authToken);
             console.log(`🍪 쿠키 ${name}에서 토큰 발견`);
             return authToken;
           }
@@ -162,7 +151,5 @@ export const getAuthToken = (): string => {
   }
 
   console.warn('❌ 유효한 토큰을 찾을 수 없습니다.');
-  console.log('📋 저장된 모든 키:', Object.keys(localStorage));
-  
   return '';
 }; 

@@ -30,7 +30,19 @@ export default function ConfirmedPurchasesPage() {
   async function fetchConfirmedPurchases() {
     setLoading(true)
     try {
-      const response = await fetch('/api/confirmed-purchases')
+      // 인증 토큰 가져오기
+      const token = localStorage.getItem('supabase.auth.token');
+      
+      const response = await fetch('/api/confirmed-purchases', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        credentials: 'include'
+      });
       
       if (!response.ok) {
         // 인증 오류면 로그인 페이지로 리다이렉트

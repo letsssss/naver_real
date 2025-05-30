@@ -3,6 +3,13 @@ import { cookies } from 'next/headers';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase.types';
 
+// CORS 헤더 설정
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 // ISO 문자열을 "YYYY-MM-DD HH:mm" 형식으로 변환하는 함수
 function formatDate(isoString: string): string {
   try {
@@ -42,9 +49,15 @@ export async function GET(request: NextRequest) {
     
     if (!session) {
       console.error('인증 세션 오류: 세션 없음');
-      return NextResponse.json(
-        { success: false, error: '인증되지 않은 사용자입니다.' },
-        { status: 401 }
+      return new NextResponse(
+        JSON.stringify({ success: false, error: '인증되지 않은 사용자입니다.' }),
+        { 
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
       );
     }
 
@@ -87,9 +100,15 @@ export async function GET(request: NextRequest) {
       
       if (fallbackError) {
         console.error('대체 쿼리 실패:', fallbackError);
-        return NextResponse.json(
-          { success: false, error: '구매 내역을 가져오는 중 오류가 발생했습니다.' },
-          { status: 500 }
+        return new NextResponse(
+          JSON.stringify({ success: false, error: '구매 내역을 가져오는 중 오류가 발생했습니다.' }),
+          { 
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
         );
       }
       
@@ -124,7 +143,15 @@ export async function GET(request: NextRequest) {
         };
       });
       
-      return NextResponse.json({ success: true, purchases: mapped });
+      return new NextResponse(
+        JSON.stringify({ success: true, purchases: mapped }),
+        { 
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      );
     }
 
     // 콘솔에 디버깅 정보 출력 (개발 시에만 활성화)
@@ -146,12 +173,26 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ success: true, purchases: mapped });
+    return new NextResponse(
+      JSON.stringify({ success: true, purchases: mapped }),
+      { 
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    );
   } catch (error) {
     console.error('API 오류:', error);
-    return NextResponse.json(
-      { success: false, error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
+    return new NextResponse(
+      JSON.stringify({ success: false, error: '서버 오류가 발생했습니다.' }),
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
     );
   }
 } 
