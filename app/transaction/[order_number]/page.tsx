@@ -274,13 +274,16 @@ export default function TransactionPage({ params }: { params: { order_number: st
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ order_number: orderNumber }),
-        credentials: 'include'
+        body: JSON.stringify({ 
+          orderNumber: orderNumber,
+          userId: currentUser.id 
+        }),
+        credentials: 'include'  // 쿠키를 포함하여 요청
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || '채팅방 초기화 중 오류가 발생했습니다')
+        throw new Error(errorData.error || '채팅방 초기화 중 오류가 발생했습니다')
       }
 
       const data = await response.json()

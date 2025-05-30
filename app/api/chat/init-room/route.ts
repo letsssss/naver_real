@@ -131,6 +131,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 채팅방 참가자 추가
+    const { error: participantsError } = await supabase
+      .from('room_participants')
+      .insert([
+        { room_id: newRoom.id, user_id: purchase.buyer_id },
+        { room_id: newRoom.id, user_id: purchase.seller_id }
+      ]);
+
+    if (participantsError) {
+      logDebug('⚠️ 참가자 추가 오류:', participantsError.message);
+      // 참가자 추가 실패는 치명적이지 않으므로 계속 진행
+    }
+
     logDebug('✅ 새 채팅방 생성됨:', newRoom.id);
     return NextResponse.json(
       { roomId: newRoom.id },
