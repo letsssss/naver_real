@@ -697,89 +697,117 @@ export default function MyPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {requestedTickets.map((ticket) => (
-                      <div key={ticket.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="text-lg font-semibold">{ticket.title}</h3>
-                              <span className="bg-pink-100 text-pink-600 px-2 py-1 rounded-full text-xs">
-                                구해요
-                              </span>
-                            </div>
-                            <p className="text-gray-600 text-sm mb-2">
-                              {ticket.event_date && `공연일: ${ticket.event_date}`}
-                              {ticket.event_venue && ` | 장소: ${ticket.event_venue}`}
-                            </p>
-                            <p className="text-gray-500 text-sm">
-                              최대 예산: {ticket.ticket_price?.toLocaleString()}원
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className="flex gap-2">
-                              <Link href={`/ticket-request/${ticket.id}`}>
-                                <Button variant="outline" size="sm">
-                                  상세보기
-                                </Button>
-                              </Link>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                                    <FaTrash className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>요청 삭제</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      "{ticket.title}" 요청을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>취소</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                      onClick={() => handleDeleteRequest(ticket.id)}
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      삭제
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4 pt-3 border-t">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">
-                              등록일: {new Date(ticket.created_at).toLocaleDateString()}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-500">제안 받은 수:</span>
-                              <div className="relative">
-                                <button
-                                  onClick={() => openProposalModal(ticket.id)}
-                                  className={`px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                    hasNewProposals(ticket.id, ticket.proposalCount)
-                                      ? 'bg-red-100 text-red-600 hover:bg-red-200 border border-red-300'
-                                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                                  }`}
-                                  disabled={ticket.proposalCount === 0}
-                                >
-                                  {ticket.proposalCount}건
-                                </button>
-                                {hasNewProposals(ticket.id, ticket.proposalCount) && (
-                                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold shadow-md animate-pulse">
-                                    NEW
+                    {requestedTickets.map((ticket) => {
+                      // 요청 상태에 따른 UI 결정
+                      const isAccepted = ticket.requestStatus === 'ACCEPTED';
+                      const hasProposals = ticket.requestStatus === 'HAS_PROPOSALS';
+                      
+                      return (
+                        <div key={ticket.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                          isAccepted ? 'border-green-200 bg-green-50' : 
+                          hasProposals ? 'border-yellow-200 bg-yellow-50' : ''
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="text-lg font-semibold">{ticket.title}</h3>
+                                
+                                {/* 상태별 배지 */}
+                                {isAccepted ? (
+                                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                                    거래 진행중
                                   </span>
+                                ) : hasProposals ? (
+                                  <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">
+                                    제안 {ticket.pendingProposalCount}개
+                                    {hasNewProposals(ticket.id, ticket.proposalCount) && (
+                                      <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs animate-pulse">
+                                        NEW
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="bg-pink-100 text-pink-600 px-2 py-1 rounded-full text-xs">
+                                    구해요
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <p className="text-gray-600 text-sm mb-2">
+                                {ticket.event_date && `공연일: ${ticket.event_date}`}
+                                {ticket.event_venue && ` | 장소: ${ticket.event_venue}`}
+                              </p>
+                              
+                              <p className="text-gray-500 text-sm mb-2">
+                                최대 예산: {ticket.ticket_price?.toLocaleString()}원
+                              </p>
+                              
+                              {/* 수락된 제안 정보 표시 */}
+                              {isAccepted && ticket.acceptedProposal && (
+                                <div className="bg-green-100 border border-green-200 rounded-lg p-3 mt-3">
+                                  <p className="text-green-800 font-medium text-sm">
+                                    ✅ 제안이 수락되었습니다
+                                  </p>
+                                  <p className="text-green-700 text-sm">
+                                    거래 가격: {ticket.acceptedProposal.proposedPrice?.toLocaleString()}원
+                                  </p>
+                                  <p className="text-green-600 text-xs mt-1">
+                                    판매자와 연락하여 거래를 진행하세요
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="text-right">
+                              <div className="flex gap-2">
+                                <Link href={`/ticket-request/${ticket.id}`}>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className={hasNewProposals(ticket.id, ticket.proposalCount) ? 'border-red-300 text-red-600 hover:bg-red-50' : ''}
+                                  >
+                                    {isAccepted ? '거래 상세' : hasProposals ? '제안 확인' : '상세보기'}
+                                    {hasNewProposals(ticket.id, ticket.proposalCount) && (
+                                      <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs">
+                                        NEW
+                                      </span>
+                                    )}
+                                  </Button>
+                                </Link>
+                                
+                                {/* 수락된 거래는 삭제 버튼 숨김 */}
+                                {!isAccepted && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                                        <FaTrash className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>요청 삭제</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          "{ticket.title}" 요청을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>취소</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                          onClick={() => handleDeleteRequest(ticket.id)}
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          삭제
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 )}
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

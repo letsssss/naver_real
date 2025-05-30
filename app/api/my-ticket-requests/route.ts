@@ -31,13 +31,13 @@ export async function GET(req: NextRequest) {
 
     console.log('[내 티켓 요청 API] 사용자 ID:', userId);
 
-    // 티켓 요청 목록과 각 요청의 제안 수 조회
+    // 티켓 요청 목록과 각 요청의 제안 수 및 상태 조회
     const { data: requests, error } = await supabase
       .from('posts')
       .select(`
         *,
         users (id, name, email),
-        proposals (id)
+        proposals (id, status, proposed_price, proposer_id, created_at)
       `, { count: 'exact' })
       .eq('category', 'TICKET_REQUEST')
       .eq('author_id', userId)
@@ -63,6 +63,20 @@ export async function GET(req: NextRequest) {
         parsedContent = { description: request.content };
       }
 
+      // 제안 상태 분석
+      const proposals = request.proposals || [];
+      const totalProposals = proposals.length;
+      const acceptedProposal = proposals.find((p: any) => p.status === 'ACCEPTED');
+      const pendingProposals = proposals.filter((p: any) => p.status === 'PENDING').length;
+      
+      // 요청 상태 결정
+      let requestStatus = 'PENDING'; // 기본: 제안 대기중
+      if (acceptedProposal) {
+        requestStatus = 'ACCEPTED'; // 제안 수락됨
+      } else if (totalProposals > 0) {
+        requestStatus = 'HAS_PROPOSALS'; // 제안 있음
+      }
+
       return {
         id: request.id,
         title: request.title,
@@ -76,8 +90,16 @@ export async function GET(req: NextRequest) {
         event_date: request.event_date || parsedContent?.date,
         event_venue: request.event_venue || parsedContent?.venue,
         ticket_price: request.ticket_price,
-        // 제안 수 계산
-        proposalCount: request.proposals ? request.proposals.length : 0,
+        // 제안 정보
+        proposalCount: totalProposals,
+        pendingProposalCount: pendingProposals,
+        requestStatus: requestStatus,
+        acceptedProposal: acceptedProposal ? {
+          id: acceptedProposal.id,
+          proposedPrice: acceptedProposal.proposed_price,
+          proposerId: acceptedProposal.proposer_id,
+          acceptedAt: acceptedProposal.created_at
+        } : null,
         // 파싱된 내용에서 추가 정보
         description: parsedContent?.description || '',
         quantity: parsedContent?.quantity || 1,

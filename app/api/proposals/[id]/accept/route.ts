@@ -108,86 +108,11 @@ export async function POST(
 
     console.log('[🎯 제안 수락 API] 제안 수락 완료:', proposalId);
 
-    // 6. Purchase 레코드 생성 (기존 진행중인 거래 탭 재활용)
-    try {
-      // 주문번호 생성 (타임스탬프 기반)
-      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      
-      // 안전한 데이터 접근
-      const postData = proposal.posts;
-      const buyerId = postData?.author_id; // 요청자 = 구매자
-      const sellerId = proposal.proposer_id; // 제안자 = 판매자
-      const ticketTitle = postData?.title || '티켓 요청';
-      
-      console.log('[🎯 제안 수락 API] Purchase 생성 데이터:', {
-        post_id: proposal.post_id,
-        buyer_id: buyerId,
-        seller_id: sellerId,
-        total_price: proposal.proposed_price,
-        order_number: orderNumber,
-        ticket_title: ticketTitle
-      });
-
-      // 필수 데이터 검증
-      if (!buyerId || !sellerId) {
-        console.error('[🎯 제안 수락 API] 필수 ID 누락:', { buyerId, sellerId });
-        throw new Error('구매자 또는 판매자 ID가 누락되었습니다.');
-      }
-      
-      const insertData = {
-        post_id: proposal.post_id,
-        buyer_id: buyerId,
-        seller_id: sellerId,
-        total_price: proposal.proposed_price,
-        quantity: 1, // 기본값
-        status: 'PROCESSING',
-        order_number: orderNumber,
-        ticket_title: ticketTitle,
-        event_date: postData?.event_date || null,
-        event_venue: postData?.event_venue || null, 
-        ticket_price: proposal.proposed_price,
-        payment_method: 'PENDING', // 결제 방법 미정
-        created_at: new Date().toISOString()
-      };
-
-      console.log('[🎯 제안 수락 API] Purchase INSERT 데이터:', insertData);
-      
-      // Purchase 생성에만 관리자 클라이언트 사용 (RLS 우회)
-      const adminSupabase = createAdminClient();
-      
-      const { data: purchaseData, error: purchaseError } = await adminSupabase
-        .from('purchases')
-        .insert(insertData)
-        .select()
-        .single();
-
-      if (purchaseError) {
-        console.error('[🎯 제안 수락 API] Purchase 레코드 생성 실패:', {
-          error: purchaseError,
-          code: purchaseError.code,
-          message: purchaseError.message,
-          details: purchaseError.details,
-          hint: purchaseError.hint
-        });
-        // 에러를 throw하지 않고 로그만 남김 (제안 수락은 성공하도록)
-      } else {
-        console.log('[🎯 제안 수락 API] Purchase 레코드 생성 성공:', purchaseData.id);
-      }
-    } catch (purchaseCreateError) {
-      console.error('[🎯 제안 수락 API] Purchase 생성 중 예외 발생:', {
-        error: purchaseCreateError,
-        message: purchaseCreateError instanceof Error ? purchaseCreateError.message : String(purchaseCreateError)
-      });
-      // 치명적이지 않으므로 계속 진행
-    }
-
-    // TODO: 알림 발송 (제안자에게 수락 알림)
-    // await sendNotification(proposal.proposer_id, 'PROPOSAL_ACCEPTED', ...)
-
+    // 수락 성공 메시지 (요청중인 취켓팅에서 상태 확인 가능)
     return NextResponse.json(
       { 
         success: true, 
-        message: '제안이 성공적으로 수락되었습니다! 진행중인 거래에서 확인하세요.',
+        message: '제안이 성공적으로 수락되었습니다! 요청중인 취켓팅에서 확인하세요.',
         proposalId: proposalId
       },
       { status: 200, headers: CORS_HEADERS }
