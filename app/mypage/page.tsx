@@ -326,11 +326,35 @@ export default function MyPage() {
     try {
       console.log('요청 삭제 시작 - 요청 ID:', requestId);
       
+      // 토큰 가져오기
+      let authToken = '';
+      if (typeof window !== 'undefined') {
+        const supabaseKey = Object.keys(localStorage).find(key => 
+          key.startsWith('sb-') && key.endsWith('-auth-token')
+        );
+        
+        if (supabaseKey) {
+          const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
+          authToken = supabaseData.access_token || '';
+        }
+        
+        if (!authToken) {
+          authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+        }
+      }
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
       const response = await fetch(`/api/posts/${requestId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
+        credentials: 'include',
       });
       
       if (!response.ok) {
