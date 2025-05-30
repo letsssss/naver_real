@@ -56,24 +56,31 @@ export async function OPTIONS() {
 }
 
 // Supabase에서 인증된 사용자 정보 가져오기
-async function getAuthUser(request: NextRequest) {
+async function getAuthUser(request: NextRequest): Promise<any | null> {
   try {
-    console.log("\n===== 판매자 구매 API - 사용자 인증 시작 =====");
-    console.log("요청 URL:", request.url);
+    console.log("\n===== 인증 정보 디버깅 시작 =====");
     
-    // Admin 클라이언트 사용
-    const client = createAdminClient();
+    // 🔍 받은 헤더 정보 확인
+    const authHeader = request.headers.get('authorization');
+    console.log("📋 Authorization 헤더:", authHeader ? `${authHeader.substring(0, 20)}...` : "없음");
     
-    // 모든 쿠키 정보 로깅
-    console.log("요청에서 받은 모든 쿠키:");
+    // 🔍 모든 쿠키 정보 확인
     const allCookies = request.cookies.getAll();
-    console.log(`총 ${allCookies.length}개의 쿠키 발견`);
+    console.log("🍪 받은 모든 쿠키:", allCookies.map(c => c.name).join(', '));
     allCookies.forEach(cookie => {
-      console.log(` - ${cookie.name}: ${cookie.value.substring(0, 20)}...`);
+      console.log(`🍪 ${cookie.name}: ${cookie.value.substring(0, 30)}...`);
     });
     
+    // 🔍 URL 쿼리 파라미터 확인
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId');
+    console.log("🔗 URL userId 파라미터:", userId);
+    
+    console.log("===== 인증 정보 디버깅 완료 =====\n");
+
+    const client = createAdminClient();
+    
     // 1. 먼저 Authorization 헤더 확인
-    const authHeader = request.headers.get('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       console.log("Authorization 헤더에서 토큰 발견");
