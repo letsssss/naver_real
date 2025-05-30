@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (sessionError) {
       logDebug('❌ 세션 확인 오류:', sessionError.message);
       return NextResponse.json(
-        { error: '세션 확인 중 오류가 발생했습니다.' },
+        { error: '세션이 만료되었습니다. 다시 로그인해주세요.' },
         { status: 401 }
       );
     }
@@ -71,6 +71,16 @@ export async function POST(request: NextRequest) {
     }
 
     logDebug('주문 번호:', finalOrderNumber);
+
+    // 구매 내역 확인 전에 세션 갱신 시도
+    try {
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        logDebug('⚠️ 세션 갱신 실패:', refreshError.message);
+      }
+    } catch (refreshError) {
+      logDebug('⚠️ 세션 갱신 중 오류:', refreshError);
+    }
 
     // 구매 내역 확인
     const { data: purchase, error: purchaseError } = await supabase

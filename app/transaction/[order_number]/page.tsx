@@ -268,14 +268,24 @@ export default function TransactionPage({ params }: { params: { order_number: st
     try {
       setIsInitializingChat(true)
       
-      // Supabase 클라이언트 생성
+      // Supabase 클라이언트 생성 (쿠키 자동 처리)
       const supabase = createClientComponentClient<Database>()
       
       // 현재 세션 가져오기
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
-      if (sessionError || !session) {
+      if (sessionError) {
+        console.error('[TransactionDetail] 세션 조회 오류:', sessionError)
         throw new Error('세션을 가져올 수 없습니다. 다시 로그인해주세요.')
+      }
+
+      if (!session) {
+        // 세션이 없으면 재인증 시도
+        const { error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) {
+          console.error('[TransactionDetail] 세션 갱신 오류:', refreshError)
+          throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.')
+        }
       }
       
       // 채팅방 초기화 API 호출
@@ -283,7 +293,6 @@ export default function TransactionPage({ params }: { params: { order_number: st
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ 
           orderNumber: orderNumber,
@@ -310,6 +319,11 @@ export default function TransactionPage({ params }: { params: { order_number: st
         title: "채팅방 초기화 오류",
         description: error.message || "채팅방을 준비하는 중 오류가 발생했습니다."
       })
+      
+      // 인증 오류인 경우 로그인 페이지로 이동
+      if (error.message.includes('로그인') || error.message.includes('세션')) {
+        router.push('/login')
+      }
     } finally {
       setIsInitializingChat(false)
     }
