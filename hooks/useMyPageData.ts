@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -22,6 +21,7 @@ interface Sale {
   status: string;
   isActive: boolean;
   sortPriority: number;
+  transaction_type?: 'direct_purchase' | 'proposal_based';
 }
 
 interface User {

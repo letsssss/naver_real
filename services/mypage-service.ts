@@ -89,6 +89,7 @@ export const fetchOngoingSales = async (
             status: statusText,
             isActive: status === 'ACTIVE',
             sortPriority: getStatusPriority(status),
+            transaction_type: purchase.transaction_type || 'direct_purchase',
             purchaseInfo: {
               id: purchase.id,
               status: purchase.status,
@@ -203,6 +204,7 @@ export const fetchOngoingSales = async (
         status: statusText,
         isActive,
         sortPriority: getStatusPriority(status),
+        transaction_type: 'direct_purchase', // 일반 게시물은 직접 판매
         parsedContent: parsedContent,
         rawPrice: contentPrice,
         purchaseInfo: null // 구매 정보 없음

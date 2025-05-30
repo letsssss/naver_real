@@ -18,6 +18,7 @@ export type Sale = {
   sortPriority?: number;
   orderNumber?: string;
   ticket_price?: string | number;
+  transaction_type?: 'direct_purchase' | 'proposal_based'; // 거래 유형 추가
 };
 
 interface SaleItemProps {
@@ -179,7 +180,19 @@ export default function SaleItem({ sale, onDelete, router }: SaleItemProps) {
   return (
     <div className="border-b py-4 last:border-b-0">
       <div className="flex justify-between mb-1">
-        <h3 className="font-medium">{sale.title}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium">{sale.title}</h3>
+          {/* 거래 유형 배지 추가 */}
+          {sale.transaction_type && (
+            <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+              sale.transaction_type === 'proposal_based'
+                ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                : 'bg-blue-100 text-blue-700 border border-blue-200'
+            }`}>
+              {sale.transaction_type === 'proposal_based' ? '제안 수락' : '직접 판매'}
+            </span>
+          )}
+        </div>
         <SaleStatusBadge status={sale.status} isActive={Boolean(orderNumber || sale.orderNumber)} />
       </div>
       <p className="text-sm text-gray-600">{sale.date}</p>

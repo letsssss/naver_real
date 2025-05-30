@@ -22,6 +22,7 @@ interface Sale {
   status: string;
   isActive: boolean;
   sortPriority: number;
+  transaction_type?: 'direct_purchase' | 'proposal_based';
 }
 
 // 상태 카운트 타입 정의

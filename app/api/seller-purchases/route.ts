@@ -518,10 +518,79 @@ export async function GET(request: NextRequest) {
       }
       
       console.log(`판매자 ${authUser.id}의 판매 상품에 대한 구매 ${purchases?.length || 0}개 조회됨`);
+      
+      // 🔥 NEW: proposal_transactions에서 판매자 거래도 조회
+      console.log("5. proposal_transactions에서 판매자 거래 조회 중...");
+      
+      const { data: proposalTransactions, error: proposalError } = await supabase
+        .from('proposal_transactions')
+        .select(`
+          *,
+          posts!proposal_transactions_post_id_fkey(*),
+          buyer:users!proposal_transactions_buyer_id_fkey(*),
+          seller:users!proposal_transactions_seller_id_fkey(*)
+        `)
+        .eq('seller_id', authUser.id)
+        .in('status', ['PENDING', 'COMPLETED', 'PROCESSING', 'CONFIRMED'])
+        .order('updated_at', { ascending: false });
+      
+      if (proposalError) {
+        console.error("proposal_transactions 조회 오류:", proposalError);
+        // 에러가 나도 기존 purchases는 반환
+      } else {
+        console.log(`판매자 ${authUser.id}의 제안 기반 거래 ${proposalTransactions?.length || 0}개 조회됨`);
+      }
+      
+      // 🔥 두 데이터 결합: purchases + proposal_transactions
+      const allSalesData = [];
+      
+      // 기존 purchases 추가
+      if (purchases && purchases.length > 0) {
+        const formattedPurchases = purchases.map((purchase: any) => ({
+          ...purchase,
+          transaction_type: 'direct_purchase', // 구분을 위한 필드
+          postId: purchase.post_id || purchase.postId,
+        }));
+        allSalesData.push(...formattedPurchases);
+      }
+      
+      // proposal_transactions를 purchases 형태로 변환하여 추가
+      if (proposalTransactions && proposalTransactions.length > 0) {
+        const formattedProposals = proposalTransactions.map((proposal: any) => ({
+          id: proposal.id,
+          order_number: proposal.order_number,
+          buyer_id: proposal.buyer_id,
+          seller_id: proposal.seller_id,
+          post_id: proposal.post_id,
+          postId: proposal.post_id,
+          total_price: proposal.total_price,
+          selected_seats: proposal.selected_seats,
+          quantity: proposal.quantity,
+          status: proposal.status,
+          created_at: proposal.created_at,
+          updated_at: proposal.updated_at,
+          // 관련 데이터
+          post: proposal.posts,
+          buyer: proposal.buyer,
+          seller: proposal.seller,
+          // 구분을 위한 필드
+          transaction_type: 'proposal_based',
+        }));
+        allSalesData.push(...formattedProposals);
+      }
+      
+      // 시간순 정렬 (최신순)
+      allSalesData.sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at);
+        const dateB = new Date(b.updated_at || b.created_at);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      console.log(`✅ 총 판매 거래 수: ${allSalesData.length}개 (직접구매: ${purchases?.length || 0}, 제안기반: ${proposalTransactions?.length || 0})`);
       console.log("===== 판매자 구매 목록 API 호출 완료 =====\n");
       
       // 조회 결과가 없어도 빈 배열 반환
-      const safePurchasesList = purchases || [];
+      const safePurchasesList = allSalesData || [];
       
       // 성공 응답 반환
       return addCorsHeaders(NextResponse.json({

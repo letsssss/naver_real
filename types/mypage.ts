@@ -17,6 +17,7 @@ export interface Sale {
   status: string;
   isActive: boolean;
   sortPriority: number;
+  transaction_type?: 'direct_purchase' | 'proposal_based';
 }
 
 // 알림 타입 정의
