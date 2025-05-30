@@ -321,6 +321,33 @@ export default function MyPage() {
     }
   };
 
+  // 요청중인 취켓팅 삭제 핸들러 추가
+  const handleDeleteRequest = async (requestId: number) => {
+    try {
+      console.log('요청 삭제 시작 - 요청 ID:', requestId);
+      
+      const response = await fetch(`/api/posts/${requestId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('요청 삭제에 실패했습니다');
+      }
+      
+      toast.success('요청이 성공적으로 삭제되었습니다');
+      
+      // 요청 목록 새로고침
+      fetchRequestedTickets();
+      
+    } catch (error) {
+      console.error('요청 삭제 오류:', error);
+      toast.error('요청 삭제에 실패했습니다');
+    }
+  };
+
   // 게시물 삭제 핸들러
   const handleDeletePost = async (postId: number) => {
     if (user) {
@@ -598,11 +625,37 @@ export default function MyPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <Link href={`/ticket-request/${ticket.id}`}>
-                              <Button variant="outline" size="sm">
-                                상세보기
-                              </Button>
-                            </Link>
+                            <div className="flex gap-2">
+                              <Link href={`/ticket-request/${ticket.id}`}>
+                                <Button variant="outline" size="sm">
+                                  상세보기
+                                </Button>
+                              </Link>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                                    <FaTrash className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>요청 삭제</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      "{ticket.title}" 요청을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>취소</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleDeleteRequest(ticket.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      삭제
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </div>
                         </div>
                         
