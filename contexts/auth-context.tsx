@@ -251,81 +251,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router]);
 
-  // 세션 갱신 함수
-  const refreshSession = useCallback(async (): Promise<boolean> => {
-    if (process.env.NODE_ENV === 'development') {
-      // 개발 환경에서는 세션 갱신 로직 건너뛰기
-      console.log("개발 환경: 세션 갱신 건너뛰기");
-      return true;
-    }
-    
-    try {
-      console.log("세션 갱신 시도...");
-      // 토큰 갱신 API 호출
-      const response = await fetch('/api/auth/renew', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      if (response.ok) {
-        console.log("세션 갱신 성공");
-        // 갱신된 세션 정보 확인
-        await checkAuthStatus();
-        return true;
-      } else {
-        // 갱신 실패 시에도 로그아웃하지 않음
-        console.warn("❗ 세션 갱신 실패 - 상태 코드:", response.status);
-        const errorData = await response.json().catch(() => ({}));
-        console.warn("❗ 세션 갱신 실패 - 응답 데이터:", errorData);
-        return false;
-      }
-    } catch (error) {
-      console.error('세션 갱신 중 오류 발생:', error);
-      return false;
-    }
+  // 초기 로드 시 인증 상태 확인
+  useEffect(() => {
+    checkAuthStatus();
   }, [checkAuthStatus]);
 
-  // 인증이 필요한 라우트 접근 시 세션 확인
+  // 보호된 라우트 접근 시 인증 확인
   useEffect(() => {
-    // 첫 렌더링 시 인증 상태 확인
-    if (loading) {
-      checkAuthStatus();
-    }
-    
-    // 보호된 라우트 목록 - PROTECTED_ROUTES 상수 사용
-    const protectedRoutes = PROTECTED_ROUTES;
-    
-    // 현재 경로가 보호된 라우트인 경우 세션 확인
-    if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-      // 개발 환경에서는 항상 인증 상태로 처리
-      if (process.env.NODE_ENV === 'development') {
-        if (!devSetupDone.current) {
-          checkAuthStatus();
-        }
-        return;
+    if (!loading && !user) {
+      const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname?.startsWith(route));
+      if (isProtectedRoute) {
+        toast.error("로그인이 필요한 페이지입니다");
+        router.push("/login?callbackUrl=" + encodeURIComponent(pathname || ''));
       }
-      
-      // 프로덕션 환경에서는 세션 갱신 시도
-      refreshSession();
     }
-  }, [pathname, checkAuthStatus, refreshSession, loading]);
+  }, [pathname, user, loading, router]);
 
-  // 로그인 함수
+  // 로그인 함수 (기존 방식 유지 - 건드리지 않음)
   const login = async (email: string, password: string) => {
     try {
-      // 로딩 상태 설정
       setLoading(true);
       
       console.log('🔐 로그인 시작:', email);
       
-      // ✅ 서버 API를 통한 로그인 (통일된 쿠키 설정)
+      // 서버 API를 통한 로그인 (기존 방식 유지)
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-        credentials: 'include', // 쿠키 포함
+        credentials: 'include',
       });
       
       const result = await response.json();
@@ -341,57 +297,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('✅ 서버 로그인 성공:', result.user.email);
       
-      // ✅ 브라우저 클라이언트로 세션 확인
-      const browserClient = createBrowserClient();
-      const { data: sessionData } = await browserClient.auth.getSession();
-      
-      if (sessionData.session) {
-        console.log('✅ Supabase 세션 확인됨:', sessionData.session.user.email);
-        
-        // 로컬 스토리지에 토큰 저장 (API 요청용)
-        safeLocalStorageSet("token", result.token);
-        safeLocalStorageSet("access_token", sessionData.session.access_token);
-        safeLocalStorageSet("supabase_token", sessionData.session.access_token);
-        
-        console.log('💾 토큰 저장 완료');
-      } else {
-        console.warn('⚠️ Supabase 세션이 없습니다. 쿠키 확인 필요');
-      }
-      
-      // 사용자 정보 구성 (서버 응답 우선)
-      const userData: User = {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name || "사용자",
-        role: result.user.role || "USER",
-        createdAt: new Date().toISOString()
-      };
-      
-      // 사용자 정보 저장
-      safeLocalStorageSet("user", JSON.stringify(userData));
-      setUser(userData);
-      
-      // 쿠키 확인 로깅
-      if (typeof document !== 'undefined') {
-        const cookies = document.cookie.split(';').map(c => c.trim());
-        console.log('🍪 로그인 후 쿠키 목록:');
-        cookies.forEach(cookie => {
-          if (cookie.includes('auth') || cookie.includes('sb-')) {
-            console.log(' -', cookie.substring(0, 50) + '...');
-          }
-        });
-      }
+      // 인증 상태 다시 확인
+      await checkAuthStatus();
       
       setLoading(false);
-      
-      // ✅ 페이지 새로고침으로 미들웨어가 새 세션을 인식하도록 함
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          router.refresh();
-          console.log('🔄 미들웨어 세션 인식을 위해 페이지 새로고침');
-        }, 500);
-      }
-      
       return { success: true };
       
     } catch (error) {
@@ -404,17 +313,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 소셜 로그인 함수 수정 (카카오 로그인 처리)
+  // 소셜 로그인 함수 (단순화)
   const socialLogin = async (provider: string) => {
     try {
       setLoading(true);
       console.log(`${provider} 로그인 시작`);
-      
-      // 소셜 로그인 성공 시 개발 환경 설정 리셋
-      // 이로써 실제 로그인이 테스트 사용자로 덮어쓰여지는 것을 방지
-      devSetupDone.current = false;
-      
-      // 실제 로그인 처리는 KakaoLoginButton 컴포넌트에서 직접 처리됨
+      // 실제 로그인 처리는 KakaoLoginButton 컴포넌트에서 처리됨
     } catch (error) {
       console.error(`${provider} 로그인 오류:`, error);
       toast.error(`${provider} 로그인 중 오류가 발생했습니다.`);

@@ -9,7 +9,6 @@ import { FeedbackForm } from "@/components/feedback-form"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "sonner"
 import { SyncUser } from "@/app/components/sync-user"
-import TokenRefresher from '@/app/components/auth/TokenRefresher'
 import { Footer } from "@/components/Footer"
 import { ReviewSection } from "@/components/ReviewSection"
 
@@ -37,7 +36,6 @@ export default function RootLayout({
         <meta name="naver-site-verification" content="877909cff89a029e033c97399331d77f7ca29013" />
       </head>
       <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
-        <TokenRefresher />
         <AuthProvider>
           <SyncUser />
           <div className="flex-grow">
