@@ -71,10 +71,25 @@ export default function MyPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null)
   const [proposals, setProposals] = useState<any[]>([])
   const [isLoadingProposals, setIsLoadingProposals] = useState(false)
+  
+  // NEW 배지 관련 상태 추가
+  const [lastCheckedTimes, setLastCheckedTimes] = useState<Record<number, string>>({})
 
   // 마운트 확인
   useEffect(() => {
     setMounted(true)
+    
+    // localStorage에서 마지막 확인 시간 불러오기
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('proposal-last-checked');
+      if (saved) {
+        try {
+          setLastCheckedTimes(JSON.parse(saved));
+        } catch (e) {
+          console.error('마지막 확인 시간 파싱 오류:', e);
+        }
+      }
+    }
   }, [])
 
   // 로그인 상태 확인
@@ -100,6 +115,45 @@ export default function MyPage() {
     }
   }, [user]);
 
+  // NEW 배지 표시 여부 결정 함수
+  const hasNewProposals = (ticketId: number, proposalCount: number) => {
+    const lastChecked = lastCheckedTimes[ticketId];
+    if (!lastChecked) {
+      // 처음 보는 티켓이고 제안이 있으면 NEW 표시
+      return proposalCount > 0;
+    }
+    
+    // 마지막 확인 이후 새로운 제안이 있는지 체크
+    // 임시로 localStorage에 저장된 이전 제안 수와 비교
+    const savedCounts = localStorage.getItem('proposal-counts');
+    if (savedCounts) {
+      try {
+        const counts = JSON.parse(savedCounts);
+        const previousCount = counts[ticketId] || 0;
+        
+        // 제안 수가 증가했으면 NEW 표시
+        if (proposalCount > previousCount) {
+          return true;
+        }
+      } catch (e) {
+        console.error('제안 수 파싱 오류:', e);
+      }
+    }
+    
+    return false;
+  };
+  
+  // 제안 수 localStorage에 저장하는 함수
+  const updateProposalCounts = (tickets: any[]) => {
+    if (typeof window !== 'undefined') {
+      const counts: Record<number, number> = {};
+      tickets.forEach(ticket => {
+        counts[ticket.id] = ticket.proposalCount;
+      });
+      localStorage.setItem('proposal-counts', JSON.stringify(counts));
+    }
+  };
+
   // 요청중인 취켓팅 데이터 가져오는 함수
   const fetchRequestedTickets = async () => {
     if (!user) return;
@@ -118,6 +172,9 @@ export default function MyPage() {
       console.log('요청중인 취켓팅 조회 성공:', data);
       
       setRequestedTickets(data.requests || []);
+      
+      // 제안 수 저장 (다음 비교를 위해)
+      updateProposalCounts(data.requests || []);
       
     } catch (error) {
       console.error('요청중인 취켓팅 조회 오류:', error);
@@ -196,6 +253,16 @@ export default function MyPage() {
     setSelectedTicketId(ticketId);
     setIsProposalModalOpen(true);
     fetchProposals(ticketId);
+    
+    // 마지막 확인 시간 업데이트
+    const now = new Date().toISOString();
+    const updatedTimes = { ...lastCheckedTimes, [ticketId]: now };
+    setLastCheckedTimes(updatedTimes);
+    
+    // localStorage에 저장
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('proposal-last-checked', JSON.stringify(updatedTimes));
+    }
   };
 
   // user와 activeTab이 변경될 때 데이터 가져오기
@@ -690,13 +757,24 @@ export default function MyPage() {
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-500">제안 받은 수:</span>
-                              <button
-                                onClick={() => openProposalModal(ticket.id)}
-                                className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors cursor-pointer"
-                                disabled={ticket.proposalCount === 0}
-                              >
-                                {ticket.proposalCount}건
-                              </button>
+                              <div className="relative">
+                                <button
+                                  onClick={() => openProposalModal(ticket.id)}
+                                  className={`px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                    hasNewProposals(ticket.id, ticket.proposalCount)
+                                      ? 'bg-red-100 text-red-600 hover:bg-red-200 border border-red-300'
+                                      : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                                  }`}
+                                  disabled={ticket.proposalCount === 0}
+                                >
+                                  {ticket.proposalCount}건
+                                </button>
+                                {hasNewProposals(ticket.id, ticket.proposalCount) && (
+                                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold shadow-md animate-pulse">
+                                    NEW
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
