@@ -21,6 +21,15 @@ export const fetchOngoingSales = async (
   console.log("📊 사용자 정보:", user);
   console.log("📊 사용자 ID:", user?.id);
   
+  // ✅ API_BASE_URL 디버깅 추가
+  console.log("🔍 API_BASE_URL 디버깅:", API_BASE_URL);
+  console.log("🔍 API_BASE_URL 타입:", typeof API_BASE_URL);
+  console.log("🔍 window.location.origin:", typeof window !== 'undefined' ? window.location.origin : 'window 없음');
+  
+  // ✅ API_BASE_URL 임시 fallback 설정
+  const baseUrl = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  console.log("🔍 최종 사용할 baseUrl:", baseUrl);
+  
   if (!user) {
     console.log("❌ 사용자 정보가 없어서 함수 종료");
     return;
@@ -45,7 +54,7 @@ export const fetchOngoingSales = async (
     // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기 (구매 현황 우선)
     const timestamp = Date.now();
     const userId = user?.id || '';
-    const purchaseUrl = `${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`;
+    const purchaseUrl = `${baseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`;
     console.log("🔗 seller-purchases API 호출 준비:");
     console.log("   URL:", purchaseUrl);
     console.log("   사용자 ID:", userId);
@@ -133,7 +142,12 @@ export const fetchOngoingSales = async (
     // 2. 판매 목록 API 호출 - 구매 정보가 없는 경우만 추가
     const salesTimestamp = Date.now();
     console.log("판매 목록 불러오기 시도... 사용자 ID:", user.id);
-    const response = await fetch(`${API_BASE_URL}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
+    
+    // ✅ 모든 게시물을 가져와서 카테고리 값 확인
+    const salesApiUrl = `${baseUrl}/api/posts?userId=${user.id}&t=${salesTimestamp}`;
+    console.log("📡 판매 목록 API URL:", salesApiUrl);
+    
+    const response = await fetch(salesApiUrl, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': authToken ? `Bearer ${authToken}` : '',
@@ -167,6 +181,23 @@ export const fetchOngoingSales = async (
       return;
     }
     
+    // ✅ 모든 게시물의 카테고리 확인 및 로깅
+    console.log("🔍 모든 게시물의 카테고리 분석:");
+    data.posts.forEach((post: any, index: number) => {
+      console.log(`게시물 ${index + 1}: ID=${post.id}, title="${post.title}", category="${post.category}", status="${post.status}"`);
+    });
+    
+    // ✅ TICKET_REQUEST가 아닌 게시물만 필터링 (클라이언트에서)
+    const directSalePosts = data.posts.filter((post: any) => {
+      const isTicketRequest = post.category === 'TICKET_REQUEST';
+      if (isTicketRequest) {
+        console.log(`🚫 TICKET_REQUEST 제외: ID=${post.id}, title="${post.title}"`);
+      }
+      return !isTicketRequest;
+    });
+    
+    console.log(`✅ 필터링 결과: 전체 ${data.posts.length}개 중 직접 판매 ${directSalePosts.length}개`);
+    
     // 상태 카운트 초기화
     const newSaleStatus = {
       취켓팅진행중: 0,
@@ -180,9 +211,11 @@ export const fetchOngoingSales = async (
     // 이미 구매 정보가 있는 ID 목록 생성
     const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
     
-    // 구매 정보가 없는 상품만 필터링
-    const remainingPosts = data.posts.filter((post: any) => !existingPostIds.includes(post.id));
-
+    // ✅ 필터링된 직접 판매 게시물에서 구매 정보가 없는 상품만 필터링
+    const remainingPosts = directSalePosts.filter((post: any) => !existingPostIds.includes(post.id));
+    
+    console.log(`📋 최종 처리할 게시물: 기존 구매정보 ${salesWithPurchaseInfo.length}개 + 새로운 판매글 ${remainingPosts.length}개`);
+    
     // 구매 정보가 없는 상품 처리
     const additionalSales = remainingPosts.map((post: any, idx: number) => {
       // content 필드에서 가격 정보 추출 (JSON 파싱)
