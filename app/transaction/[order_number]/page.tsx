@@ -15,6 +15,38 @@ import { useToast } from "@/components/ui/use-toast"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/supabase.types"
 import ReportButton from "./ReportButton"
+import { confirmPurchase } from "@/services/mypage-service"
+import { TransactionStatus } from "@/types/mypage"
+
+interface Transaction {
+  id: string;
+  type: string;
+  status: string;
+  currentStep: string;
+  stepDates: {
+    payment: string | null;
+    ticketing_started: string | null;
+    ticketing_completed: string | null;
+    confirmed: string | null;
+  };
+  ticket: {
+    title: string;
+    date: string;
+    time: string;
+    venue: string;
+    seat: string;
+    image: string;
+  };
+  price: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  ticketingStatus: string;
+  seller: {
+    id: string;
+    name: string;
+    profileImage: string;
+  };
+}
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -103,19 +135,19 @@ const getTicketingStatusText = (status: string) => {
   }
 }
 
-export default function TransactionDetail() {
-  const params = useParams()
+export default function TransactionPage({ params }: { params: { order_number: string } }) {
   const router = useRouter()
   const orderNumber = params?.order_number as string
   const { user: currentUser } = useAuth() // 로그인한 사용자 정보
   const { toast } = useToast()
   
-  const [transaction, setTransaction] = useState(defaultTransaction)
+  const [transaction, setTransaction] = useState<Transaction>(defaultTransaction)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [roomId, setRoomId] = useState<string | null>(null)
   const [isInitializingChat, setIsInitializingChat] = useState(false)
+  const [setOngoingPurchases, setPurchaseStatus] = useState<any>(null)
 
   // sessionStorage에서 채팅방 ID 가져오기
   useEffect(() => {
@@ -280,33 +312,14 @@ export default function TransactionDetail() {
           // API 호출 시작을 알리는 로그
           console.log("구매확정 API 호출 시작:", orderNumber);
           
-          const response = await fetch(`/api/purchase/${orderNumber}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              status: "CONFIRMED",
-            }),
-          })
+          const result = await confirmPurchase(
+            orderNumber,
+            setOngoingPurchases,
+            setPurchaseStatus
+          );
           
-          // API 응답 로그
-          console.log("구매확정 API 응답 상태:", response.status);
-          
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || "구매 확정에 실패했습니다.")
-          }
-          
-          const result = await response.json()
-          
-          // 응답 결과 로그
-          console.log("구매확정 API 응답 데이터:", result);
-          
-          if (result.error) {
-            throw new Error(result.error)
-          }
+          // 성공 알림 먼저 표시
+          alert("구매가 확정되었습니다.");
           
           // 상태 업데이트
           setTransaction({
@@ -317,29 +330,21 @@ export default function TransactionDetail() {
               ...transaction.stepDates,
               confirmed: new Date().toISOString(),
             },
-          })
-          
-          // 성공 알림 먼저 표시
-          alert("구매가 확정되었습니다.")
+          });
           
           // 잠시 후 페이지 새로고침 (API 처리가 완료되도록 지연)
-          console.log("페이지 새로고침 예약 (1초 후)");
           setTimeout(() => {
-            console.log("페이지 새로고침 실행");
             window.location.reload();
           }, 1000);
         } catch (error) {
-          console.error("구매 확정 에러:", error)
-          alert(error instanceof Error ? error.message : "구매 확정에 실패했습니다.")
+          console.error("구매 확정 에러:", error);
+          alert(error instanceof Error ? error.message : "구매 확정에 실패했습니다.");
         }
-      } else {
-        // 사용자가 취소를 누른 경우 아무 작업도 수행하지 않음
-        console.log("사용자가 구매 확정을 취소했습니다.")
       }
     } else if (transaction.currentStep === "confirmed") {
-      router.push(`/review/${params.order_number}`)
+      router.push(`/review/${params.order_number}`);
     }
-  }
+  };
 
   // 현재 단계에 따른 버튼 텍스트 결정
   const getActionButtonText = () => {

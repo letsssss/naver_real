@@ -26,6 +26,10 @@ export const formatDate = (...dates: (string | undefined)[]): string => {
 
 // 상태 텍스트 변환 함수
 export const getStatusText = (status: string): string => {
+  if (!status) return '판매중';
+  
+  const normalizedStatus = status.toUpperCase();
+  
   const statusMap: Record<string, string> = {
     'PENDING': '취켓팅진행중',
     'PENDING_PAYMENT': '취켓팅진행중',
@@ -34,10 +38,12 @@ export const getStatusText = (status: string): string => {
     'COMPLETED': '취켓팅완료',
     'CONFIRMED': '거래완료',
     'CANCELLED': '거래취소',
-    'ACTIVE': '판매중'
+    'ACTIVE': '판매중',
+    'IN_PROGRESS': '취켓팅진행중'
   };
   
-  return statusMap[status?.toUpperCase()] || '판매중';
+  // 상태값이 없거나 매핑되지 않은 상태인 경우 기본값 반환
+  return statusMap[normalizedStatus] || '판매중';
 };
 
 // 상태별 색상 클래스 반환 함수
