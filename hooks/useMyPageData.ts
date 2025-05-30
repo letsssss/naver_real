@@ -123,7 +123,103 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         }
       }
       
-      // API 요청
+      // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기 (구매 현황 우선)
+      const timestamp = Date.now();
+      const userId = user?.id || '';
+      console.log(`판매자 구매 내역 요청: ${apiBaseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
+      
+      const purchaseResponse = await fetch(`${apiBaseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        credentials: 'include' // 쿠키 포함
+      });
+      
+      console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);
+      
+      let purchasesByPostId: Record<number, any> = {};
+      let salesWithPurchaseInfo: any[] = [];
+      
+      if (purchaseResponse.ok) {
+        const purchaseData = await purchaseResponse.json();
+        console.log("판매자 구매 내역 데이터:", purchaseData);
+        
+        if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
+          // 게시글 ID별로 구매 정보를 인덱싱
+          purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
+            if (purchase.postId || purchase.post_id) {
+              // post_id 또는 postId 필드 처리
+              const postId = purchase.postId || purchase.post_id;
+              acc[postId] = purchase;
+            }
+            return acc;
+          }, {});
+          
+          // 구매 정보가 있는 판매 상품 목록 생성 - 제안 기반 거래 포함
+          salesWithPurchaseInfo = purchaseData.purchases.map((purchase: any) => {
+            const postId = purchase.postId || purchase.post_id;
+            const post = purchase.post || {};
+            
+            // 판매 데이터 기본 형식 생성
+            const status = purchase.status || 'ACTIVE';
+            
+            // 상태 텍스트 변환
+            let statusText = "판매중";
+            if (status === 'PENDING' || status === 'PENDING_PAYMENT' || status === 'PROCESSING') {
+              statusText = "취켓팅 진행중";
+            } else if (status === 'COMPLETED') {
+              statusText = "취켓팅 완료";
+            } else if (status === 'CONFIRMED') {
+              statusText = "거래완료";
+            } else if (status === 'CANCELLED') {
+              statusText = "거래취소";
+            }
+            
+            // 날짜 처리
+            const dateStr = purchase.created_at || post.created_at || new Date().toISOString();
+            const date = new Date(dateStr);
+            const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
+            
+            // 가격 처리
+            const priceValue = post.ticket_price || post.ticketPrice || post.price || purchase.total_price || 0;
+            const formattedPrice = priceValue 
+              ? `${Number(priceValue).toLocaleString()}원` 
+              : '가격 정보 없음';
+              
+            // 정렬 우선순위
+            let sortPriority = 0;
+            if (statusText === "취켓팅 진행중") {
+              sortPriority = 1;
+            } else if (statusText === "판매중") {
+              sortPriority = 2;
+            } else if (statusText === "취켓팅 완료") {
+              sortPriority = 3;
+            } else if (statusText === "거래완료") {
+              sortPriority = 4;
+            } else if (statusText === "거래취소") {
+              sortPriority = 5;
+            }
+              
+            return {
+              id: postId,
+              title: post.title || post.eventName || purchase.ticket_title || '제목 없음',
+              date: formattedDate,
+              price: formattedPrice,
+              status: statusText,
+              isActive: status === 'ACTIVE',
+              sortPriority: sortPriority,
+              transaction_type: purchase.transaction_type || 'direct_purchase', // 거래 유형 추가
+              orderNumber: purchase.order_number || purchase.orderNumber
+            };
+          });
+        }
+      }
+
+      // 2. 판매 목록 API 호출 - 구매 정보가 없는 경우만 추가
       const salesTimestamp = Date.now();
       const response = await fetch(`${apiBaseUrl}/api/posts?userId=${user.id}&t=${salesTimestamp}`, {
         headers: {
@@ -135,13 +231,48 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       });
       
       if (!response.ok) {
-        throw new Error('판매 목록을 불러오는데 실패했습니다.');
+        // 구매 정보가 있는 판매 상품만이라도 표시
+        if (salesWithPurchaseInfo.length > 0) {
+          const sortedSalesData = [...salesWithPurchaseInfo].sort((a, b) => a.sortPriority - b.sortPriority);
+          setOriginalSales(sortedSalesData);
+          setOngoingSales(sortedSalesData);
+          
+          // 상태 카운트 계산
+          const newSaleStatus = {
+            취켓팅진행중: 0,
+            판매중인상품: 0,
+            취켓팅완료: 0,
+            거래완료: 0,
+            거래취소: 0,
+          };
+          
+          salesWithPurchaseInfo.forEach(sale => {
+            if (sale.status === '취켓팅 진행중') newSaleStatus.취켓팅진행중 += 1;
+            else if (sale.status === '판매중') newSaleStatus.판매중인상품 += 1;
+            else if (sale.status === '취켓팅 완료') newSaleStatus.취켓팅완료 += 1;
+            else if (sale.status === '거래완료') newSaleStatus.거래완료 += 1;
+            else if (sale.status === '거래취소') newSaleStatus.거래취소 += 1;
+          });
+          
+          setSaleStatus(newSaleStatus);
+        } else {
+          throw new Error('판매 목록을 불러오는데 실패했습니다.');
+        }
+        return;
       }
         
       const data = await response.json();
       
       if (!data.posts || !Array.isArray(data.posts)) {
-        setOngoingSales([]);
+        // 구매 정보가 있는 판매 상품만이라도 표시
+        if (salesWithPurchaseInfo.length > 0) {
+          const sortedSalesData = [...salesWithPurchaseInfo].sort((a, b) => a.sortPriority - b.sortPriority);
+          setOriginalSales(sortedSalesData);
+          setOngoingSales(sortedSalesData);
+        } else {
+          setOngoingSales([]);
+          setOriginalSales([]);
+        }
         return;
       }
       
@@ -154,38 +285,15 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         거래취소: 0,
       };
       
-      // 구매 확정(CONFIRMED) 상태 확인을 위해 추가 API 호출
-      const timestamp = Date.now();
-      const userId = user?.id || '';
+      // 3. 구매 정보가 없는 판매 상품 처리
+      // 이미 구매 정보가 있는 ID 목록 생성
+      const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
       
-      const purchaseResponse = await fetch(`${apiBaseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
-          'Cache-Control': 'no-cache'
-        },
-        credentials: 'include'
-      });
-      
-      let purchasesByPostId: Record<number, any> = {};
-      
-      if (purchaseResponse.ok) {
-        const purchaseData = await purchaseResponse.json();
-        if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
-          // 게시글 ID별로 구매 정보를 인덱싱
-          purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
-            if (purchase.postId || purchase.post_id) {
-              const postId = purchase.postId || purchase.post_id;
-              acc[postId] = purchase;
-            }
-            return acc;
-          }, {});
-        }
-      }
-        
+      // 구매 정보가 없는 상품만 필터링
+      const remainingPosts = data.posts.filter((post: any) => !existingPostIds.includes(post.id));
+
       // API 응답을 화면에 표시할 형식으로 변환
-      const salesData = data.posts.map((post: any) => {
+      const additionalSales = remainingPosts.map((post: any) => {
         // 관련된 구매 확인
         const relatedPurchase = purchasesByPostId[post.id];
         const purchaseStatus = relatedPurchase?.status || '';
@@ -197,25 +305,16 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
         // 구매 상태가 CONFIRMED인 경우 거래완료로 표시
         if (purchaseStatus === 'CONFIRMED') {
           statusText = "거래완료";
-          newSaleStatus.거래완료 += 1;
         } else if (postStatus === 'ACTIVE' || postStatus === '' || postStatus === undefined || postStatus === null) {
           statusText = "판매중";
-          newSaleStatus.판매중인상품 += 1;
         } else if (postStatus === 'PENDING' || postStatus === 'PENDING_PAYMENT' || postStatus === 'PROCESSING') {
           statusText = "취켓팅 진행중";
-          newSaleStatus.취켓팅진행중 += 1;
         } else if (postStatus === 'COMPLETED') {
           statusText = "취켓팅 완료";
-          newSaleStatus.취켓팅완료 += 1;
         } else if (postStatus === 'CONFIRMED') {
           statusText = "거래완료";
-          newSaleStatus.거래완료 += 1;
         } else if (postStatus === 'CANCELLED') {
           statusText = "거래취소";
-          newSaleStatus.거래취소 += 1;
-        } else {
-          // 기타 상태는 판매중으로 간주
-          newSaleStatus.판매중인상품 += 1;
         }
         
         // 정렬을 위한 우선순위 부여
@@ -242,12 +341,28 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
           status: statusText,
           isActive: postStatus === 'ACTIVE' || postStatus === '' || postStatus === undefined || postStatus === null,
           sortPriority: sortPriority,
+          transaction_type: 'direct_purchase', // 일반 게시물은 직접 판매
           orderNumber: relatedPurchase?.orderNumber
         };
       });
       
+      // 4. 모든 판매 데이터 결합
+      const combinedSales = [...salesWithPurchaseInfo, ...additionalSales];
+      
+      // 상태 카운트 계산
+      combinedSales.forEach(sale => {
+        if (sale.status === '취켓팅 진행중') newSaleStatus.취켓팅진행중 += 1;
+        else if (sale.status === '판매중') newSaleStatus.판매중인상품 += 1;
+        else if (sale.status === '취켓팅 완료') newSaleStatus.취켓팅완료 += 1;
+        else if (sale.status === '거래완료') newSaleStatus.거래완료 += 1;
+        else if (sale.status === '거래취소') newSaleStatus.거래취소 += 1;
+      });
+      
       // 상태에 따라 정렬
-      const sortedSalesData = [...salesData].sort((a, b) => a.sortPriority - b.sortPriority);
+      const sortedSalesData = [...combinedSales].sort((a, b) => a.sortPriority - b.sortPriority);
+      
+      console.log("✅ 통합된 판매 데이터:", combinedSales);
+      console.log("✅ 제안 기반 거래 포함된 판매 목록:", salesWithPurchaseInfo.length, "개");
       
       // 상태 업데이트
       setSaleStatus(newSaleStatus);

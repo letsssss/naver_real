@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { supabase, getSupabaseClient } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabase";
 import { Database } from "@/types/supabase.types";
 
 // 사용자 데이터 타입 정의
@@ -61,8 +61,8 @@ async function getAuthUser(request: NextRequest) {
     console.log("\n===== 판매자 구매 API - 사용자 인증 시작 =====");
     console.log("요청 URL:", request.url);
     
-    // 일관된 Supabase 클라이언트 인스턴스 사용
-    const client = getSupabaseClient();
+    // Admin 클라이언트 사용
+    const client = createAdminClient();
     
     // 모든 쿠키 정보 로깅
     console.log("요청에서 받은 모든 쿠키:");
@@ -373,6 +373,11 @@ export async function GET(request: NextRequest) {
     // 디버깅: 환경 출력
     console.log("NODE_ENV:", process.env.NODE_ENV);
     
+    // 환경변수 로그
+    console.log('✅ SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 10))
+
+    const supabase = createAdminClient()
+
     try {
       // 1. 먼저 posts 테이블 구조 확인
       console.log("1. posts 테이블 구조 확인 중...");
