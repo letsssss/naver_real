@@ -749,6 +749,45 @@ export default function MyPage() {
                                   <span className="inline-block bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium">
                                     ✅ 제안이 수락되었습니다
                                   </span>
+                                  
+                                  {/* 거래 상세 보기와 메시지 버튼 */}
+                                  {ticket.acceptedProposal && (
+                                    <div className="flex gap-2 mt-3">
+                                      <Button 
+                                        className="text-sm bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1 font-medium" 
+                                        variant="outline"
+                                        onClick={() => {
+                                          // TODO: 제안 기반 거래 상세 페이지로 이동
+                                          console.log('거래 상세 보기:', ticket.acceptedProposal.id);
+                                          toast.info('거래 상세 페이지 준비중입니다');
+                                        }}
+                                      >
+                                        <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
+                                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                                        </svg>
+                                        거래 상세 보기
+                                      </Button>
+                                      
+                                      <MessageButton 
+                                        orderNumber={`PROPOSAL-${ticket.acceptedProposal.id}`}
+                                        onClick={() => {
+                                          console.log('메시지 버튼 클릭:', ticket.acceptedProposal.id);
+                                          toast.info('메시지 기능 준비중입니다');
+                                        }}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
