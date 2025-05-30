@@ -147,6 +147,8 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       if (purchaseResponse.ok) {
         const purchaseData = await purchaseResponse.json();
         console.log("판매자 구매 내역 데이터:", purchaseData);
+        console.log("🔥 DEBUG: purchaseData.purchases 길이:", purchaseData.purchases?.length);
+        console.log("🔥 DEBUG: purchaseData.purchases 샘플:", purchaseData.purchases?.slice(0, 2));
         
         if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
           // 게시글 ID별로 구매 정보를 인덱싱
@@ -155,6 +157,7 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
               // post_id 또는 postId 필드 처리
               const postId = purchase.postId || purchase.post_id;
               acc[postId] = purchase;
+              console.log("🔥 DEBUG: purchasesByPostId에 추가:", postId, purchase.transaction_type);
             }
             return acc;
           }, {});
@@ -163,6 +166,13 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
           salesWithPurchaseInfo = purchaseData.purchases.map((purchase: any) => {
             const postId = purchase.postId || purchase.post_id;
             const post = purchase.post || {};
+            
+            console.log("🔥 DEBUG: 판매 상품 처리 중:", {
+              postId,
+              title: post.title || purchase.ticket_title,
+              transaction_type: purchase.transaction_type,
+              status: purchase.status
+            });
             
             // 판매 데이터 기본 형식 생성
             const status = purchase.status || 'ACTIVE';

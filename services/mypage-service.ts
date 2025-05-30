@@ -17,26 +17,44 @@ export const fetchOngoingSales = async (
   setOriginalSales: (sales: Sale[]) => void,
   setIsLoadingSales: (isLoading: boolean) => void
 ) => {
-  if (!user) return;
+  console.log("🚀🚀🚀 fetchOngoingSales 함수 시작! 🚀🚀🚀");
+  console.log("📊 사용자 정보:", user);
+  console.log("📊 사용자 ID:", user?.id);
   
+  if (!user) {
+    console.log("❌ 사용자 정보가 없어서 함수 종료");
+    return;
+  }
+  
+  console.log("✅ 사용자 정보 확인 완료, 로딩 상태 설정 중...");
   setIsLoadingSales(true);
   try {
-    // 인증 토큰 가져오기
+    console.log("🔑 인증 토큰 가져오기 시작...");
     const authToken = getAuthToken();
+    console.log("🔑 토큰 결과:", authToken ? `토큰 있음 (${authToken.substring(0, 20)}...)` : "토큰 없음");
     
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': authToken ? `Bearer ${authToken}` : '',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    };
+    console.log("📡 API 헤더 준비 완료:", headers);
+
     // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기 (구매 현황 우선)
     const timestamp = Date.now();
     const userId = user?.id || '';
-    console.log(`판매자 구매 내역 요청: ${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`);
+    const purchaseUrl = `${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`;
+    console.log("🔗 seller-purchases API 호출 준비:");
+    console.log("   URL:", purchaseUrl);
+    console.log("   사용자 ID:", userId);
+    console.log("   타임스탬프:", timestamp);
     
-    const purchaseResponse = await fetch(`${API_BASE_URL}/api/seller-purchases?t=${timestamp}&userId=${userId}`, {
+    console.log("🚀 seller-purchases API 호출 시작...");
+    const purchaseResponse = await fetch(purchaseUrl, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : '',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
+      headers,
       credentials: 'include' // 쿠키 포함
     });
     
