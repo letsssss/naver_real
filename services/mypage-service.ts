@@ -1058,4 +1058,41 @@ export const cancelPurchase = async (
     toast.error(error instanceof Error ? error.message : "거래 취소 중 오류가 발생했습니다.");
     return false;
   }
+};
+
+export const confirmPurchase = async (
+  orderNumber: string,
+  setOngoingPurchases: React.Dispatch<React.SetStateAction<Purchase[]>>,
+  setPurchaseStatus: React.Dispatch<React.SetStateAction<TransactionStatus>>
+) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/purchase/${orderNumber}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status: 'CONFIRMED' })
+    });
+
+    if (!response.ok) {
+      throw new Error('구매 확정에 실패했습니다.');
+    }
+
+    const data = await response.json();
+
+    // UI 업데이트
+    setOngoingPurchases(prev => prev.filter(purchase => purchase.orderNumber !== orderNumber));
+
+    // 상태 카운트 업데이트
+    setPurchaseStatus(prev => ({
+      ...prev,
+      취켓팅완료: Math.max(0, prev.취켓팅완료 - 1),
+      거래완료: prev.거래완료 + 1
+    }));
+
+    return data;
+  } catch (error) {
+    console.error('구매 확정 오류:', error);
+    throw error;
+  }
 }; 
