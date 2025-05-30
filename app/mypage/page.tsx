@@ -825,7 +825,7 @@ export default function MyPage() {
                                   </div>
                                 ) : (
                                   // 진행중인 제안: 기존 로직
-                                  {hasProposals ? (
+                                  hasProposals ? (
                                     // 제안이 있으면 모달 열기
                                     <Button 
                                       variant="outline" 
@@ -850,7 +850,7 @@ export default function MyPage() {
                                         상세보기
                                       </Button>
                                     </Link>
-                                  )}
+                                  )
                                 )}
                                 
                                 {/* 수락된 거래는 삭제 버튼 숨김 */}
