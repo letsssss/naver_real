@@ -73,17 +73,28 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 메시지 데이터 불러오기
+   * 채팅방 초기화 함수
    */
-  const fetchMessages = useCallback(async () => {
+  const initializeChat = useCallback(async () => {
     if (!roomId) return;
     
     try {
       setLoading(true);
       console.log(`[채팅] 메시지 불러오기 시작 - 방ID: ${roomId}`);
       
+      const supabase = createBrowserClient();
+      
+      // 세션 확인
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('[채팅] 세션 오류:', sessionError);
+        setError('로그인이 필요합니다.');
+        return;
+      }
+      
       // 1. 채팅방 정보 조회
-      const { data: roomData, error: roomError } = await createBrowserClient()
+      const { data: roomData, error: roomError } = await supabase
         .from('rooms')
         .select('*')
         .eq('id', roomId)
@@ -100,7 +111,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       }
       
       // 2. 채팅 메시지 조회
-      const { data: messagesData, error: messagesError } = await createBrowserClient()
+      const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
         .select(`
           *,
@@ -123,7 +134,7 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       setMessages(messagesData || []);
       
       // 3. 참가자 정보 조회
-      const { data: participantsData, error: participantsError } = await createBrowserClient()
+      const { data: participantsData, error: participantsError } = await supabase
         .from('room_participants')
         .select(`
           *,
@@ -143,13 +154,14 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
       
       // 4. 읽지 않은 메시지 읽음 표시
       await markMessagesAsRead();
-    } catch (err) {
-      console.error('[채팅] 데이터 로딩 중 오류:', err);
-      setError('채팅 데이터를 불러오는 중 오류가 발생했습니다.');
+      
+    } catch (error) {
+      console.error('[채팅] 초기화 중 오류:', error);
+      setError('채팅방 초기화 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
-  }, [roomId, createBrowserClient]);
+  }, [roomId, userId]);
 
   /**
    * 메시지 읽음 표시
@@ -158,125 +170,86 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
     if (!roomId || !userId) return;
     
     try {
-      const { error } = await createBrowserClient()
+      const supabase = createBrowserClient();
+      
+      // 세션 확인
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      
+      await supabase
         .from('messages')
         .update({ is_read: true })
         .eq('room_id', roomId)
-        .neq('sender_id', userId)
+        .eq('receiver_id', userId)
         .eq('is_read', false);
-      
-      if (error) {
-        console.error('[채팅] 메시지 읽음 처리 오류:', error);
-      }
-    } catch (err) {
-      console.error('[채팅] 메시지 읽음 처리 중 오류:', err);
+        
+    } catch (error) {
+      console.error('[채팅] 읽음 표시 오류:', error);
     }
-  }, [roomId, userId, createBrowserClient]);
+  }, [roomId, userId]);
 
   /**
    * 초기 데이터 로딩
    */
   useEffect(() => {
     if (roomId) {
-      fetchMessages();
+      initializeChat();
     }
-  }, [roomId, fetchMessages]);
+  }, [roomId, initializeChat]);
 
   /**
    * 실시간 메시지 구독 (useRealtimeMessages 훅 사용)
    */
-  useRealtimeMessages(roomId, async (newMessage) => {
-    // userId가 없으면 처리하지 않음 (불필요한 작업 방지)
-    if (!userId) {
-      console.warn('[채팅] userId가 없어 메시지 처리를 건너뜁니다:', newMessage.id);
-      return;
+  useRealtimeMessages(roomId, (newMessage) => {
+    setMessages((prev) => [...prev, newMessage]);
+    if (newMessage.sender_id !== userId) {
+      markMessagesAsRead();
     }
-    
-    console.log('[채팅] 새 메시지 수신:', newMessage);
-    
-    const chatMessage = newMessage as unknown as ChatMessage;
-    
-    if (userId && chatMessage.sender_id !== userId) {
-      // 내가 보낸 메시지가 아닐 경우 읽음 표시
-      await createBrowserClient()
-        .from('messages')
-        .update({ is_read: true })
-        .eq('id', chatMessage.id);
-        
-      // 다른 사람의 메시지인 경우 발신자 정보 조회
-      const { data: sender } = await createBrowserClient()
-        .from('users')
-        .select('id, name, profile_image')
-        .eq('id', chatMessage.sender_id)
-        .single();
-        
-      if (sender) {
-        chatMessage.sender = sender;
-      }
-    }
-    
-    // 중복 메시지 방지를 위한 검사 추가
-    setMessages((prev) => {
-      // 이미 동일한 ID의 메시지가 있는지 확인
-      const exists = prev.some((msg) => msg.id === chatMessage.id);
-      // 중복이면 기존 상태 유지, 새 메시지면 추가
-      return exists ? prev : [...prev, chatMessage];
-    });
   });
 
   /**
    * 메시지 전송 함수
    */
   const sendMessage = useCallback(async () => {
-    const trimmedMessage = newMessage.trim();
-    if (!trimmedMessage || !roomId || !userId) return;
+    if (!newMessage.trim() || !roomId || !userId) return;
     
     try {
       setSendingMessage(true);
-      console.log(`[채팅] 메시지 전송 시도: "${trimmedMessage.substring(0, 20)}${trimmedMessage.length > 20 ? '...' : ''}"`);
       
-      // 메시지 ID 생성
+      const supabase = createBrowserClient();
+      
+      // 세션 확인
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('로그인이 필요합니다.');
+        return;
+      }
+      
       const messageId = uuidv4();
-      
-      // 메시지 삽입
-      const { error } = await createBrowserClient()
+      const { error: sendError } = await supabase
         .from('messages')
-        .insert([
-          {
-            id: messageId,
-            room_id: roomId,
-            sender_id: userId,
-            content: trimmedMessage,
-            is_read: false,
-            created_at: new Date().toISOString()
-          },
-        ]);
+        .insert({
+          id: messageId,
+          room_id: roomId,
+          sender_id: userId,
+          content: newMessage.trim(),
+        });
       
-      if (error) {
-        console.error('[채팅] 메시지 전송 오류:', error);
+      if (sendError) {
+        console.error('[채팅] 메시지 전송 오류:', sendError);
         toast.error('메시지 전송에 실패했습니다.');
         return;
       }
       
-      // 채팅방 마지막 메시지 업데이트
-      await createBrowserClient()
-        .from('rooms')
-        .update({
-          last_chat: trimmedMessage,
-          time_of_last_chat: new Date().toISOString()
-        })
-        .eq('id', roomId);
-      
-      // 입력 필드 초기화
       setNewMessage('');
-      console.log('[채팅] 메시지 전송 성공');
-    } catch (err) {
-      console.error('[채팅] 메시지 전송 중 오류:', err);
+      
+    } catch (error) {
+      console.error('[채팅] 메시지 전송 중 오류:', error);
       toast.error('메시지 전송 중 오류가 발생했습니다.');
     } finally {
       setSendingMessage(false);
     }
-  }, [newMessage, roomId, userId, createBrowserClient]);
+  }, [newMessage, roomId, userId]);
 
   /**
    * 엔터 키로 메시지 전송

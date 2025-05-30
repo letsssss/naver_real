@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 // import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 
@@ -19,20 +19,30 @@ export async function POST(request: NextRequest) {
   
   try {
     // 쿠키 기반 Supabase 클라이언트 생성
-    const supabase = createServerComponentClient<Database>({ cookies });
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
     
     // 세션 확인 (쿠키에서 자동으로 세션 읽음)
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     // 인증 실패 처리
-    if (authError || !user) {
-      logDebug('❌ 인증 실패:', authError?.message);
+    if (sessionError) {
+      logDebug('❌ 세션 확인 오류:', sessionError.message);
       return NextResponse.json(
-        { error: '인증에 실패했습니다. 다시 로그인해주세요.' },
+        { error: '세션 확인 중 오류가 발생했습니다.' },
+        { status: 401 }
+      );
+    }
+
+    if (!session) {
+      logDebug('❌ 세션 없음');
+      return NextResponse.json(
+        { error: '로그인이 필요합니다.' },
         { status: 401 }
       );
     }
     
+    const user = session.user;
     logDebug('✅ 인증 성공: 사용자 ID', user.id);
 
     // 요청 본문에서 주문 번호 가져오기
@@ -103,15 +113,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 새 채팅방 생성
-    const roomId = crypto.randomUUID(); // nanoid() 대신 표준 UUID 생성
-    const { error: createError } = await supabase
+    const { data: newRoom, error: createError } = await supabase
       .from('rooms')
       .insert({
-        id: roomId,
         order_number: finalOrderNumber,
         buyer_id: purchase.buyer_id,
         seller_id: purchase.seller_id,
-      });
+      })
+      .select()
+      .single();
 
     if (createError) {
       logDebug('❌ 채팅방 생성 오류:', createError.message);
@@ -121,9 +131,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logDebug('✅ 새 채팅방 생성됨:', roomId);
+    logDebug('✅ 새 채팅방 생성됨:', newRoom.id);
     return NextResponse.json(
-      { roomId },
+      { roomId: newRoom.id },
       { status: 201 }
     );
 
