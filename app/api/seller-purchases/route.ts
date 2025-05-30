@@ -60,6 +60,28 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
   try {
     console.log("\n===== 인증 정보 디버깅 시작 =====");
     
+    // 🔍 URL 쿼리 파라미터 확인 (개발 환경에서 우선 처리)
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId');
+    console.log("🔗 URL userId 파라미터:", userId);
+    
+    // 🔥 NEW: 개발 환경에서는 userId 파라미터를 가장 먼저 확인
+    if (process.env.NODE_ENV === 'development' && userId && userId.length > 10) {
+      console.log("🚀 개발 환경: userId 파라미터로 즉시 인증 처리");
+      console.log("쿼리 파라미터에서 유효한 사용자 ID 발견:", userId);
+      
+      try {
+        return {
+          id: userId,
+          email: 'dev-user@example.com',
+          name: '개발 테스트 사용자',
+          role: 'USER'
+        };
+      } catch (error) {
+        console.error("개발 환경 인증 처리 중 오류:", error);
+      }
+    }
+    
     // 🔍 받은 헤더 정보 확인
     const authHeader = request.headers.get('authorization');
     console.log("📋 Authorization 헤더:", authHeader ? `${authHeader.substring(0, 20)}...` : "없음");
@@ -70,11 +92,6 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
     allCookies.forEach(cookie => {
       console.log(`🍪 ${cookie.name}: ${cookie.value.substring(0, 30)}...`);
     });
-    
-    // 🔍 URL 쿼리 파라미터 확인
-    const url = new URL(request.url);
-    const userId = url.searchParams.get('userId');
-    console.log("🔗 URL userId 파라미터:", userId);
     
     console.log("===== 인증 정보 디버깅 완료 =====\n");
 
@@ -297,32 +314,6 @@ async function getAuthUser(request: NextRequest): Promise<any | null> {
         }
       } catch (tokenError) {
         console.error("auth-token 쿠키 검증 오류:", tokenError);
-      }
-    }
-    
-    // 4. 사용자 ID를 쿼리 파라미터로 받은 경우 (개발 환경에서만 허용)
-    if (process.env.NODE_ENV === 'development') {
-      // URL 객체로 파싱하여 더 안정적으로 쿼리 파라미터 추출
-      const url = new URL(request.url);
-      const userId = url.searchParams.get('userId');
-      console.log("개발 환경 인증 검사 - URL:", url.toString());
-      console.log("개발 환경 인증 검사 - userId 파라미터:", userId);
-      
-      if (userId && userId.length > 10) {  // 유효한 ID 형식인지 간단히 확인
-        console.log("쿼리 파라미터에서 유효한 사용자 ID 발견:", userId);
-        
-        try {
-          // 개발 환경에서는 사용자 ID가 존재하면 바로 인증 성공으로 처리
-          // 데이터베이스 조회 대신 직접 사용자 정보 생성
-          return {
-            id: userId,
-            email: 'dev-user@example.com',
-            name: '개발 테스트 사용자',
-            role: 'USER'
-          };
-        } catch (error) {
-          console.error("개발 환경 인증 처리 중 오류:", error);
-        }
       }
     }
     

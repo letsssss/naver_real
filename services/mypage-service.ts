@@ -187,13 +187,17 @@ export const fetchOngoingSales = async (
       console.log(`게시물 ${index + 1}: ID=${post.id}, title="${post.title}", category="${post.category}", status="${post.status}"`);
     });
     
-    // ✅ 제안 기반 거래 추가를 위한 새로운 필터링 로직
+    // 🔥 NEW: 제안 기반 거래 추가를 위한 새로운 필터링 로직
     console.log("🔍 제안 기반 거래 확인을 위해 현재 사용자의 수락된 제안 조회 시작...");
     
     // 현재 사용자가 제안했고 수락된 TICKET_REQUEST 게시물들을 찾기
     let acceptedProposalPosts: any[] = [];
     try {
-      const proposalResponse = await fetch(`${baseUrl}/api/seller-purchases?userId=${user.id}`, {
+      const proposalTimestamp = Date.now();
+      const proposalApiUrl = `${baseUrl}/api/seller-purchases?userId=${user.id}&t=${proposalTimestamp}`;
+      console.log("🔗 제안 기반 거래 API URL:", proposalApiUrl);
+      
+      const proposalResponse = await fetch(proposalApiUrl, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : '',
@@ -201,6 +205,8 @@ export const fetchOngoingSales = async (
         },
         credentials: 'include',
       });
+      
+      console.log("🔄 제안 기반 거래 API 응답 상태:", proposalResponse.status, proposalResponse.statusText);
       
       if (proposalResponse.ok) {
         const proposalData = await proposalResponse.json();
@@ -236,6 +242,24 @@ export const fetchOngoingSales = async (
         }
       } else {
         console.log("⚠️ 제안 기반 거래 조회 실패 또는 데이터 없음");
+        console.log("🔍 응답 상태 코드:", proposalResponse.status);
+        console.log("🔍 응답 상태 텍스트:", proposalResponse.statusText);
+        
+        // 401 오류인 경우 추가 정보 로깅
+        if (proposalResponse.status === 401) {
+          console.error("🚨 seller-purchases API 401 인증 오류 발생!");
+          console.error("🔗 요청 URL:", proposalApiUrl);
+          console.error("🔑 Authorization 헤더:", authToken ? "존재함" : "없음");
+          console.error("👤 사용자 ID:", user.id);
+          
+          // 응답 본문도 확인
+          try {
+            const errorText = await proposalResponse.text();
+            console.error("📝 오류 응답 본문:", errorText);
+          } catch (textError) {
+            console.error("📝 오류 응답 본문 읽기 실패:", textError);
+          }
+        }
       }
     } catch (error) {
       console.warn("⚠️ 제안 기반 거래 조회 중 오류:", error);
