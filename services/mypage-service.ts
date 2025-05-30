@@ -187,7 +187,61 @@ export const fetchOngoingSales = async (
       console.log(`게시물 ${index + 1}: ID=${post.id}, title="${post.title}", category="${post.category}", status="${post.status}"`);
     });
     
-    // ✅ TICKET_REQUEST가 아닌 게시물만 필터링 (클라이언트에서)
+    // ✅ 제안 기반 거래 추가를 위한 새로운 필터링 로직
+    console.log("🔍 제안 기반 거래 확인을 위해 현재 사용자의 수락된 제안 조회 시작...");
+    
+    // 현재 사용자가 제안했고 수락된 TICKET_REQUEST 게시물들을 찾기
+    let acceptedProposalPosts: any[] = [];
+    try {
+      const proposalResponse = await fetch(`${baseUrl}/api/seller-purchases?userId=${user.id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+        credentials: 'include',
+      });
+      
+      if (proposalResponse.ok) {
+        const proposalData = await proposalResponse.json();
+        console.log("🎯 제안 기반 거래 조회 성공:", proposalData);
+        
+        if (proposalData.purchases && Array.isArray(proposalData.purchases)) {
+          // proposal_transaction과 user_proposal 타입인 것들 중 TICKET_REQUEST 게시물 찾기
+          acceptedProposalPosts = proposalData.purchases
+            .filter((purchase: any) => 
+              (purchase.transaction_type === 'proposal_transaction' || purchase.transaction_type === 'user_proposal') && 
+              purchase.post?.category === 'TICKET_REQUEST'
+            )
+            .map((purchase: any) => ({
+              ...purchase.post,
+              // 제안 관련 추가 정보
+              proposal_price: purchase.total_price,
+              proposal_status: purchase.status,
+              proposal_transaction_id: purchase.id,
+              proposal_id: purchase.proposal_id, // user_proposal의 경우
+              transaction_type: purchase.transaction_type,
+              // user_proposal 추가 정보
+              ...(purchase.transaction_type === 'user_proposal' && {
+                proposal_message: purchase.proposal_message,
+                section_id: purchase.section_id,
+                section_name: purchase.section_name,
+              })
+            }));
+          
+          console.log(`✅ 제안 기반 TICKET_REQUEST 게시물 ${acceptedProposalPosts.length}개 발견`);
+          acceptedProposalPosts.forEach((post, index) => {
+            console.log(`제안 거래 ${index + 1}: ID=${post.id}, title="${post.title}", type=${post.transaction_type}, status=${post.proposal_status}, price=${post.proposal_price}`);
+          });
+        }
+      } else {
+        console.log("⚠️ 제안 기반 거래 조회 실패 또는 데이터 없음");
+      }
+    } catch (error) {
+      console.warn("⚠️ 제안 기반 거래 조회 중 오류:", error);
+    }
+    
+    // ✅ 직접 판매 게시물 필터링 (TICKET_REQUEST 제외)
     const directSalePosts = data.posts.filter((post: any) => {
       const isTicketRequest = post.category === 'TICKET_REQUEST';
       if (isTicketRequest) {
@@ -196,7 +250,10 @@ export const fetchOngoingSales = async (
       return !isTicketRequest;
     });
     
-    console.log(`✅ 필터링 결과: 전체 ${data.posts.length}개 중 직접 판매 ${directSalePosts.length}개`);
+    // ✅ 제안 기반 거래와 직접 판매 합치기
+    const allSalePosts = [...directSalePosts, ...acceptedProposalPosts];
+    
+    console.log(`✅ 필터링 결과: 전체 ${data.posts.length}개 중 직접 판매 ${directSalePosts.length}개 + 제안 거래 ${acceptedProposalPosts.length}개 = 총 ${allSalePosts.length}개`);
     
     // 상태 카운트 초기화
     const newSaleStatus = {
@@ -212,12 +269,15 @@ export const fetchOngoingSales = async (
     const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
     
     // ✅ 필터링된 직접 판매 게시물에서 구매 정보가 없는 상품만 필터링
-    const remainingPosts = directSalePosts.filter((post: any) => !existingPostIds.includes(post.id));
+    const remainingPosts = allSalePosts.filter((post: any) => !existingPostIds.includes(post.id));
     
     console.log(`📋 최종 처리할 게시물: 기존 구매정보 ${salesWithPurchaseInfo.length}개 + 새로운 판매글 ${remainingPosts.length}개`);
     
     // 구매 정보가 없는 상품 처리
     const additionalSales = remainingPosts.map((post: any, idx: number) => {
+      // 제안 거래인지 확인 (proposal_transaction 또는 user_proposal)
+      const isProposalTransaction = post.transaction_type === 'proposal_transaction' || post.transaction_type === 'user_proposal';
+      
       // content 필드에서 가격 정보 추출 (JSON 파싱)
       let parsedContent: any = {};
       try {
@@ -228,9 +288,11 @@ export const fetchOngoingSales = async (
         console.warn('❗ content 파싱 오류:', post.id, e);
       }
       
-      // status는 post.status를 직접 사용 (구매 정보가 없음)
-      const status = post.status || 'ACTIVE';
-      const isActive = status === 'ACTIVE';
+      // 상태 처리 - 제안 거래는 proposal_status 사용
+      const status = isProposalTransaction 
+        ? (post.proposal_status || 'PENDING') // 제안의 기본 상태는 PENDING
+        : (post.status || 'ACTIVE');
+      const isActive = status === 'ACTIVE' || status === 'PENDING'; // PENDING도 활성 상태로 간주
       const statusText = getStatusText(status);
       
       // 날짜 처리
@@ -238,12 +300,16 @@ export const fetchOngoingSales = async (
       const date = new Date(dateStr);
       const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
       
-      // 가격 처리
+      // 가격 처리 - 제안 거래는 proposal_price 우선 사용
       const contentPrice = parsedContent?.price;
-      const priceValue = contentPrice || post.ticket_price || post.ticketPrice || post.price || 0;
+      const priceValue = isProposalTransaction 
+        ? (post.proposal_price || contentPrice || post.ticket_price || post.ticketPrice || post.price || 0)
+        : (contentPrice || post.ticket_price || post.ticketPrice || post.price || 0);
       const formattedPrice = priceValue 
         ? `${Number(priceValue).toLocaleString()}원` 
         : '가격 정보 없음';
+      
+      console.log(`💰 가격 처리 결과 - ID: ${post.id}, type: ${post.transaction_type}, isProposal: ${isProposalTransaction}, proposal_price: ${post.proposal_price}, final_price: ${priceValue}`);
       
       return {
         ...post, // 기존 필드 유지
@@ -255,10 +321,23 @@ export const fetchOngoingSales = async (
         status: statusText,
         isActive,
         sortPriority: getStatusPriority(status),
-        transaction_type: 'direct_purchase', // 일반 게시물은 직접 판매
+        transaction_type: isProposalTransaction ? post.transaction_type : 'direct_purchase',
         parsedContent: parsedContent,
         rawPrice: contentPrice,
-        purchaseInfo: null // 구매 정보 없음
+        purchaseInfo: null, // 구매 정보 없음
+        // 제안 거래 추가 정보
+        ...(isProposalTransaction && {
+          proposal_price: post.proposal_price,
+          proposal_status: post.proposal_status,
+          proposal_transaction_id: post.proposal_transaction_id,
+          proposal_id: post.proposal_id,
+          // user_proposal 추가 정보
+          ...(post.transaction_type === 'user_proposal' && {
+            proposal_message: post.proposal_message,
+            section_id: post.section_id,
+            section_name: post.section_name,
+          })
+        })
       };
     });
     

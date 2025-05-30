@@ -562,7 +562,30 @@ export async function GET(request: NextRequest) {
         console.log(`판매자 ${authUser.id}의 제안 기반 거래 ${proposalTransactions?.length || 0}개 조회됨`);
       }
       
-      // 🔥 두 데이터 결합: purchases + proposal_transactions
+      // 🔥 NEW: proposals 테이블에서 사용자가 제안한 모든 제안 조회 (PENDING, ACCEPTED, REJECTED 포함)
+      console.log("6. proposals에서 사용자가 제안한 모든 제안 조회 중...");
+      
+      const { data: userProposals, error: userProposalsError } = await supabase
+        .from('proposals')
+        .select(`
+          *,
+          posts!proposals_post_id_fkey(*),
+          requester:users!proposals_proposer_id_fkey(*)
+        `)
+        .eq('proposer_id', authUser.id)
+        .in('status', ['PENDING', 'ACCEPTED', 'REJECTED'])
+        .order('updated_at', { ascending: false });
+      
+      if (userProposalsError) {
+        console.error("사용자 제안 조회 오류:", userProposalsError);
+      } else {
+        console.log(`사용자 ${authUser.id}가 제안한 제안 ${userProposals?.length || 0}개 조회됨`);
+        userProposals?.forEach((proposal, index) => {
+          console.log(`  제안 ${index + 1}: ID=${proposal.id}, status=${proposal.status}, post_id=${proposal.post_id}, price=${proposal.proposed_price}`);
+        });
+      }
+      
+      // 🔥 세 데이터 결합: purchases + proposal_transactions + user_proposals
       const allSalesData = [];
       
       // 기존 purchases 추가
@@ -575,7 +598,7 @@ export async function GET(request: NextRequest) {
         allSalesData.push(...formattedPurchases);
       }
       
-      // proposal_transactions를 purchases 형태로 변환하여 추가
+      // proposal_transactions를 purchases 형태로 변환하여 추가 (수락된 제안)
       if (proposalTransactions && proposalTransactions.length > 0) {
         const formattedProposals = proposalTransactions.map((proposal: any) => ({
           id: proposal.id,
@@ -595,9 +618,52 @@ export async function GET(request: NextRequest) {
           buyer: proposal.buyer,
           seller: proposal.seller,
           // 구분을 위한 필드
-          transaction_type: 'proposal_based',
+          transaction_type: 'proposal_transaction',
         }));
         allSalesData.push(...formattedProposals);
+      }
+      
+      // user_proposals를 purchases 형태로 변환하여 추가 (모든 제안 상태 포함)
+      if (userProposals && userProposals.length > 0) {
+        const formattedUserProposals = userProposals.map((proposal: any) => {
+          // proposal_transactions에서 이미 추가된 것은 제외 (중복 방지)
+          const existsInTransactions = proposalTransactions?.some(
+            (transaction: any) => transaction.id === proposal.id
+          );
+          
+          if (existsInTransactions) {
+            console.log(`제안 ID ${proposal.id}는 이미 proposal_transactions에 있으므로 제외`);
+            return null;
+          }
+          
+          return {
+            id: `proposal_${proposal.id}`, // 중복 방지를 위한 ID 접두사
+            proposal_id: proposal.id,
+            order_number: null, // 제안은 아직 주문번호가 없음
+            buyer_id: proposal.posts?.author_id, // 티켓을 요청한 사람이 구매자
+            seller_id: proposal.proposer_id, // 제안한 사람이 판매자 (현재 사용자)
+            post_id: proposal.post_id,
+            postId: proposal.post_id,
+            total_price: proposal.proposed_price,
+            selected_seats: proposal.section_name,
+            quantity: 1,
+            status: proposal.status, // PENDING, ACCEPTED, REJECTED
+            created_at: proposal.created_at,
+            updated_at: proposal.updated_at,
+            // 관련 데이터
+            post: proposal.posts,
+            buyer: null, // 제안 단계에서는 구매자 정보 불필요
+            seller: proposal.requester,
+            // 구분을 위한 필드
+            transaction_type: 'user_proposal',
+            // 제안 관련 추가 정보
+            proposal_message: proposal.message,
+            section_id: proposal.section_id,
+            section_name: proposal.section_name,
+          };
+        }).filter(Boolean); // null 값 제거
+        
+        allSalesData.push(...formattedUserProposals);
       }
       
       // 시간순 정렬 (최신순)
@@ -607,7 +673,7 @@ export async function GET(request: NextRequest) {
         return dateB.getTime() - dateA.getTime();
       });
       
-      console.log(`✅ 총 판매 거래 수: ${allSalesData.length}개 (직접구매: ${purchases?.length || 0}, 제안기반: ${proposalTransactions?.length || 0})`);
+      console.log(`✅ 총 판매 거래 수: ${allSalesData.length}개 (직접구매: ${purchases?.length || 0}, 제안거래: ${proposalTransactions?.length || 0}, 사용자제안: ${userProposals?.length || 0})`);
       console.log("===== 판매자 구매 목록 API 호출 완료 =====\n");
       
       // 조회 결과가 없어도 빈 배열 반환
