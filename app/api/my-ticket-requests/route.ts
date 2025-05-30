@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 응답 데이터 구성
-    const formattedRequests = requests?.map(request => {
+    // 응답 데이터 구성 - async/await 처리를 위해 Promise.all 사용
+    const formattedRequests = await Promise.all(requests?.map(async (request) => {
       let parsedContent = null;
       try {
         parsedContent = typeof request.content === 'string' 
@@ -68,6 +68,33 @@ export async function GET(req: NextRequest) {
       const totalProposals = proposals.length;
       const acceptedProposal = proposals.find((p: any) => p.status === 'ACCEPTED');
       const pendingProposals = proposals.filter((p: any) => p.status === 'PENDING').length;
+      
+      // 수락된 제안이 있을 경우 관련 Proposal Transaction 정보 조회
+      let acceptedProposalWithTransaction = null;
+      if (acceptedProposal) {
+        // 수락된 제안과 연결된 Proposal Transaction 조회
+        const { data: transactionData } = await supabase
+          .from('proposal_transactions')
+          .select('id, order_number, status, total_price')
+          .eq('proposal_id', acceptedProposal.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        acceptedProposalWithTransaction = {
+          id: acceptedProposal.id,
+          proposedPrice: acceptedProposal.proposed_price,
+          proposerId: acceptedProposal.proposer_id,
+          acceptedAt: acceptedProposal.updated_at || acceptedProposal.created_at,
+          // Proposal Transaction 정보 추가
+          transaction: transactionData ? {
+            id: transactionData.id,
+            orderNumber: transactionData.order_number,
+            status: transactionData.status,
+            totalPrice: transactionData.total_price
+          } : null
+        };
+      }
       
       // 요청 상태 결정
       let requestStatus = 'PENDING'; // 기본: 제안 대기중
@@ -94,18 +121,13 @@ export async function GET(req: NextRequest) {
         proposalCount: totalProposals,
         pendingProposalCount: pendingProposals,
         requestStatus: requestStatus,
-        acceptedProposal: acceptedProposal ? {
-          id: acceptedProposal.id,
-          proposedPrice: acceptedProposal.proposed_price,
-          proposerId: acceptedProposal.proposer_id,
-          acceptedAt: acceptedProposal.created_at
-        } : null,
+        acceptedProposal: acceptedProposalWithTransaction,
         // 파싱된 내용에서 추가 정보
         description: parsedContent?.description || '',
         quantity: parsedContent?.quantity || 1,
         sections: parsedContent?.sections || []
       };
-    }) || [];
+    }) || []);
 
     console.log(`[내 티켓 요청 API] ${formattedRequests.length}개 요청 조회 성공`);
 

@@ -14,6 +14,13 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: CORS_HEADERS });
 }
 
+// 간단한 주문 번호 생성 함수
+async function createSimpleOrderNumber() {
+  const timestamp = new Date().getTime().toString().slice(-8);
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `ORDER-${timestamp}-${random}`;
+}
+
 // POST: 제안 수락
 export async function POST(
   request: NextRequest,
@@ -24,6 +31,7 @@ export async function POST(
   try {
     // 원래 방식대로 일반 작업에는 서버 클라이언트 사용
     const supabase = createSupabaseServerClient();
+    const adminSupabase = createAdminClient();
     const proposalId = params.id;
     
     if (!proposalId) {
@@ -38,7 +46,7 @@ export async function POST(
       .from('proposals')
       .select(`
         *,
-        posts (id, title, author_id)
+        posts (id, title, author_id, ticket_price)
       `)
       .eq('id', proposalId)
       .single();
@@ -106,14 +114,49 @@ export async function POST(
       // 치명적이지 않으므로 계속 진행
     }
 
-    console.log('[🎯 제안 수락 API] 제안 수락 완료:', proposalId);
+    // 6. Proposal Transaction 레코드 생성 (별도 테이블)
+    const orderNumber = await createSimpleOrderNumber();
+    
+    const proposalTransactionData = {
+      proposal_id: parseInt(proposalId),
+      post_id: proposal.post_id,
+      buyer_id: proposal.posts.author_id, // 티켓을 요청한 사람이 구매자
+      seller_id: proposal.proposer_id,    // 제안한 사람이 판매자
+      order_number: orderNumber,
+      status: 'PROCESSING',
+      total_price: proposal.proposed_price,
+      selected_seats: proposal.section_name,
+      quantity: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    // 수락 성공 메시지 (기존 시스템 재활용)
+    console.log('[🎯 제안 수락 API] Proposal Transaction 데이터 생성:', proposalTransactionData);
+
+    const { data: proposalTransaction, error: proposalTransactionError } = await adminSupabase
+      .from('proposal_transactions')
+      .insert(proposalTransactionData)
+      .select()
+      .single();
+
+    if (proposalTransactionError) {
+      console.error('[🎯 제안 수락 API] Proposal Transaction 생성 오류:', proposalTransactionError);
+      return NextResponse.json(
+        { success: false, message: 'Proposal Transaction 생성 중 오류가 발생했습니다.' },
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
+
+    console.log('[🎯 제안 수락 API] 제안 수락 및 Proposal Transaction 생성 완료:', { proposalId, orderNumber });
+
+    // 수락 성공 메시지
     return NextResponse.json(
       { 
         success: true, 
-        message: '제안이 성공적으로 수락되었습니다! 기존 거래 시스템을 활용해 진행하세요.',
-        proposalId: proposalId
+        message: '제안이 성공적으로 수락되었습니다!',
+        proposalId: proposalId,
+        orderNumber: orderNumber,
+        transactionId: proposalTransaction.id
       },
       { status: 200, headers: CORS_HEADERS }
     );
