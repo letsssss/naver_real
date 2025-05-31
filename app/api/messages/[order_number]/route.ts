@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase.types';
 
 // Node.js 런타임 사용 (Edge에서는 환경변수 로딩 문제 발생)
@@ -18,66 +18,71 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { order_number: string } }
 ) {
-  const orderNumber = params.order_number;
-  logDebug(`GET 요청 시작: ${orderNumber}`);
+  const cookieStore = cookies();
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
+        },
+      },
+    }
+  );
 
   try {
-    // 쿠키 기반 Supabase 클라이언트 생성
-    const supabase = createServerComponentClient<Database>({ cookies });
-    
-    // 세션 확인 (쿠키에서 자동으로 세션 읽음)
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    // 인증 실패 처리
-    if (authError || !user) {
-      logDebug('❌ 인증 실패:', authError?.message);
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      logDebug('❌ 인증 실패:', userError?.message);
       return NextResponse.json(
-        { error: '인증에 실패했습니다. 다시 로그인해주세요.' },
+        { error: '인증되지 않은 사용자입니다.' },
         { status: 401 }
       );
     }
-    
+
+    const { order_number } = params;
+    if (!order_number) {
+      return NextResponse.json({ error: '주문 번호가 필요합니다.' }, { status: 400 });
+    }
+
     logDebug('✅ 인증 성공: 사용자 ID', user.id);
 
-    // 주문 번호로 채팅방 ID 조회
-    const { data: roomData, error: roomError } = await supabase
+    // 채팅방 정보 조회
+    const { data: room, error: roomError } = await supabase
       .from('rooms')
-      .select('id, buyer_id, seller_id')
-      .eq('order_number', orderNumber)
+      .select('*')
+      .eq('order_number', order_number)
       .single();
 
-    if (roomError || !roomData) {
-      logDebug('❌ 채팅방 조회 오류:', roomError?.message);
+    if (roomError) {
+      logDebug('❌ 채팅방 조회 오류:', roomError.message);
       return NextResponse.json(
-        { error: '해당 주문 번호의 채팅방을 찾을 수 없습니다.' },
+        { error: '채팅방을 찾을 수 없습니다.' },
         { status: 404 }
       );
     }
 
-    // 채팅방 접근 권한 확인
-    const isAuthorized = user.id === roomData.buyer_id || user.id === roomData.seller_id;
-    
-    if (!isAuthorized) {
+    // 사용자가 해당 채팅방에 접근 권한이 있는지 확인
+    if (room.buyer_id !== user.id && room.seller_id !== user.id) {
       logDebug('❌ 권한 없음:', user.id);
       return NextResponse.json(
-        { error: '이 채팅방에 대한 접근 권한이 없습니다.' },
+        { error: '접근 권한이 없습니다.' },
         { status: 403 }
       );
     }
 
-    // 메시지 조회
+    // 메시지 목록 조회
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
-      .select(`
-        id,
-        content,
-        sender_id,
-        receiver_id,
-        is_read,
-        created_at,
-        sender:sender_id(id, name, profile_image)
-      `)
-      .eq('room_id', roomData.id)
+      .select('*')
+      .eq('room_id', room.id)
       .order('created_at', { ascending: true });
 
     if (messagesError) {
@@ -97,7 +102,7 @@ export async function GET(
       const { error: updateError } = await supabase
         .from('messages')
         .update({ is_read: true })
-        .eq('room_id', roomData.id)
+        .eq('room_id', room.id)
         .eq('is_read', false)
         .neq('sender_id', user.id);
 
@@ -112,7 +117,7 @@ export async function GET(
     // API 응답
     return NextResponse.json({
       success: true,
-      roomId: roomData.id,
+      roomId: room.id,
       messages: messages || []
     });
 
