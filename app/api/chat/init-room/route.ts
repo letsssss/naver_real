@@ -1,10 +1,13 @@
 // 목적: 거래(orderNumber) 기반으로 채팅방을 자동 생성하거나 반환합니다.
 
 import { NextRequest, NextResponse } from 'next/server';
-// import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
+
+// 환경 변수에서 Supabase 설정 가져오기
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // Node.js 런타임 사용 (Edge에서는 환경변수 로딩 문제 발생)
 export const runtime = 'nodejs';
@@ -18,11 +21,24 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
-    // 쿠키 기반 Supabase 클라이언트 생성
-    const supabase = createServerComponentClient<Database>({ cookies });
+    // Authorization 헤더 확인
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      logDebug('❌ Authorization 헤더 누락');
+      return NextResponse.json(
+        { error: '인증 토큰이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
+    // 토큰 추출
+    const token = authHeader.split(' ')[1];
     
-    // 세션 확인 (쿠키에서 자동으로 세션 읽음)
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Supabase 클라이언트 생성
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // 토큰으로 사용자 정보 가져오기
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     // 인증 실패 처리
     if (authError || !user) {
