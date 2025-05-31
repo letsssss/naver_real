@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/types/supabase.types';
 
 // ✅ Supabase 프로젝트 ID를 환경변수에서 동적으로 가져오기
@@ -44,7 +44,33 @@ export async function middleware(req: NextRequest) {
   console.log('🔍 [MW] 요청 경로:', req.nextUrl.pathname);
   
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient<Database>({ req, res });
+  
+  // Supabase 클라이언트 생성
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          res.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: any) {
+          res.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+        },
+      },
+    }
+  )
 
   // ✅ 쿠키 확인 로직 개선
   const supabaseCookie = req.cookies.get(authCookie);
