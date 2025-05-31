@@ -32,7 +32,7 @@ export const supabaseServer = () => {
 /**
  * ✅ 서버 컴포넌트용 Supabase 클라이언트 생성 함수
  */
-export function createSupabaseServerClient() {
+export const createSupabaseServerClient = () => {
   const cookieStore = cookies();
 
   return createServerClient<Database>(
@@ -43,16 +43,24 @@ export function createSupabaseServerClient() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
-          cookieStore.set(name, value, options);
+        set(name: string, value: string, options: any) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            console.warn('[Supabase] 쿠키 설정 실패:', error);
+          }
         },
-        remove(name: string, options: { path: string; domain?: string }) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
-        }
-      }
+        remove(name: string, options: any) {
+          try {
+            cookieStore.delete({ name, ...options });
+          } catch (error) {
+            console.warn('[Supabase] 쿠키 삭제 실패:', error);
+          }
+        },
+      },
     }
   );
-}
+};
 
 /**
  * ✅ 인증된 사용자 정보를 가져오는 함수
@@ -60,21 +68,20 @@ export function createSupabaseServerClient() {
  */
 export async function getAuthenticatedUser() {
   const cookieStore = cookies();
-  const headerStore = headers();
 
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
-          cookieStore.set(name, value, options);
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
         },
-        remove(name: string, options: { path: string; domain?: string }) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        remove(name: string, options: any) {
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
         }
       }
     }

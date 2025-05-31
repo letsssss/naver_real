@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase.types';
-import { createServerClient } from '@supabase/ssr';
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient, createServerClient } from '@supabase/ssr';
 
 // env.ts에서 환경변수 가져오기
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/env';
@@ -23,10 +22,10 @@ let initAttempted = false;
 
 /**
  * 브라우저에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
- * 이 클라이언트는 auth-helpers-nextjs를 사용하여 쿠키 기반 인증을 자동으로 처리합니다.
+ * 이 클라이언트는 쿠키 기반 인증을 자동으로 처리합니다.
  * 브라우저 환경에서만 사용할 수 있습니다.
  */
-export function createBrowserClient(): SupabaseClient<Database> {
+export function createBrowserSupabaseClient(): SupabaseClient<Database> {
   // 브라우저 환경이 아니면 일반 클라이언트 반환
   if (typeof window === 'undefined') {
     console.warn('브라우저 환경이 아닙니다. 일반 클라이언트를 반환합니다.');
@@ -39,20 +38,26 @@ export function createBrowserClient(): SupabaseClient<Database> {
   }
   
   try {
-    console.log('✅ 브라우저 클라이언트 생성 (@supabase/auth-helpers-nextjs)');
+    console.log('✅ 브라우저 클라이언트 생성 (@supabase/ssr)');
     
-    // Pages Router용 클라이언트 생성
-    const client = createPagesBrowserClient<Database>({
-      supabaseUrl: SUPABASE_URL,
-      supabaseKey: SUPABASE_ANON_KEY,
-      cookieOptions: {
-        name: 'sb-auth-token',
-        secure: true,      // ✅ HTTPS 환경에서만 쿠키 전송
-        sameSite: 'Lax',   // ✅ 기본 보안 설정
-        path: '/',
-        domain: undefined  // 현재 도메인 사용
-      },
-    });
+    // 새로운 브라우저 클라이언트 생성
+    const client = createBrowserClient<Database>(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          get(name: string) {
+            return document.cookie.split('; ').find(row => row.startsWith(name))?.split('=')[1]
+          },
+          set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
+            document.cookie = `${name}=${value}; path=${options.path}${options.maxAge ? `; max-age=${options.maxAge}` : ''}${options.domain ? `; domain=${options.domain}` : ''}${options.secure ? '; secure' : ''}${options.sameSite ? `; samesite=${options.sameSite}` : ''}`
+          },
+          remove(name: string, options: { path: string; domain?: string }) {
+            document.cookie = `${name}=; path=${options.path}${options.domain ? `; domain=${options.domain}` : ''}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+          },
+        },
+      }
+    );
     
     browserClientInstance = client;
     console.log('✅ 브라우저 클라이언트 생성 성공');
@@ -91,9 +96,9 @@ const createSupabaseInstance = (): SupabaseClient<Database> => {
   initAttempted = true;
   
   try {
-    // 브라우저 환경에서는 createBrowserClient 사용
+    // 브라우저 환경에서는 createBrowserSupabaseClient 사용
     if (typeof window !== 'undefined') {
-      return createBrowserClient();
+      return createBrowserSupabaseClient();
     }
     
     supabaseInstance = createClient<Database>(
@@ -128,7 +133,7 @@ export const createServerSupabaseClient = () => {
   const { cookies } = require('next/headers');
   const cookieStore = cookies();
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
     {
@@ -192,7 +197,7 @@ export function createAuthClient(): SupabaseClient<Database> {
 export function createAdminClient(cookieStore?: any): SupabaseClient<Database> {
   // ❗ 클라이언트 환경에서 호출되면 중단
   if (typeof window !== 'undefined') {
-    console.error('[createAdminClient] 이 함수는 클라이언트에서 호출되면 안 됩니다. 대신 createBrowserClient() 사용하세요.');
+    console.error('[createAdminClient] 이 함수는 클라이언트에서 호출되면 안 됩니다. 대신 createBrowserSupabaseClient() 사용하세요.');
     return getSupabaseClient(); // 에러 대신 일반 클라이언트 반환 (기존 코드 깨지지 않도록)
   }
   

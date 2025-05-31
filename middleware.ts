@@ -40,88 +40,43 @@ const PROTECTED_API_ROUTES = [
   '/api/notifications',
 ];
 
-export async function middleware(req: NextRequest) {
-  console.log('🔍 [MW] 요청 경로:', req.nextUrl.pathname);
-  
-  const res = NextResponse.next();
-  
-  // Supabase 클라이언트 생성
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return req.cookies.get(name)?.value
+          return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options: any) {
-          res.cookies.set({
+        set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
+          response.cookies.set({
             name,
             value,
             ...options,
           })
         },
-        remove(name: string, options: any) {
-          res.cookies.set({
+        remove(name: string, options: { path: string; domain?: string }) {
+          response.cookies.set({
             name,
             value: '',
             ...options,
+            maxAge: 0,
           })
         },
       },
     }
-  )
+  );
 
-  // ✅ 쿠키 확인 로직 개선
-  const supabaseCookie = req.cookies.get(authCookie);
-  const authStatus = req.cookies.get(authStatusCookie);
-  
-  console.log('🍪 [MW] Supabase 쿠키:', supabaseCookie ? '있음' : '없음');
-  console.log('🍪 [MW] 인증 상태:', authStatus?.value || '없음');
-  
-  // Supabase 세션 확인
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  
-  console.log('👤 [MW] Supabase 세션:', session ? `있음 (${session.user.email})` : '없음');
+  await supabase.auth.getSession();
 
-  // 보호된 라우트 확인
-  const isProtectedRoute = PROTECTED_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
-  const isAdminRoute = req.nextUrl.pathname.startsWith('/admin');
-  const isProtectedApiRoute = PROTECTED_API_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
-
-  // ✅ 인증이 필요한 경로에서 세션이 없는 경우
-  if (!session && (isProtectedRoute || isProtectedApiRoute)) {
-    console.log('🚫 [MW] 인증 필요 - 로그인으로 리다이렉트');
-    
-    // API 경로는 401 응답
-    if (isProtectedApiRoute) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
-    }
-    
-    // 페이지 경로는 로그인으로 리다이렉트
-    const redirectUrl = new URL('/login', req.url);
-    redirectUrl.searchParams.set('redirectTo', req.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  // ✅ 관리자 권한 확인 (세션이 있는 경우)
-  if (session && isAdminRoute) {
-    // 관리자 권한은 페이지에서 확인하도록 위임
-    console.log('👑 [MW] 관리자 경로 접근 - 페이지에서 권한 확인');
-  }
-
-  // ✅ 인증된 사용자의 경우 세션 정보 로깅
-  if (session) {
-    console.log('✅ [MW] 인증된 사용자:', {
-      email: session.user.email,
-      id: session.user.id,
-      expires: new Date(session.expires_at! * 1000).toLocaleString()
-    });
-  }
-
-  return res;
+  return response;
 }
 
 // ✅ App Router용 matcher 설정
