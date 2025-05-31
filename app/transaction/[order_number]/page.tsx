@@ -4,19 +4,20 @@ import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeft, Calendar, MapPin, Clock, CreditCard, Play, ThumbsUp, CheckCircle, Send, X } from "lucide-react"
+import { ArrowLeft, Calendar, MapPin, Clock, CreditCard, Play, ThumbsUp, CheckCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { TransactionStepper } from "@/components/transaction-stepper"
 import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
 import ChatModal from "@/components/chat/ChatModal"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "@/hooks/use-toast"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/supabase.types"
 import ReportButton from "./ReportButton"
 import { confirmPurchase } from "@/services/mypage-service"
 import { TransactionStatus } from "@/types/mypage"
+import MessageButton from "@/components/MessageButton"
 
 interface Transaction {
   id: string;
@@ -139,7 +140,6 @@ export default function TransactionPage({ params }: { params: { order_number: st
   const router = useRouter()
   const orderNumber = params?.order_number as string
   const { user: currentUser } = useAuth() // 로그인한 사용자 정보
-  const { toast } = useToast()
   
   const [transaction, setTransaction] = useState<Transaction>(defaultTransaction)
   const [isLoading, setIsLoading] = useState(true)
@@ -250,58 +250,11 @@ export default function TransactionPage({ params }: { params: { order_number: st
     loadData()
   }, [orderNumber, currentUser])
 
-  const openChat = async () => {
-    if (!currentUser?.id) {
-      toast({
-        variant: "destructive",
-        title: "로그인 필요",
-        description: "채팅을 시작하려면 로그인이 필요합니다."
-      })
-      return
-    }
-    
-    if (roomId) {
-      setIsChatOpen(true)
-      return
-    }
-    
-    try {
-      setIsInitializingChat(true)
-      
-      // 채팅방 초기화 API 호출
-      const response = await fetch('/api/chat/init-room', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ order_number: orderNumber }),
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || '채팅방 초기화 중 오류가 발생했습니다')
-      }
-
-      const data = await response.json()
-      console.log('[TransactionDetail] 채팅방 초기화 성공:', data)
-      
-      // 채팅방 ID 설정
-      setRoomId(data.roomId)
-      setIsChatOpen(true)
-    } catch (error: any) {
-      console.error('[TransactionDetail] 채팅방 초기화 오류:', error)
-      toast({
-        variant: "destructive",
-        title: "채팅방 초기화 오류",
-        description: error.message || "채팅방을 준비하는 중 오류가 발생했습니다."
-      })
-    } finally {
-      setIsInitializingChat(false)
-    }
+  // 💡 채팅 모달 닫기 핸들러
+  const closeChat = () => {
+    console.log('[TransactionDetail] 채팅 모달 닫기')
+    setIsChatOpen(false)
   }
-  
-  const closeChat = () => setIsChatOpen(false)
 
   const handleAction = async () => {
     if (transaction.currentStep === "ticketing_started") {
@@ -615,22 +568,17 @@ export default function TransactionPage({ params }: { params: { order_number: st
                     variant="button"
                   />
                 )}
-                <Button onClick={openChat} variant="outline" className="flex items-center gap-2 border-gray-300">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                  판매자에게 메시지
-                </Button>
+                <MessageButton 
+                  orderNumber={orderNumber}
+                  currentUser={currentUser}
+                  onChatOpen={(roomId) => {
+                    setRoomId(roomId)
+                    setIsChatOpen(true)
+                  }}
+                  variant="outline" 
+                  className="border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                  disabled={isInitializingChat}
+                />
                 {transaction.type === "purchase" && (
                   <Button
                     onClick={handleAction}
@@ -657,14 +605,26 @@ export default function TransactionPage({ params }: { params: { order_number: st
 
       {/* 1:1 채팅 인터페이스 */}
       {isChatOpen && roomId && (
-        <ChatModal roomId={roomId} onClose={closeChat} />
+        <ChatModal 
+          roomId={roomId} 
+          onClose={closeChat}
+          onError={(error) => {
+            console.error('[TransactionDetail] ChatModal 오류:', error)
+            toast({
+              variant: "destructive", 
+              title: "채팅 오류",
+              description: error
+            })
+          }}
+        />
       )}
       
       {isInitializingChat && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col items-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500 mb-4"></div>
-            <p className="text-gray-700">채팅방을 준비하고 있습니다...</p>
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+            <p className="text-gray-700 text-center">채팅방을 준비하고 있습니다...</p>
+            <p className="text-sm text-gray-500 text-center mt-2">잠시만 기다려주세요</p>
           </div>
         </div>
       )}

@@ -4,6 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/contexts/auth-context';
+import { MessageCircle } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface MessageButtonProps {
   orderNumber?: string;
@@ -13,6 +15,9 @@ interface MessageButtonProps {
   isLoading?: boolean;
   className?: string;
   debug?: boolean;
+  currentUser: any;
+  onChatOpen: (roomId: string) => void;
+  variant?: 'default' | 'outline' | 'ghost';
 }
 
 export default function MessageButton({ 
@@ -22,11 +27,15 @@ export default function MessageButton({
   disabled = false, 
   isLoading = false,
   className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium",
-  debug = false
+  debug = false,
+  currentUser,
+  onChatOpen,
+  variant = 'outline'
 }: MessageButtonProps) {
   const { user } = useAuth();
   const [localOrderNumber, setLocalOrderNumber] = useState<string | undefined>(orderNumber);
   const [isOrderNumberLoading, setIsOrderNumberLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   
   // 주문번호가 없을 때 상품 ID로 주문번호 조회
   useEffect(() => {
@@ -114,35 +123,85 @@ export default function MessageButton({
   // 사용자 정보나 주문번호가 없으면 버튼 비활성화
   const buttonDisabled = disabled || isLoading || !user || isOrderNumberLoading;
 
+  const handleClick = async () => {
+    console.log('[MessageButton] 클릭됨:', orderNumber);
+    
+    // 로그인 확인
+    if (!currentUser?.id) {
+      toast({
+        variant: "destructive",
+        title: "로그인 필요",
+        description: "채팅을 시작하려면 로그인이 필요합니다."
+      });
+      return;
+    }
+
+    try {
+      setIsInitializing(true);
+      console.log('[MessageButton] 채팅방 초기화 시작:', orderNumber);
+      
+      // 채팅방 초기화 API 호출
+      const response = await fetch('/api/chat/init-room', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          order_number: orderNumber 
+        }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = '채팅방 초기화 중 오류가 발생했습니다';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          console.error('[MessageButton] API 응답 파싱 실패:', errorText);
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('[MessageButton] 채팅방 초기화 성공:', data);
+      
+      // 성공 시 부모 컴포넌트에 roomId 전달
+      onChatOpen(data.roomId);
+      
+      toast({
+        title: "채팅방 준비 완료",
+        description: "판매자와 대화를 시작할 수 있습니다."
+      });
+      
+    } catch (error: any) {
+      console.error('[MessageButton] 채팅방 초기화 오류:', error);
+      toast({
+        variant: "destructive",
+        title: "채팅방 오류",
+        description: error.message || "채팅방을 준비하는 중 오류가 발생했습니다."
+      });
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   return (
     <Button
-      variant="outline"
-      className={className}
-      onClick={onClick}
-      disabled={buttonDisabled}
+      onClick={handleClick}
+      variant={variant}
+      disabled={buttonDisabled || isInitializing}
+      className={`flex items-center gap-2 transition-colors ${
+        variant === 'outline' 
+          ? 'border-gray-300 hover:border-blue-400 hover:text-blue-600' 
+          : ''
+      } ${className}`}
     >
-      <div className="relative">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-        
-        {shouldDisplayCount && (
-          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </div>
-      {isLoading || isOrderNumberLoading ? "로딩 중..." : "메시지"}
+      <MessageCircle className="w-4 h-4" />
+      {isInitializing ? '준비중...' : '판매자에게 메시지'}
     </Button>
   );
 } 
