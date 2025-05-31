@@ -1,4 +1,3 @@
-
 import { compare, hash } from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextAuthOptions } from 'next-auth';
@@ -11,7 +10,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
 // @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { Database } from '@/types/supabase.types';
 // @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
@@ -576,4 +575,26 @@ function setCookie(name: string, value: string, days: number) {
   
   const maxAge = days * 24 * 60 * 60;
   document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax;`;
+}
+
+// 서버 컴포넌트에서 사용할 Supabase 클라이언트 생성
+export function createAuthClient() {
+  const cookieStore = cookies();
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
+        },
+      },
+    }
+  );
 }

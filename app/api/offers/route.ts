@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase';
 import { validateRequestToken } from '@/lib/auth';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import type { Database } from '@/types/supabase.types';
 
 const adminSupabase = createAdminClient();
 
@@ -23,95 +25,45 @@ export async function OPTIONS() {
 }
 
 // GET: 활성화된 티켓 요청 목록 조회
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const cookieStore = cookies();
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
+        },
+      },
+    }
+  );
+
   try {
-    console.log('[Offers API] GET 요청 시작');
-
-    // ✅ 새로운 구조: posts와 offers를 조인해서 조회
-    const { data: offers, error } = await adminSupabase
-      .from('offers')
-      .select(`
-        *,
-        posts!inner (
-          id,
-          title,
-          content,
-          category,
-          event_name,
-          event_date,
-          event_venue,
-          ticket_price,
-          created_at,
-          author_id
-        ),
-        users!offerer_id (
-          id,
-          name,
-          email
-        )
-      `)
-      .eq('status', 'PENDING')
-      .is('seller_id', null) // 티켓 요청만 조회 (판매자가 아직 정해지지 않은 것)
-      .eq('posts.category', 'TICKET_REQUEST') // posts의 카테고리가 TICKET_REQUEST인 것만
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[Offers API] 조회 오류:', error);
-      return NextResponse.json({ 
-        error: '티켓 요청을 불러올 수 없습니다.' 
-      }, { status: 500, headers: CORS_HEADERS });
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ error: '인증되지 않은 사용자입니다.' }, { status: 401 });
     }
 
-    // ✅ 새로운 응답 데이터 구성: posts 데이터를 메인으로 사용
-    const ticketRequests = offers?.map(offer => {
-      const post = offer.posts;
-      let messageData: any = {};
-      
-      // message 필드의 JSON 파싱 (실패해도 계속 진행)
-      try {
-        messageData = JSON.parse(offer.message);
-      } catch (parseError) {
-        console.error('[Offers API] 메시지 파싱 오류:', parseError);
-      }
-      
-      return {
-        id: offer.id,
-        postId: post.id, // ✅ post ID 추가
-        // posts 테이블의 데이터를 메인으로 사용
-        title: post.title,
-        concertTitle: post.title, // 호환성을 위해 concertTitle도 제공
-        eventName: post.event_name,
-        eventDate: post.event_date,
-        eventVenue: post.event_venue,
-        description: post.content,
-        ticketPrice: post.ticket_price,
-        // offers 테이블의 데이터
-        maxPrice: offer.price,
-        quantity: messageData.quantity || 1,
-        // 사용자 정보
-        user: offer.users,
-        // 상태 정보
-        status: offer.status,
-        expiresAt: offer.expires_at,
-        createdAt: offer.created_at,
-        // 추가 메타데이터
-        category: post.category,
-        authorId: post.author_id
-      };
-    }) || [];
+    const { data: offers, error: offersError } = await supabase
+      .from('offers')
+      .select('*')
+      .eq('user_id', user.id);
 
-    console.log(`[Offers API] ${ticketRequests.length}개의 티켓 요청 조회 성공`);
+    if (offersError) {
+      return NextResponse.json({ error: '제안 목록을 가져오는데 실패했습니다.' }, { status: 500 });
+    }
 
-    return NextResponse.json({ 
-      success: true, 
-      requests: ticketRequests 
-    }, { headers: CORS_HEADERS });
-
+    return NextResponse.json(offers);
   } catch (error) {
-    console.error('[Offers API] GET 오류:', error);
-    return NextResponse.json({ 
-      error: '서버 오류가 발생했습니다.' 
-    }, { status: 500, headers: CORS_HEADERS });
+    console.error('제안 목록 조회 중 오류:', error);
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }
 
