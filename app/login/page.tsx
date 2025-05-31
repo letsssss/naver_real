@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
 import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
@@ -16,7 +16,10 @@ export default function LoginPage({
   searchParams?: { redirectTo?: string }
 }) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
     const checkSession = async () => {

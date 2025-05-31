@@ -1,6 +1,6 @@
 "use client";
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface KakaoLoginButtonProps {
   mode?: 'login' | 'signup';
@@ -8,7 +8,10 @@ interface KakaoLoginButtonProps {
 }
 
 export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginButtonProps) {
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   async function signInWithKakao() {
     console.log('카카오 로그인 시작...');
