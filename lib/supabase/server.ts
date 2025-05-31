@@ -44,18 +44,10 @@ export const createSupabaseServerClient = () => {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: any) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            console.warn('[Supabase] 쿠키 설정 실패:', error);
-          }
+          cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: any) {
-          try {
-            cookieStore.delete({ name, ...options });
-          } catch (error) {
-            console.warn('[Supabase] 쿠키 삭제 실패:', error);
-          }
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
         },
       },
     }

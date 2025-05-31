@@ -1,6 +1,7 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '@/types/supabase.types';
+import { createClient } from '@supabase/supabase-js';
 import { createBrowserClient, createServerClient } from '@supabase/ssr';
+import { Database } from '@/types/supabase.types';
+import { cookies } from 'next/headers';
 
 // env.ts에서 환경변수 가져오기
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from '@/lib/env';
@@ -15,9 +16,9 @@ const options = {
 };
 
 // ✅ 싱글톤 인스턴스 관리용 변수들
-let supabaseInstance: SupabaseClient<Database> | null = null;
-let adminSupabaseInstance: SupabaseClient<Database> | null = null;
-let browserClientInstance: SupabaseClient<Database> | null = null;
+let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
+let adminSupabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
+let browserClientInstance: ReturnType<typeof createBrowserClient<Database>> | null = null;
 let initAttempted = false;
 
 /**
@@ -25,115 +26,24 @@ let initAttempted = false;
  * 이 클라이언트는 쿠키 기반 인증을 자동으로 처리합니다.
  * 브라우저 환경에서만 사용할 수 있습니다.
  */
-export function createBrowserSupabaseClient(): SupabaseClient<Database> {
-  // 브라우저 환경이 아니면 일반 클라이언트 반환
-  if (typeof window === 'undefined') {
-    console.warn('브라우저 환경이 아닙니다. 일반 클라이언트를 반환합니다.');
-    return getSupabaseClient();
-  }
-  
-  // 이미 생성된 인스턴스가 있으면 재사용
-  if (browserClientInstance) {
-    return browserClientInstance;
-  }
-  
-  try {
-    console.log('✅ 브라우저 클라이언트 생성 (@supabase/ssr)');
-    
-    // 새로운 브라우저 클라이언트 생성
-    const client = createBrowserClient<Database>(
+export function createBrowserSupabaseClient() {
+  if (!browserClientInstance) {
+    browserClientInstance = createBrowserClient<Database>(
       SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get(name: string) {
-            return document.cookie.split('; ').find(row => row.startsWith(name))?.split('=')[1]
-          },
-          set(name: string, value: string, options: { path: string; maxAge?: number; domain?: string; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none' }) {
-            document.cookie = `${name}=${value}; path=${options.path}${options.maxAge ? `; max-age=${options.maxAge}` : ''}${options.domain ? `; domain=${options.domain}` : ''}${options.secure ? '; secure' : ''}${options.sameSite ? `; samesite=${options.sameSite}` : ''}`
-          },
-          remove(name: string, options: { path: string; domain?: string }) {
-            document.cookie = `${name}=; path=${options.path}${options.domain ? `; domain=${options.domain}` : ''}; expires=Thu, 01 Jan 1970 00:00:00 GMT`
-          },
-        },
-      }
+      SUPABASE_ANON_KEY
     );
-    
-    browserClientInstance = client;
-    console.log('✅ 브라우저 클라이언트 생성 성공');
-    
-    // 세션 확인 테스트
-    browserClientInstance.auth.getSession().then(({ data }) => {
-      console.log("✅ 브라우저 클라이언트 세션 확인:", data.session ? "세션 있음" : "세션 없음");
-      
-      // 세션이 있으면 세션 정보 출력
-      if (data.session) {
-        const expiresAt = data.session.expires_at;
-        const expiresDate = expiresAt ? new Date(expiresAt * 1000).toLocaleString() : '알 수 없음';
-        console.log(`✅ 세션 만료: ${expiresDate} (${data.session.user.email})`);
-      }
-    });
-    
-    return browserClientInstance;
-  } catch (error) {
-    console.error('브라우저 클라이언트 생성 오류:', error);
-    // 오류 발생 시 일반 클라이언트로 폴백
-    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, options);
-    return supabaseInstance;
   }
+  return browserClientInstance;
 }
 
-// ✅ 싱글톤 Supabase 인스턴스 생성
-const createSupabaseInstance = (): SupabaseClient<Database> => {
-  if (supabaseInstance) {
-    return supabaseInstance;
-  }
-  
-  if (initAttempted) {
-    console.warn('[Supabase] 이전 초기화 시도가 있었지만 생성되지 않았습니다. 재시도합니다.');
-  }
-  
-  initAttempted = true;
-  
-  try {
-    // 브라우저 환경에서는 createBrowserSupabaseClient 사용
-    if (typeof window !== 'undefined') {
-      return createBrowserSupabaseClient();
-    }
-    
-    supabaseInstance = createClient<Database>(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      options
-    );
-    
-    // 디버깅용 로그
-    if (typeof window !== 'undefined') {
-      console.log('✅ Supabase 클라이언트 초기화 완료');
-      console.log('🔗 URL:', SUPABASE_URL.substring(0, 15) + '...');
-    }
-    
-    return supabaseInstance;
-  } catch (error) {
-    console.error('[Supabase] 클라이언트 생성 오류:', error);
-    throw error;
-  }
-};
-
-// 초기 인스턴스 생성
-const supabase = createSupabaseInstance();
-
 /**
- * Next.js 서버 컴포넌트에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
- * 이 함수는 App Router(/app)에서만 사용해야 합니다.
- * @supabase/ssr의 createServerClient를 사용하여 쿠키 처리를 완벽하게 지원합니다.
+ * 서버에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
+ * 이 클라이언트는 쿠키 기반 인증을 자동으로 처리합니다.
+ * 서버 컴포넌트나 API 라우트에서 사용할 수 있습니다.
  */
-export const createServerSupabaseClient = () => {
-  // 동적으로 cookies import (Pages Router 호환성을 위해)
-  const { cookies } = require('next/headers');
+export function createServerSupabaseClient() {
   const cookieStore = cookies();
-
-  const supabase = createServerClient<Database>(
+  return createServerClient<Database>(
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
     {
@@ -142,112 +52,53 @@ export const createServerSupabaseClient = () => {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: any) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            // 서버 컴포넌트에서 쿠키 설정이 실패할 수 있음 (읽기 전용 컨텍스트)
-            console.warn('[Supabase] 쿠키 설정 실패:', error);
-          }
+          cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: any) {
-          try {
-            cookieStore.delete({ name, ...options });
-          } catch (error) {
-            // 서버 컴포넌트에서 쿠키 삭제가 실패할 수 있음 (읽기 전용 컨텍스트)
-            console.warn('[Supabase] 쿠키 삭제 실패:', error);
-          }
+          cookieStore.set({ name, '', ...options, maxAge: 0 });
         },
       },
     }
   );
-
-  return supabase;
-};
-
-/**
- * 서버 사이드에서 사용하기 위한 Supabase 클라이언트를 생성합니다.
- * 이 함수는 Pages Router(/pages)와 App Router 모두에서 사용 가능합니다.
- * @deprecated createServerSupabaseClient 함수를 대신 사용하세요.
- */
-export function createLegacyServerClient(): SupabaseClient<Database> {
-  console.log('[Supabase] 레거시 서버 클라이언트 생성');
-  // 기존 인스턴스를 재사용하는 대신, 서버용 옵션이 필요한 경우에만 새 인스턴스 생성
-  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
 }
 
 /**
- * 권한 확인을 위한 인증 전용 클라이언트를 생성합니다.
+ * 일반 Supabase 클라이언트를 생성하거나 반환합니다.
+ * 이미 생성된 인스턴스가 있다면 그것을 재사용합니다.
  */
-export function createAuthClient(): SupabaseClient<Database> {
-  // 새 인스턴스를 생성하지 않고 기존 인스턴스 재사용
-  return getSupabaseClient();
+export function getSupabaseClient() {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, options);
+  }
+  return supabaseInstance;
 }
 
 /**
- * 관리자 권한 Supabase 클라이언트를 생성합니다.
- * 이 클라이언트는 서버 측에서만 사용되어야 합니다.
- * 싱글톤 패턴으로 한 번만 생성됩니다.
- * @param cookieStore 선택적으로 쿠키 스토어를 전달하여 인증된 세션을 유지할 수 있습니다.
+ * 관리자 권한을 가진 Supabase 클라이언트를 생성하거나 반환합니다.
+ * 이미 생성된 인스턴스가 있다면 그것을 재사용합니다.
  */
-export function createAdminClient(cookieStore?: any): SupabaseClient<Database> {
-  // ❗ 클라이언트 환경에서 호출되면 중단
-  if (typeof window !== 'undefined') {
-    console.error('[createAdminClient] 이 함수는 클라이언트에서 호출되면 안 됩니다. 대신 createBrowserSupabaseClient() 사용하세요.');
-    return getSupabaseClient(); // 에러 대신 일반 클라이언트 반환 (기존 코드 깨지지 않도록)
-  }
-  
-  // 쿠키가 제공된 경우 서버 컴포넌트 클라이언트 생성 시도
-  if (cookieStore && typeof cookieStore === 'object') {
-    try {
-      const { createServerComponentClient } = require('@supabase/auth-helpers-nextjs');
-      return createServerComponentClient({ cookies: () => cookieStore });
-    } catch (error) {
-      console.warn('[Supabase] 쿠키를 사용한 서버 컴포넌트 클라이언트 생성 실패:', error);
-      // 실패 시 일반 관리자 클라이언트로 폴백
-    }
-  }
-  
-  // 이미 생성된 인스턴스가 있으면 재사용
-  if (adminSupabaseInstance) {
-    return adminSupabaseInstance;
-  }
-  
-  console.log(`[Supabase] 관리자 클라이언트 생성 - URL: ${SUPABASE_URL.substring(0, 15)}...`);
-  
-  try {
-    // 새 인스턴스 생성 및 저장
-    adminSupabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
+export function getAdminSupabaseClient() {
+  if (!adminSupabaseInstance) {
+    adminSupabaseInstance = createClient<Database>(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      {
+        ...options,
+        auth: {
+          ...options.auth,
+          persistSession: false,
+        },
       }
-    });
-    return adminSupabaseInstance;
-  } catch (error) {
-    console.error('[Supabase] 관리자 클라이언트 생성 오류:', error);
-    throw error;
+    );
   }
+  return adminSupabaseInstance;
 }
 
-/**
- * 관리자 권한의 Supabase 클라이언트 인스턴스 (서버에서만 사용)
- * 싱글톤 패턴으로 생성
- */
-export const adminSupabase = typeof window === 'undefined' 
-  ? createAdminClient() 
-  : null; // 브라우저 환경에서는 null로 설정
+// ✅ 기본 Supabase 클라이언트 인스턴스 생성
+export const supabase = getSupabaseClient();
 
-/**
- * 현재 클라이언트나 서버 환경에 맞는 Supabase 클라이언트를 반환합니다.
- */
-export function getSupabaseClient(): SupabaseClient<Database> {
-  return supabase || createSupabaseInstance();
-}
+// ✅ 관리자 권한을 가진 Supabase 클라이언트 인스턴스 생성
+export const adminSupabase = getAdminSupabaseClient();
 
 /**
  * ID 값을 문자열로 변환합니다.
