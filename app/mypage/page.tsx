@@ -643,7 +643,7 @@ export default function MyPage() {
               onClick={() => setActiveTab("profile")}
             >
               <User className="inline-block mr-2" />
-              프로필
+              프로필_테스트
             </button>
             <button
               className={`flex-1 py-4 px-6 text-center ${activeTab === "requested-tickets" ? "bg-gray-100 font-semibold" : ""}`}
