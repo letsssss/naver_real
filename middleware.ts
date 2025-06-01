@@ -58,6 +58,55 @@ export async function middleware(req: NextRequest) {
       return handleAuthFailure(req);
     }
 
+    // 세션이 있는 경우 인증 관련 쿠키 설정
+    if (session) {
+      // Supabase 세션 쿠키 설정
+      res.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        user: session.user
+      }), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+        path: '/',
+      });
+
+      // 인증 상태 쿠키 설정
+      res.cookies.set('auth-status', 'authenticated', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+        path: '/',
+      });
+
+      // 사용자 정보 쿠키 설정
+      res.cookies.set('user', JSON.stringify({
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.name || '사용자',
+        role: session.user.user_metadata?.role || 'USER'
+      }), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+        path: '/',
+      });
+
+      // Supabase 토큰 타입 쿠키 설정
+      res.cookies.set(`sb-${projectRef}-auth-token-type`, 'authenticated', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+        path: '/',
+      });
+    }
+
     // API 요청에 대한 인증 처리
     if (req.nextUrl.pathname.startsWith('/api/')) {
       if (!session) {
@@ -93,8 +142,29 @@ export async function middleware(req: NextRequest) {
       
       const response = NextResponse.redirect(redirectUrl);
       
-      // 인증 상태 쿠키 제거
+      // 모든 인증 관련 쿠키 제거
       response.cookies.set('auth-status', '', { 
+        expires: new Date(0),
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
+      
+      response.cookies.set('user', '', {
+        expires: new Date(0),
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
+      
+      response.cookies.set(`sb-${projectRef}-auth-token`, '', {
+        expires: new Date(0),
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
+      
+      response.cookies.set(`sb-${projectRef}-auth-token-type`, '', {
         expires: new Date(0),
         path: '/',
         sameSite: 'lax',
@@ -119,17 +189,6 @@ export async function middleware(req: NextRequest) {
       });
     }
 
-    // 세션이 있는 경우 인증 상태 쿠키 설정
-    if (session) {
-      res.cookies.set('auth-status', 'authenticated', {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-        path: '/',
-      });
-    }
-
     return res;
   } catch (error) {
     console.error('미들웨어 오류:', error);
@@ -144,8 +203,29 @@ function handleAuthFailure(req: NextRequest) {
   
   const response = NextResponse.redirect(redirectUrl);
   
-  // 인증 상태 쿠키 제거
+  // 모든 인증 관련 쿠키 제거
   response.cookies.set('auth-status', '', {
+    expires: new Date(0),
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
+  
+  response.cookies.set('user', '', {
+    expires: new Date(0),
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
+  
+  response.cookies.set(`sb-${projectRef}-auth-token`, '', {
+    expires: new Date(0),
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
+  
+  response.cookies.set(`sb-${projectRef}-auth-token-type`, '', {
     expires: new Date(0),
     path: '/',
     sameSite: 'lax',

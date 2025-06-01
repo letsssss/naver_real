@@ -12,6 +12,21 @@ const isBrowser = () => typeof window !== 'undefined';
 // 개발 환경인지 확인하는 헬퍼 함수
 const isDevelopment = () => process.env.NODE_ENV === 'development';
 
+// 쿠키 설정 헬퍼 함수
+const setCookie = (name: string, value: string, maxAge: number = 30 * 24 * 60 * 60) => {
+  if (isBrowser()) {
+    const cookieOptions = [
+      `${name}=${encodeURIComponent(value)}`,
+      'path=/',
+      `max-age=${maxAge}`,
+      'SameSite=Lax',
+      process.env.NODE_ENV === 'production' ? 'Secure' : ''
+    ].filter(Boolean).join('; ');
+
+    document.cookie = cookieOptions;
+  }
+};
+
 // 로컬 스토리지에 안전하게 저장하는 함수
 const safeLocalStorageSet = (key: string, value: string) => {
   if (isBrowser()) {
@@ -22,16 +37,24 @@ const safeLocalStorageSet = (key: string, value: string) => {
       // localStorage에 저장
       localStorage.setItem(key, value);
       
-      // 쿠키에 저장 (httpOnly 아님)
-      const maxAge = 30 * 24 * 60 * 60; // 30일 (초 단위)
-      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
+      // 쿠키에 저장
+      const maxAge = 30 * 24 * 60 * 60; // 30일
+      setCookie(key, value, maxAge);
       
-      // auth-token과 auth-status 쿠키와 동기화
+      // 인증 상태 쿠키 설정
       if (key === "user") {
-        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
+        setCookie('auth-status', 'authenticated', maxAge);
+        
+        // Supabase 프로젝트 ref 가져오기
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || '';
+        if (projectRef) {
+          // Supabase 인증 상태 쿠키도 설정
+          setCookie(`sb-${projectRef}-auth-token-type`, 'authenticated', maxAge);
+        }
       }
     } catch (e) {
-      console.error("로컬 스토리지 저장 오류:", e);
+      console.error("스토리지 저장 오류:", e);
     }
   }
 };
@@ -70,11 +93,18 @@ const safeLocalStorageRemove = (key: string) => {
       localStorage.removeItem(key);
       
       // 쿠키 삭제
-      document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
+      document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
       
       // 인증 관련 쿠키 모두 삭제
       if (key === "user") {
-        document.cookie = `auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
+        document.cookie = `auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+        
+        // Supabase 인증 쿠키도 삭제
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || '';
+        if (projectRef) {
+          document.cookie = `sb-${projectRef}-auth-token-type=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+        }
       }
     } catch (e) {
       console.error("스토리지 삭제 오류:", e);
@@ -165,6 +195,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // 사용자 정보 저장 - localStorage와 쿠키에 동시에 저장
         safeLocalStorageSet("user", JSON.stringify(userData));
+        
+        // 세션 토큰도 저장
+        if (session.access_token) {
+          safeLocalStorageSet("session", JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at
+          }));
+        }
+        
         setUser(userData);
         setLoading(false);
         return true;
