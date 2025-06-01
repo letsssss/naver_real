@@ -104,7 +104,6 @@ export default function MyPage() {
   // 초기 데이터 로드
   useEffect(() => {
     if (user) {
-      console.log("user", user);
       // 알림은 페이지 로드 시 항상 가져옴 (알림 카운트 표시를 위해)
       fetchNotifications(user, setNotifications, setIsLoadingNotifications);
       

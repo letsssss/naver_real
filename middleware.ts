@@ -55,7 +55,7 @@ export async function middleware(req: NextRequest) {
 
     if (error) {
       logDebug('세션 새로고침 오류:', error.message);
-      return res;
+      return handleAuthFailure(req);
     }
 
     // API 요청에 대한 인증 처리
@@ -80,7 +80,7 @@ export async function middleware(req: NextRequest) {
 
     // ✅ 인증이 필요한 경로에서 세션이 없는 경우
     if (!session && (isProtectedRoute || isProtectedApiRoute)) {
-      console.log('🚫 [MW] 인증 필요 - 로그인으로 리다이렉트');
+      logDebug('🚫 보호된 경로 접근 거부:', req.nextUrl.pathname);
       
       // API 경로는 401 응답
       if (isProtectedApiRoute) {
@@ -89,14 +89,25 @@ export async function middleware(req: NextRequest) {
       
       // 페이지 경로는 로그인으로 리다이렉트
       const redirectUrl = new URL('/login', req.url);
-      redirectUrl.searchParams.set('redirectTo', req.nextUrl.pathname);
-      return NextResponse.redirect(redirectUrl);
+      redirectUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+      
+      const response = NextResponse.redirect(redirectUrl);
+      
+      // 인증 상태 쿠키 제거
+      response.cookies.set('auth-status', '', { 
+        expires: new Date(0),
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
+      
+      return response;
     }
 
     // ✅ 관리자 권한 확인 (세션이 있는 경우)
     if (session && isAdminRoute) {
       // 관리자 권한은 페이지에서 확인하도록 위임
-      console.log('�� [MW] 관리자 경로 접근 - 페이지에서 권한 확인');
+      console.log('✅ [MW] 관리자 경로 접근 - 페이지에서 권한 확인');
     }
 
     // ✅ 인증된 사용자의 경우 세션 정보 로깅
@@ -108,11 +119,40 @@ export async function middleware(req: NextRequest) {
       });
     }
 
+    // 세션이 있는 경우 인증 상태 쿠키 설정
+    if (session) {
+      res.cookies.set('auth-status', 'authenticated', {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+        path: '/',
+      });
+    }
+
     return res;
-  } catch (error: any) {
-    logDebug('미들웨어 오류:', error.message);
-    return res;
+  } catch (error) {
+    console.error('미들웨어 오류:', error);
+    return handleAuthFailure(req);
   }
+}
+
+// 인증 실패 처리 함수
+function handleAuthFailure(req: NextRequest) {
+  const redirectUrl = new URL('/login', req.url);
+  redirectUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+  
+  const response = NextResponse.redirect(redirectUrl);
+  
+  // 인증 상태 쿠키 제거
+  response.cookies.set('auth-status', '', {
+    expires: new Date(0),
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
+  
+  return response;
 }
 
 // ✅ App Router용 matcher 설정

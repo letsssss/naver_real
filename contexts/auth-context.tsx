@@ -19,25 +19,16 @@ const safeLocalStorageSet = (key: string, value: string) => {
       // 서버사이드 렌더링 시 오류 방지
       console.log(`${key} 저장: 길이=${value.length}`);
       
-      // 중요: localStorage에 먼저 저장 (주요 저장소)
+      // localStorage에 저장
       localStorage.setItem(key, value);
       
-      // 세션 스토리지에도 백업
-      sessionStorage.setItem(key, value);
-      
-      // 쿠키에도 저장 (httpOnly 아님)
+      // 쿠키에 저장 (httpOnly 아님)
       const maxAge = 30 * 24 * 60 * 60; // 30일 (초 단위)
-      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
+      document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
       
-      // auth-token과 auth-status 쿠키와 동기화 (미들웨어와 일치)
-      if (key === "token") {
-        // 최대한 많은 방법으로 토큰 저장
-        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
-        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=None; Secure`;
-        
-        // 모든 경로에도 쿠키 설정 시도
-        document.cookie = `auth-token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
-        document.cookie = `token=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=None; Secure`;
+      // auth-token과 auth-status 쿠키와 동기화
+      if (key === "user") {
+        document.cookie = `auth-status=authenticated; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
       }
     } catch (e) {
       console.error("로컬 스토리지 저장 오류:", e);
@@ -53,15 +44,14 @@ const safeLocalStorageGet = (key: string) => {
       let value = localStorage.getItem(key);
       if (value) return value;
       
-      // localStorage에 없으면 sessionStorage 확인
-      value = sessionStorage.getItem(key);
-      if (value) return value;
-      
-      // sessionStorage에도 없으면 cookie 확인
+      // localStorage에 없으면 cookie 확인
       const cookies = document.cookie.split('; ');
       const cookie = cookies.find(row => row.startsWith(`${key}=`));
       if (cookie) {
-        return decodeURIComponent(cookie.split('=')[1]);
+        const value = decodeURIComponent(cookie.split('=')[1]);
+        // 찾은 값을 localStorage에도 동기화
+        localStorage.setItem(key, value);
+        return value;
       }
       
       return null;
@@ -78,18 +68,13 @@ const safeLocalStorageRemove = (key: string) => {
   if (isBrowser()) {
     try {
       localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
       
-      // 일반 쿠키 삭제
-      document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      // 쿠키 삭제
+      document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
       
-      // 인증 관련 쿠키 모두 삭제 (미들웨어 사용 쿠키 포함)
-      if (key === "token" || key === "user") {
-        document.cookie = `auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `supabase-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      // 인증 관련 쿠키 모두 삭제
+      if (key === "user") {
+        document.cookie = `auth-status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`;
       }
     } catch (e) {
       console.error("스토리지 삭제 오류:", e);
@@ -140,13 +125,16 @@ const getInitialUser = (): User | null => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(getInitialUser());
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
 
   // 개발 환경 인증 상태 설정 시 사용할 참조 - 상태 설정 여부 추적
   const devSetupDone = useRef(false);
+  
+  // 현재 경로가 보호된 경로인지 확인
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname?.startsWith(route));
 
   // 인증 상태 확인 함수
   const checkAuthStatus = useCallback(async (): Promise<boolean> => {
@@ -157,12 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Supabase에서 현재 세션 가져오기
       const { data: { session }, error } = await browserClient.auth.getSession();
       
-      console.log("🧪 getSession 결과:", session, error);
+      console.log("🧪 getSession 결과:", session ? "세션 있음" : "세션 없음");
       
       if (error) {
         console.error('Supabase 세션 조회 오류:', error);
-        setUser(null);
-        setLoading(false);
+        handleAuthFailure();
         return false;
       }
       
@@ -176,43 +163,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: session.user.created_at || session.user.user_metadata?.createdAt || new Date().toISOString()
         };
         
-        // 사용자 정보 저장
+        // 사용자 정보 저장 - localStorage와 쿠키에 동시에 저장
         safeLocalStorageSet("user", JSON.stringify(userData));
         setUser(userData);
-        
-        // ✅ 자동 쿠키 설정이 이루어졌다는 로그 추가
-        console.log('✅ 인증 세션 확인 완료 - 쿠키는 미들웨어와 브라우저 클라이언트에 의해 자동으로 관리됩니다');
-        
         setLoading(false);
         return true;
       }
       
-      // 로컬 스토리지에서 사용자 정보 확인 (세션이 없는 경우)
-      const storedUser = safeLocalStorageGet('user');
-      
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setLoading(false);
-          return true;
-        } catch (error) {
-          console.error('사용자 정보 파싱 오류:', error);
-          safeLocalStorageRemove('user');
-        }
-      }
-      
-      // 인증된 사용자가 없음
-      setUser(null);
-      setLoading(false);
+      // 세션이 없으면 인증 실패 처리
+      handleAuthFailure();
       return false;
+      
     } catch (error) {
       console.error('인증 상태 확인 오류:', error);
-      setUser(null);
-      setLoading(false);
+      handleAuthFailure();
       return false;
     }
   }, []);
+
+  // 인증 실패 처리 함수
+  const handleAuthFailure = useCallback(() => {
+    safeLocalStorageRemove('user');
+    setUser(null);
+    setLoading(false);
+    
+    // 보호된 경로에서만 리디렉션
+    if (isProtectedRoute) {
+      console.log('보호된 경로 접근 거부:', pathname);
+      const redirectUrl = `/login?callbackUrl=${encodeURIComponent(pathname || '')}`;
+      router.replace(redirectUrl);
+    }
+  }, [isProtectedRoute, pathname, router]);
+
+  // 초기 로드 시 인증 상태 확인
+  useEffect(() => {
+    const initAuth = async () => {
+      // 보호된 경로에서는 즉시 체크
+      if (isProtectedRoute) {
+        const isAuthenticated = await checkAuthStatus();
+        if (!isAuthenticated) {
+          handleAuthFailure();
+        }
+      } else {
+        // 보호되지 않은 경로에서는 비동기적으로 체크
+        checkAuthStatus();
+      }
+    };
+
+    initAuth();
+  }, [checkAuthStatus, handleAuthFailure, isProtectedRoute]);
+
+  // 탭 포커스 변경 시 인증 상태 다시 확인
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isProtectedRoute) {
+        checkAuthStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [checkAuthStatus, isProtectedRoute]);
 
   // 로그아웃 함수
   const logout = useCallback(async () => {
@@ -250,22 +263,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [router]);
-
-  // 초기 로드 시 인증 상태 확인
-  useEffect(() => {
-    checkAuthStatus();
-  }, [checkAuthStatus]);
-
-  // 보호된 라우트 접근 시 인증 확인
-  useEffect(() => {
-    if (!loading && !user) {
-      const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname?.startsWith(route));
-      if (isProtectedRoute) {
-        toast.error("로그인이 필요한 페이지입니다");
-        router.push("/login?callbackUrl=" + encodeURIComponent(pathname || ''));
-      }
-    }
-  }, [pathname, user, loading, router]);
 
   // 로그인 함수 (기존 방식 유지 - 건드리지 않음)
   const login = async (email: string, password: string) => {

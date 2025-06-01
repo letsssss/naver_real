@@ -29,21 +29,21 @@ function setAuthCookies(response: NextResponse, session: any, customToken: strin
   const projectRef = getProjectRef();
   const maxAge = 60 * 60 * 24 * 7; // 7일
 
-  // Supabase 세션 쿠키 (클라이언트 접근 가능)
+  // Supabase 세션 쿠키 설정
   response.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     expires_at: session.expires_at,
     user: session.user
   }), {
-    httpOnly: false,
+    httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge,
     path: '/',
   });
 
-  // 커스텀 JWT 토큰 (httpOnly)
+  // 커스텀 JWT 토큰 설정
   response.cookies.set('auth-token', customToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -52,7 +52,7 @@ function setAuthCookies(response: NextResponse, session: any, customToken: strin
     path: '/',
   });
 
-  // 인증 상태 표시용 쿠키 (클라이언트에서 확인 가능)
+  // 인증 상태 표시용 쿠키 설정 (클라이언트 접근 가능)
   response.cookies.set('auth-status', 'authenticated', {
     httpOnly: false,
     secure: process.env.NODE_ENV === 'production',
@@ -61,7 +61,21 @@ function setAuthCookies(response: NextResponse, session: any, customToken: strin
     path: '/',
   });
 
-  console.log(`✅ 쿠키 설정 완료: sb-${projectRef}-auth-token, auth-token, auth-status`);
+  // 사용자 정보 쿠키 설정 (클라이언트 접근 가능)
+  response.cookies.set('user', JSON.stringify({
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.user_metadata?.name || '사용자',
+    role: session.user.user_metadata?.role || 'USER'
+  }), {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge,
+    path: '/',
+  });
+
+  console.log('✅ 인증 쿠키 설정 완료');
 }
 
 // OPTIONS 요청 처리 (CORS 허용)
