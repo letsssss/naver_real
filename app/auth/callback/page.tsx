@@ -25,7 +25,8 @@ export default function AuthCallback() {
           setError('인증 코드가 전달되지 않았습니다.');
           return;
         }
-
+        setError('인증 처리 중 오류가 발생했습니다.');
+        return;
         // auth-context와 동일한 클라이언트 사용
         const supabase = createBrowserClient();
 
