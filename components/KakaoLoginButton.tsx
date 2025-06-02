@@ -11,16 +11,14 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
   const supabase = createClientComponentClient();
 
   async function signInWithKakao() {
-    console.log('카카오 로그인 시작...');
-    
-    
+        
     // Supabase 공식 문서 방식: 커스텀 콜백 사용
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        redirectTo: `https://www.easyticket82.com/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
-    });
+    });  
   }
 
   const buttonText = text || (mode === 'login' ? '카카오로 로그인' : '카카오로 회원가입');

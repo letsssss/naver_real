@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Bell } from "lucide-react"
 import {
@@ -15,7 +15,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase"
+import { createBrowserClient } from "@/lib/supabase"
 
 // API에서 받는 알림 데이터 타입 
 interface Notification {
@@ -36,6 +36,7 @@ export function NotificationDropdown() {
   const router = useRouter()
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const supabaseClient = useRef(createBrowserClient())
 
   const unreadCount = notifications.filter((notification) => !notification.isRead).length
 
@@ -111,6 +112,11 @@ export function NotificationDropdown() {
     
     setIsLoadingNotifications(true);
     try {
+      const supabase = supabaseClient.current;
+      if (!supabase) {
+        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      }
+
       // Supabase 세션에서 access_token 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
@@ -122,8 +128,8 @@ export function NotificationDropdown() {
         ? `/api/notifications?userId=${userId}` 
         : '/api/notifications';
       
-      console.log('알림 API 호출 URL:', apiUrl);
-      console.log('현재 사용자 ID:', userId);
+      //console.log('알림 API 호출 URL:', apiUrl);
+      //console.log('현재 사용자 ID:', userId);
       
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -192,6 +198,11 @@ export function NotificationDropdown() {
 
   const handleNotificationClick = async (id: number) => {
     try {
+      const supabase = supabaseClient.current;
+      if (!supabase) {
+        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      }
+
       // Supabase 세션에서 access_token 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
@@ -222,12 +233,18 @@ export function NotificationDropdown() {
         )
       )
     } catch (error) {
-      console.error('알림 상태 업데이트 중 오류 발생:', error)
+      console.error('알림 읽음 처리 오류:', error);
+      toast.error('알림 상태를 업데이트하는데 실패했습니다.');
     }
   }
 
   const markAllAsRead = async () => {
     try {
+      const supabase = supabaseClient.current;
+      if (!supabase) {
+        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      }
+
       // Supabase 세션에서 access_token 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;

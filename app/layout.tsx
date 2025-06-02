@@ -11,6 +11,7 @@ import { Toaster } from "sonner"
 import { SyncUser } from "@/app/components/sync-user"
 import { Footer } from "@/components/Footer"
 import { ReviewSection } from "@/components/ReviewSection"
+import Script from 'next/script'
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -34,6 +35,13 @@ export default function RootLayout({
     <html lang="ko">
       <head>
         <meta name="naver-site-verification" content="877909cff89a029e033c97399331d77f7ca29013" />
+        <Script id="disable-devtools-message" strategy="beforeInteractive">
+          {`
+            if (typeof window !== 'undefined') {
+              window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = { isDisabled: true };
+            }
+          `}
+        </Script>
       </head>
       <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <AuthProvider>
@@ -46,7 +54,7 @@ export default function RootLayout({
           <FeedbackForm />
           <Toaster position="top-center" />
           <GoogleAnalytics gaId="G-XXXXXXXXXX" />
-          <Analytics />
+          <Analytics debug={false} />
         </AuthProvider>
       </body>
     </html>

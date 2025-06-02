@@ -6,7 +6,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
+//import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
 
@@ -47,10 +47,11 @@ export default function LoginPage({
           <Link href="/">
             <Image
               src="/easyticket-logo.png"
-              alt="EasyTicket"
+              alt="이지티켓 로고"
               width={300}
               height={100}
-              className="h-24 object-contain cursor-pointer"
+              priority
+              className="h-24 w-auto object-contain"
             />
           </Link>
         </div>
@@ -117,7 +118,7 @@ export default function LoginPage({
 
         <div className="mt-6 border-t pt-4">
           <p className="text-sm text-gray-500 mb-4">JWT 토큰이 만료되었나요?</p>
-          <SessionAuthButton />
+          {/* <SessionAuthButton /> */}
         </div>
       </div>
     </div>

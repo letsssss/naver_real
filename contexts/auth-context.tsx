@@ -3,8 +3,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
-import supabase from "@/lib/supabase"
-import { createBrowserClient } from "@/lib/supabase"
+//import supabase from "@/lib/supabase"
+import { createBrowserClient, onSessionChange } from "@/lib/supabase"
 
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
@@ -118,6 +118,19 @@ type User = {
   name: string
   role?: string
   createdAt?: string
+  user_metadata?: {
+    avatar_url?: string
+    email?: string
+    email_verified?: boolean
+    full_name?: string
+    name?: string
+    provider_id?: string
+    user_name?: string
+  }
+  app_metadata?: {
+    provider?: string
+    providers?: string[]
+  }
 }
 
 type AuthContextType = {
@@ -141,6 +154,9 @@ const PROTECTED_ROUTES = [
   '/user-info'
 ];
 
+// 전역 Supabase 클라이언트 인스턴스
+let globalSupabaseClient: ReturnType<typeof createBrowserClient> | null = null;
+
 // 스토리지에서 초기 사용자 정보 가져오기
 const getInitialUser = (): User | null => {
   const storedUser = safeLocalStorageGet("user");
@@ -159,71 +175,120 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const sessionChecked = useRef(false);
 
-  // 개발 환경 인증 상태 설정 시 사용할 참조 - 상태 설정 여부 추적
-  const devSetupDone = useRef(false);
-  
   // 현재 경로가 보호된 경로인지 확인
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname?.startsWith(route));
 
-  // 인증 상태 확인 함수
-  const checkAuthStatus = useCallback(async (): Promise<boolean> => {
+  // Supabase 클라이언트 인스턴스를 useRef로 캐싱
+  const supabaseClient = useRef<ReturnType<typeof createBrowserClient> | null>(null);
+
+  // 세션 초기화 함수
+  const initializeSession = useCallback(async () => {
     try {
-      // 새로운 브라우저 클라이언트 생성 (쿠키 자동 처리)
-      const browserClient = createBrowserClient();
-      
-      // Supabase에서 현재 세션 가져오기
-      const { data: { session }, error } = await browserClient.auth.getSession();
-      
-      console.log("🧪 getSession 결과:", session ? "세션 있음" : "세션 없음");
-      
-      if (error) {
-        console.error('Supabase 세션 조회 오류:', error);
-        handleAuthFailure();
-        return false;
+      const client = supabaseClient.current;
+      if (!client) {
+        console.error('Supabase 클라이언트가 초기화되지 않았습니다.');
+        return;
       }
-      
-      // 세션이 있으면 사용자 정보 설정
-      if (session) {
-        const userData: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name || '사용자',
-          role: session.user.user_metadata?.role || 'USER',
-          createdAt: session.user.created_at || session.user.user_metadata?.createdAt || new Date().toISOString()
-        };
-        
-        // 사용자 정보 저장 - localStorage와 쿠키에 동시에 저장
-        safeLocalStorageSet("user", JSON.stringify(userData));
-        
-        // 세션 토큰도 저장
-        if (session.access_token) {
-          safeLocalStorageSet("session", JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            expires_at: session.expires_at
-          }));
+
+      // 저장된 세션 토큰 확인
+      const storedSession = localStorage.getItem('supabase.auth.token');
+      if (storedSession) {
+        try {
+          const { access_token } = JSON.parse(storedSession);
+          if (access_token) {
+            // 세션 새로고침
+            const { data: { session }, error } = await client.auth.getSession();
+            if (session) {
+              console.log('✅ 저장된 세션 복원 성공');
+              const userData: User = {
+                id: session.user.id,
+                email: session.user.email || '',
+                name: session.user.user_metadata?.full_name || 
+                      session.user.user_metadata?.name || 
+                      session.user.user_metadata?.user_name || 
+                      '사용자',
+                role: session.user.role || 'authenticated',
+                createdAt: session.user.created_at,
+                user_metadata: session.user.user_metadata,
+                app_metadata: session.user.app_metadata
+              };
+              setUser(userData);
+              safeLocalStorageSet("user", JSON.stringify(userData));
+            }
+          }
+        } catch (error) {
+          console.error('세션 복원 중 오류:', error);
+          localStorage.removeItem('supabase.auth.token');
         }
-        
-        setUser(userData);
-        setLoading(false);
-        return true;
       }
-      
-      // 세션이 없으면 인증 실패 처리
-      handleAuthFailure();
-      return false;
-      
     } catch (error) {
-      console.error('인증 상태 확인 오류:', error);
-      handleAuthFailure();
-      return false;
+      console.error('세션 초기화 중 오류:', error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  // 클라이언트 초기화 및 세션 복원
+  useEffect(() => {
+    if (!supabaseClient.current && typeof window !== 'undefined') {
+      supabaseClient.current = createBrowserClient();
+      initializeSession();
+    }
+  }, [initializeSession]);
+
+  // 세션 변경 이벤트 리스너 설정
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const unsubscribe = onSessionChange(async ({ event, session }) => {
+      console.log('🔄 세션 변경 감지:', event);
+      sessionChecked.current = true;
+      
+      if (event === 'SIGNED_IN' && session) {
+        const userData: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.name || 
+                session.user.user_metadata?.user_name || 
+                '사용자',
+          role: session.user.role || 'authenticated',
+          createdAt: session.user.created_at,
+          user_metadata: session.user.user_metadata,
+          app_metadata: session.user.app_metadata
+        };
+        
+        setUser(userData);
+        safeLocalStorageSet("user", JSON.stringify(userData));
+        setLoading(false);
+        
+        // 리디렉션이 필요한 경우
+        const callbackUrl = new URLSearchParams(window.location.search).get('callbackUrl');
+        if (callbackUrl) {
+          router.push(decodeURIComponent(callbackUrl));
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        safeLocalStorageRemove('user');
+        localStorage.removeItem('supabase.auth.token');
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
   // 인증 실패 처리 함수
   const handleAuthFailure = useCallback(() => {
+    if (!sessionChecked.current) {
+      console.log('⚠️ 세션 체크가 아직 완료되지 않았습니다');
+      return;
+    }
+    
     safeLocalStorageRemove('user');
+    localStorage.removeItem('supabase.auth.token');
     setUser(null);
     setLoading(false);
     
@@ -235,23 +300,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isProtectedRoute, pathname, router]);
 
-  // 초기 로드 시 인증 상태 확인
-  useEffect(() => {
-    const initAuth = async () => {
-      // 보호된 경로에서는 즉시 체크
-      if (isProtectedRoute) {
-        const isAuthenticated = await checkAuthStatus();
-        if (!isAuthenticated) {
-          handleAuthFailure();
-        }
-      } else {
-        // 보호되지 않은 경로에서는 비동기적으로 체크
-        checkAuthStatus();
+  // 인증 상태 확인 함수
+  const checkAuthStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!sessionChecked.current) {
+        console.log('⚠️ 세션 체크 대기 중...');
+        return true; // 초기 체크는 통과
       }
-    };
 
-    initAuth();
-  }, [checkAuthStatus, handleAuthFailure, isProtectedRoute]);
+      const client = supabaseClient.current;
+      if (!client) {
+        console.error('Supabase 클라이언트가 초기화되지 않았습니다.');
+        handleAuthFailure();
+        return false;
+      }
+      
+      // Supabase에서 현재 세션 가져오기
+      const { data: { session }, error } = await client.auth.getSession();
+      
+      console.log("🔍 세션 확인:", session ? "세션 있음" : "세션 없음");
+      
+      if (error) {
+        console.error('Supabase 세션 조회 오류:', error);
+        handleAuthFailure();
+        return false;
+      }
+      
+      // 세션이 있으면 사용자 정보 설정
+      if (session) {
+        console.log("✅ 유효한 세션 발견");
+        const userData: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.name || 
+                session.user.user_metadata?.user_name || 
+                '사용자',
+          role: session.user.role || 'authenticated',
+          createdAt: session.user.created_at,
+          user_metadata: session.user.user_metadata,
+          app_metadata: session.user.app_metadata
+        };
+        
+        setUser(userData);
+        safeLocalStorageSet("user", JSON.stringify(userData));
+        setLoading(false);
+        return true;
+      }
+      
+      console.log("❌ 유효한 세션 없음");
+      handleAuthFailure();
+      return false;
+      
+    } catch (error) {
+      console.error('인증 상태 확인 오류:', error);
+      handleAuthFailure();
+      return false;
+    }
+  }, [handleAuthFailure]);
 
   // 탭 포커스 변경 시 인증 상태 다시 확인
   useEffect(() => {
@@ -272,8 +378,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // 쿠키 관리를 위해 브라우저 클라이언트 사용
-      const browserClient = createBrowserClient();
+      // 캐싱된 클라이언트 사용
+      const browserClient = supabaseClient.current;
       
       // Supabase 세션 로그아웃
       const { error } = await browserClient.auth.signOut();
@@ -292,9 +398,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 사용자 상태 초기화
       setUser(null);
       
-      // 개발 환경 설정 상태 초기화 (다시 로그인할 때 설정되도록)
-      devSetupDone.current = false;
-      
       // 로그인 페이지로 이동
       router.push('/login');
     } catch (error) {
@@ -304,49 +407,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router]);
 
-  // 로그인 함수 (기존 방식 유지 - 건드리지 않음)
+  // 로그인 함수
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
       
       console.log('🔐 로그인 시작:', email);
       
-      // 서버 API를 통한 로그인 (기존 방식 유지)
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include',
+      const client = supabaseClient.current;
+      if (!client) {
+        throw new Error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      }
+      
+      // Supabase를 통한 직접 로그인
+      const { data, error } = await client.auth.signInWithPassword({
+        email,
+        password,
       });
       
-      const result = await response.json();
-      
-      if (!response.ok || !result.success) {
-        console.error('❌ 로그인 실패:', result.error);
-        setLoading(false);
+      if (error) {
+        console.error('❌ 로그인 실패:', error);
         return {
           success: false,
-          message: result.error || "로그인에 실패했습니다."
+          message: error.message
         };
       }
       
-      console.log('✅ 서버 로그인 성공:', result.user.email);
+      if (data.session) {
+        console.log('✅ Supabase 로그인 성공:', data.session.user.email);
+        
+        // 사용자 정보 설정
+        const userData: User = {
+          id: data.session.user.id,
+          email: data.session.user.email || '',
+          name: data.session.user.user_metadata?.full_name || 
+                data.session.user.user_metadata?.name || 
+                data.session.user.user_metadata?.user_name || 
+                '사용자',
+          role: data.session.user.role || 'authenticated',
+          createdAt: data.session.user.created_at,
+          user_metadata: data.session.user.user_metadata,
+          app_metadata: data.session.user.app_metadata
+        };
+        
+        // 세션 데이터 저장
+        const sessionData = {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          expires_at: data.session.expires_at,
+          provider_token: data.session.provider_token,
+          provider_refresh_token: data.session.provider_refresh_token
+        };
+        safeLocalStorageSet("session", JSON.stringify(sessionData));
+        safeLocalStorageSet("user", JSON.stringify(userData));
+        
+        setUser(userData);
+        return { success: true };
+      }
       
-      // 인증 상태 다시 확인
-      await checkAuthStatus();
-      
-      setLoading(false);
-      return { success: true };
+      return {
+        success: false,
+        message: "세션이 생성되지 않았습니다."
+      };
       
     } catch (error) {
       console.error("💥 로그인 오류:", error);
-      setLoading(false);
       return {
         success: false,
         message: "로그인 중 오류가 발생했습니다."
       };
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -1,114 +1,123 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/auth-context';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-export default function AuthCallback() {
+// PKCE 관련 스토리지 키
+const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
+const PKCE_VERIFIER_BACKUP_KEY = 'supabase.auth.code_verifier.backup';
+const PKCE_AUTH_CODE_KEY = 'supabase.auth.code';
+const PKCE_EXCHANGE_ATTEMPTED_KEY = 'supabase.auth.exchange_attempted';
+const PKCE_SESSION_KEY = 'supabase.auth.session';
+
+export default function AuthCallbackPage() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>("로그인 처리 중...");
-  const { checkAuthStatus } = useAuth();
+  const exchangeAttempted = useRef(false);
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      
+    const handleCallback = async () => {
       try {
-        if (typeof window === 'undefined') return;
+        // 이미 처리 중이면 중단
+        if (exchangeAttempted.current) {
+          console.log('🔄 Already processing callback');
+          return;
+        }
+        exchangeAttempted.current = true;
 
-        // ✅ code 쿼리 파라미터가 없는 경우
+        // 현재 세션 확인
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          console.log('✅ Active session found, redirecting...');
+          router.push('/');
+          return;
+        }
+
+        // URL에서 code 파라미터 추출
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-        if (!code) {
-          setError('인증 코드가 전달되지 않았습니다.');
-          return;
-        }
-        setError('인증 처리 중 오류가 발생했습니다.');
-        return;
-        // auth-context와 동일한 클라이언트 사용
-        const supabase = createBrowserClient();
-
-        // 🚀 성능 최적화: 세션 조회와 사용자 정보 조회를 병렬 처리
-        const [sessionResult, userResult] = await Promise.allSettled([
-          supabase.auth.getSession(),
-          supabase.auth.getUser()
-        ]);
-
-        // 세션 결과 처리
-        let sessionData = null;
-        if (sessionResult.status === 'fulfilled' && !sessionResult.value.error) {
-          sessionData = sessionResult.value.data;
-        } else {
-          console.error('세션 조회 오류:', sessionResult.status === 'rejected' ? sessionResult.reason : sessionResult.value.error);
-          setError('인증 처리 중 오류가 발생했습니다.');
-          return;
-        }
-
-        // 사용자 결과 처리
-        let userData = null;
-        if (userResult.status === 'fulfilled' && !userResult.value.error) {
-          userData = userResult.value.data;
-        }
-
-        console.log('✅ 병렬 조회 완료:', { 
-          session: sessionData.session ? '있음' : '없음',
-          user: userData?.user ? '있음' : '없음'
-        });
         
-        // ✅ 세션이 있는 경우 인증 상태 업데이트
-        if (sessionData.session && sessionData.session.user) {
-          console.log('✅ 카카오 로그인 성공:', sessionData.session.user.email);
-          
-          // auth-context의 checkAuthStatus를 호출하여 일관된 인증 상태 관리
-          await checkAuthStatus();
-          
-          setStatusMessage("로그인 완료! 홈페이지로 이동합니다...");
-          
-          // 성공 시 홈페이지로 이동
-          setTimeout(() => {
-            router.push('/');
-          }, 1000);
-          
-        } else {
-          console.error('❌ 세션 또는 사용자 정보가 없습니다');
-          setError('로그인 처리 중 오류가 발생했습니다.');
+        // code verifier 가져오기 (sessionStorage와 localStorage 모두 확인)
+        let verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
+        if (!verifier) {
+          verifier = localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY);
+          if (verifier) {
+            console.log('♻️ Restored verifier from backup');
+            sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+          }
         }
 
-      } catch (err) {
-        console.error('인증 콜백 처리 중 오류:', err);
-        // 🔧 에러가 발생해도 홈페이지로 리다이렉트 (로그인은 실제로 성공했을 가능성이 높음)
-        toast.info('로그인 처리 완료!');
-        setTimeout(() => {
+        // 이전 교환 시도 기록 확인
+        const previousAttempt = sessionStorage.getItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
+        if (previousAttempt === code) {
+          console.log('🔄 Token exchange already attempted for this code');
           router.push('/');
-        }, 1000);
+          return;
+        }
+
+        if (!code || !verifier) {
+          console.error('❌ Missing auth parameters:', { 
+            code: !!code, 
+            verifier: !!verifier,
+            sessionVerifier: !!sessionStorage.getItem(PKCE_VERIFIER_KEY),
+            localVerifier: !!localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY)
+          });
+          router.push('/login');
+          return;
+        }
+
+        // 현재 교환 시도 기록
+        sessionStorage.setItem(PKCE_EXCHANGE_ATTEMPTED_KEY, code);
+        
+        console.log('📦 Using code_verifier:', verifier.substring(0, 10) + '...');
+        console.log('🔑 Using auth code:', code);
+
+        // PKCE 토큰 교환
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          console.error('❌ 세션 교환 실패:', error.message);
+          // 실패한 경우에만 교환 시도 기록 제거
+          sessionStorage.removeItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
+          router.push('/login');
+          return;
+        }
+
+        if (data.session) {
+          console.log('✅ 세션 교환 성공');
+          
+          // 성공 후 스토리지 정리
+          sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+          localStorage.removeItem(PKCE_VERIFIER_BACKUP_KEY);
+          sessionStorage.removeItem(PKCE_AUTH_CODE_KEY);
+          
+          // 성공한 교환 기록
+          const sessionData = {
+            code,
+            verifier,
+            timestamp: Date.now()
+          };
+          sessionStorage.setItem(PKCE_SESSION_KEY, JSON.stringify(sessionData));
+          
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('❌ 콜백 처리 중 오류:', error);
+        sessionStorage.removeItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
+        router.push('/login');
       }
     };
 
-    handleAuthCallback();
-  }, [router, checkAuthStatus]);
+    handleCallback();
+  }, [router, supabase.auth]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      {error ? (
-        <div className="text-center p-6 bg-white rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4 text-red-600">로그인 오류</h2>
-          <p className="text-gray-700 mb-4">{error}</p>
-          <button 
-            onClick={() => router.push('/login')}
-            className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
-          >
-            로그인 페이지로 돌아가기
-          </button>
-        </div>
-      ) : (
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-4">{statusMessage}</h2>
-          <div className="w-12 h-12 border-4 border-t-blue-500 border-b-blue-500 border-l-transparent border-r-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">잠시만 기다려 주세요. 곧 홈페이지로 이동합니다.</p>
-        </div>
-      )}
+      <div className="text-center">
+        <h2 className="text-2xl font-semibold mb-4">로그인 처리 중...</h2>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+      </div>
     </div>
   );
 }

@@ -17,10 +17,11 @@ export default function Signup() {
           <Link href="/">
             <Image 
               src="/easyticket-logo.png" 
-              alt="EasyTicket" 
+              alt="이지티켓 로고" 
               width={300} 
-              height={100} 
-              className="h-24 object-contain cursor-pointer" 
+              height={100}
+              priority 
+              className="h-24 w-auto object-contain cursor-pointer" 
             />
           </Link>
         </div>
