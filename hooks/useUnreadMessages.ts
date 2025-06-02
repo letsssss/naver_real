@@ -75,7 +75,7 @@ export function useUnreadMessages(orderNumber?: string) {
           headers['Authorization'] = `Bearer ${token}`;
           console.log('🔑 토큰을 헤더에 추가했습니다.');
         } else {
-          console.log('⚠️ 토큰이 없습니다.');
+          console.log('⚠️ 토큰이 없습니다...');
         }
         
         // API 요청
