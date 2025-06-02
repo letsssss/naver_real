@@ -28,7 +28,8 @@ export const getSupabaseClient = () => {
   if (typeof window === 'undefined') return null;
   return createBrowserClient();
 };
-
+console.log('SUPABASE URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log('SUPABASE KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 // PKCE 초기화 함수
 const initializePKCE = () => {
   if (typeof window === 'undefined') return;

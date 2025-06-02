@@ -69,7 +69,7 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
     // 전체 시스템 성공률 (기존 로직)
     const { data, error } = await supabase
       .from("cancellation_ticketing_stats_view") // 실제 거래 통계 뷰
-      .select("confirmed_count, cancelled_count, total_count, cancellation_ticketing_rate")
+      .select("confirmed_count, cancelled_count, cancellation_ticketing_rate")
       .single();
     
     if (error || !data) {
