@@ -3,16 +3,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
-import { adminSupabase } from '@/lib/supabase-admin';
-import { getSupabaseClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
+import { verifyToken } from '@/lib/auth';
 
 // ✅ 유효성 검사 스키마
 const updateProfileSchema = z.object({
-  name: z.string().min(2).optional(),
-  phoneNumber: z.string().regex(/^[0-9]{10,11}$/).optional(),
-  bankName: z.string().optional(),
-  accountNumber: z.string().optional(),
-  accountHolder: z.string().optional(),
+  name: z.string().min(2).max(50).optional(),
+  phoneNumber: z.string().min(10).max(15).optional(),
+  profileImage: z.string().url().optional(),
 });
 
 // 사용자 프로필 타입 정의
@@ -58,7 +56,7 @@ async function getAuthUser(request: NextRequest) {
       
       // 토큰 확인
       const { data: { user: authUser }, error: verifyError } = 
-        await getSupabaseClient().auth.getUser(token);
+        await verifyToken(token);
       
       if (!verifyError && authUser) {
         console.log(`✅ 토큰으로 사용자 ID 확인: ${authUser.id}`);
@@ -83,7 +81,7 @@ async function getAuthUser(request: NextRequest) {
         
         try {
           // 서버 컴포넌트에서 인증 상태 확인
-          const { data: sessionData } = await getSupabaseClient().auth.getSession();
+          const { data: sessionData } = await verifyToken();
           
           if (sessionData?.session?.user) {
             console.log(`✅ 세션에서 사용자 발견: ${sessionData.session.user.id}`);
@@ -114,7 +112,7 @@ async function getAuthUser(request: NextRequest) {
     console.log(`✅ 사용자 ID: ${userId} - 프로필 정보 조회 시도`);
     
     // adminSupabase로 사용자 프로필 조회 (RLS 우회)
-    const { data: userRow, error: userError } = await adminSupabase
+    const { data: userRow, error: userError } = await createAdminClient
       .from('users')
       .select('*')
       .eq('id', userId)
@@ -205,9 +203,12 @@ export async function PUT(request: NextRequest) {
     }
 
     // 프로필 업데이트 데이터 준비
-    const updateData: Record<string, any> = {};
-    if (body.name) updateData.name = body.name;
-    if (body.phoneNumber) updateData.phone_number = body.phoneNumber;
+    const updateData: Record<string, any> = {
+      ...(body.name && { name: body.name }),
+      ...(body.phoneNumber && { phone_number: body.phoneNumber }),
+      ...(body.profileImage && { profile_image: body.profileImage }),
+      updated_at: new Date().toISOString()
+    };
     
     // 은행 정보 업데이트
     if (body.bankName || body.accountNumber || body.accountHolder) {
@@ -225,7 +226,7 @@ export async function PUT(request: NextRequest) {
     console.log(`✅ 프로필 업데이트 시도 (사용자 ID: ${user.id})`, updateData);
     
     // adminSupabase 사용하여 RLS 정책 우회
-    const { data, error } = await adminSupabase
+    const { data, error } = await createAdminClient
       .from('users')
       .update(updateData)
       .eq('id', user.id)

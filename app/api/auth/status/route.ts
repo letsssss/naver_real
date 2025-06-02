@@ -1,11 +1,11 @@
 // ✅ 인증 상태를 확인하는 API
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-admin';
+import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
+  const supabase = createAdminClient();
 
   const {
     data: { session },

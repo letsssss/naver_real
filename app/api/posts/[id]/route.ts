@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
-import { adminSupabase } from '@/lib/supabase-admin'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { getAuthenticatedUser } from "@/lib/auth"
 
 // CORS 헤더 설정을 위한 함수
@@ -17,6 +16,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = createAdminClient();
+    
     // params.id 비동기적으로 처리 (await 사용)
     const paramsId = await params.id;
     const id = parseInt(paramsId);
@@ -92,9 +93,9 @@ export async function GET(
       
       if (userData) {
         authorInfo = {
-          id: userData.id,
-          name: userData.name || '판매자 정보 없음',
-          image: userData.profile_image || ''
+          id: userData.id as string,
+          name: (userData.name as string) || '판매자 정보 없음',
+          image: (userData.profile_image as string) || ''
         };
       }
     }
@@ -139,6 +140,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = createAdminClient();
+    
     // params.id 비동기적으로 처리 - await 추가
     const paramsId = await params.id;
     console.log("게시물 삭제 API 호출됨 - ID:", paramsId);
@@ -194,7 +197,7 @@ export async function DELETE(
           console.log("관련 데이터 정리 시작");
           
           // 1. 먼저 관련된 구매 내역 확인 (외래 키 제약 조건 확인용)
-          const { data: purchases, error: purchasesError } = await adminSupabase
+          const { data: purchases, error: purchasesError } = await supabase
             .from('purchases')
             .select('*')
             .eq('post_id', postId);
@@ -206,7 +209,7 @@ export async function DELETE(
             
             // 관련 구매 내역이 있으면 소프트 삭제로 전환 (외래 키 제약으로 인해)
             console.log("관련 구매 내역이 있어 소프트 삭제 진행");
-            const { error: updateError } = await adminSupabase
+            const { error: updateError } = await supabase
               .from('posts')
               .update({ is_deleted: true })
               .eq('id', postId);
@@ -226,7 +229,7 @@ export async function DELETE(
           }
           
           // 2. 관련 댓글 삭제
-          const { error: commentsError } = await adminSupabase
+          const { error: commentsError } = await supabase
             .from('comments')
             .delete()
             .eq('post_id', postId);
@@ -238,7 +241,7 @@ export async function DELETE(
           }
           
           // 3. 관련 좋아요 삭제
-          const { error: likesError } = await adminSupabase
+          const { error: likesError } = await supabase
             .from('likes')
             .delete()
             .eq('post_id', postId);
@@ -251,7 +254,7 @@ export async function DELETE(
           
           // 4. 게시물 하드 삭제 시도
           console.log("adminSupabase로 하드 삭제 시도");
-          const { error: deleteError } = await adminSupabase
+          const { error: deleteError } = await supabase
             .from('posts')
             .delete()
             .eq('id', postId);
@@ -261,7 +264,7 @@ export async function DELETE(
             
             // 하드 삭제 실패 시 소프트 삭제 시도
             console.log("하드 삭제 실패로 소프트 삭제 시도");
-            const { error: updateError } = await adminSupabase
+            const { error: updateError } = await supabase
               .from('posts')
               .update({ is_deleted: true })
               .eq('id', postId);
@@ -337,7 +340,7 @@ export async function DELETE(
     console.log("관련 데이터 정리 시작");
     
     // 1. 먼저 관련된 구매 내역 확인 (외래 키 제약 조건 확인용)
-    const { data: purchases, error: purchasesError } = await adminSupabase
+    const { data: purchases, error: purchasesError } = await supabase
       .from('purchases')
       .select('*')
       .eq('post_id', postId);
@@ -349,7 +352,7 @@ export async function DELETE(
       
       // 관련 구매 내역이 있으면 소프트 삭제로 전환 (외래 키 제약으로 인해)
       console.log("관련 구매 내역이 있어 소프트 삭제 진행");
-      const { error: updateError } = await adminSupabase
+      const { error: updateError } = await supabase
         .from('posts')
         .update({ is_deleted: true })
         .eq('id', postId);
@@ -369,7 +372,7 @@ export async function DELETE(
     }
     
     // 2. 관련 댓글 삭제
-    const { error: commentsError } = await adminSupabase
+    const { error: commentsError } = await supabase
       .from('comments')
       .delete()
       .eq('post_id', postId);
@@ -381,7 +384,7 @@ export async function DELETE(
     }
     
     // 3. 관련 좋아요 삭제
-    const { error: likesError } = await adminSupabase
+    const { error: likesError } = await supabase
       .from('likes')
       .delete()
       .eq('post_id', postId);
@@ -394,7 +397,7 @@ export async function DELETE(
     
     // 4. 게시물 하드 삭제 시도
     console.log("adminSupabase로 하드 삭제 시도");
-    const { error: deleteError } = await adminSupabase
+    const { error: deleteError } = await supabase
       .from('posts')
       .delete()
       .eq('id', postId);
@@ -404,7 +407,7 @@ export async function DELETE(
       
       // 하드 삭제 실패 시 소프트 삭제 시도
       console.log("하드 삭제 실패로 소프트 삭제 시도");
-      const { error: updateError } = await adminSupabase
+      const { error: updateError } = await supabase
         .from('posts')
         .update({ is_deleted: true })
         .eq('id', postId);

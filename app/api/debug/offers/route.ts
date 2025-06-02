@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 // 개발 환경에서만 사용할 디버깅 API
 export async function GET(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = createAdminClient();
     
     // offers 테이블의 구조와 데이터 조회
     const { data: offers, error } = await supabase

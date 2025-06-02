@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import { 
-  supabase, 
-  createLegacyServerClient, 
-  formatUserId,
-  createAdminClient
-} from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { validateRequestToken } from '@/lib/auth';
 import { logDetailedError, getUserFriendlyErrorMessage, isSchemaError } from '@/lib/error-utils';
 import type { Post } from '@/types/supabase';

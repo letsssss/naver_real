@@ -3,6 +3,7 @@ import { generateAccessToken } from "@/lib/auth";
 import { createAdminClient } from '@/lib/supabase-admin';
 import jwt from "jsonwebtoken";
 import { supabase } from "@/lib/supabase";
+import { logAuthEventWithRequest } from '@/lib/auth-logger';
 
 // JWT 시크릿 키 (환경변수 없으면 기본값 사용)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase-admin';
 import type { Database } from '@/types/supabase.types';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,7 @@ const userCache = new Map<string, { user: any, timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5분
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
+  const supabase = createAdminClient();
 
   const {
     data: { session },
