@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { getTokenFromHeaders, getTokenFromCookies, verifyToken, isDevelopment } from '@/lib/auth';
 
 // verifyToken 반환 타입 정의
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
     const userId = String(decoded.userId);
 
-    const { data, error } = await supabase
+    const { data, error } = await createAdminClient()
       .from('notifications')
       .update({ is_read: true })
       .eq('id', notificationId)

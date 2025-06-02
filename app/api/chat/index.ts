@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { cors } from '@/lib/cors';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 
@@ -76,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // 특정 채팅방 조회
       if (roomId) {
-        const { data: room, error } = await supabase
+        const { data: room, error } = await createAdminClient()
           .from('rooms')
           .select(`*,
             room_participants (user:users (id, name, profile_image)),
@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(400).json({ error: '유효하지 않은 구매 ID입니다.' });
         }
         
-        const { data: roomList, error } = await supabase
+        const { data: roomList, error } = await createAdminClient()
           .from('room_participants')
           .select(`room:rooms (id, order_number, purchase_id)`) // 확장 가능
           .eq('user_id', userId);
@@ -123,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // 사용자의 모든 채팅방 목록 조회
-      const { data: participantRooms, error } = await supabase
+      const { data: participantRooms, error } = await createAdminClient()
         .from('room_participants')
         .select(`room:rooms (*,
           participants:room_participants (user:users (id, name, profile_image)),
@@ -153,7 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // 채팅방 이름 중복 확인
-      const { data: existingRoom, error: checkError } = await supabase
+      const { data: existingRoom, error: checkError } = await createAdminClient()
         .from('rooms')
         .select('id')
         .eq('order_number', name)
@@ -173,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? parseInt(purchaseId, 10) 
         : purchaseId;
         
-      const { data: createdRoom, error: createError } = await supabase
+      const { data: createdRoom, error: createError } = await createAdminClient()
         .from('rooms')
         .insert({ 
           name, 
@@ -194,14 +194,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         user_id: id 
       }));
       
-      const { error: participantError } = await supabase
+      const { error: participantError } = await createAdminClient()
         .from('room_participants')
         .insert(participants);
 
       if (participantError) {
         console.error('참가자 추가 오류:', participantError);
         // 실패한 경우 생성된 채팅방 삭제
-        await supabase.from('rooms').delete().eq('id', createdRoom.id);
+        await createAdminClient().from('rooms').delete().eq('id', createdRoom.id);
         return res.status(500).json({ error: '채팅방 참가자 추가 중 오류가 발생했습니다.' });
       }
       
@@ -217,7 +217,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // 채팅방 존재 확인
-      const { data: roomData, error: roomError } = await supabase
+      const { data: roomData, error: roomError } = await createAdminClient()
         .from('rooms')
         .select(`
           *,
@@ -240,7 +240,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // 채팅방 나가기
       if (action === 'leave') {
-        const { error: leaveError } = await supabase
+        const { error: leaveError } = await createAdminClient()
           .from('room_participants')
           .delete()
           .eq('room_id', room.id)
@@ -252,7 +252,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         
         // 참가자가 없으면 채팅방 삭제
-        const { data: remainingParticipants, error: countError } = await supabase
+        const { data: remainingParticipants, error: countError } = await createAdminClient()
           .from('room_participants')
           .select('id')
           .eq('room_id', room.id);
@@ -261,7 +261,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.error('참가자 확인 오류:', countError);
         } else if (remainingParticipants.length === 0) {
           // 채팅방 삭제
-          await supabase.from('rooms').delete().eq('id', room.id);
+          await createAdminClient().from('rooms').delete().eq('id', room.id);
         }
         
         return res.status(200).json({ success: true });

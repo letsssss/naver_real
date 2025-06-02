@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {

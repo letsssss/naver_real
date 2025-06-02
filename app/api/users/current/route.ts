@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 // verifyToken 반환 타입 정의
 interface DecodedToken {
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     const userId = decoded.userId;
     
     // Supabase에서 사용자 정보 조회
-    const { data: user, error } = await supabase
+    const { data: user, error } = await createAdminClient()
       .from('users')
       .select('id, email, name, role, profileImage, phoneNumber, createdAt')
       .eq('id', Number(userId))

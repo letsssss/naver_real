@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
-import { adminSupabase, getSupabaseClient } from '@/lib/supabase';
+import { adminSupabase } from '@/lib/supabase-admin';
+import { getSupabaseClient } from '@/lib/supabase';
 
 // ✅ 유효성 검사 스키마
 const updateProfileSchema = z.object({

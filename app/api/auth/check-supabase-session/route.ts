@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { generateAccessToken } from "@/lib/auth";
 
 // OPTIONS 메서드 처리
@@ -19,8 +19,17 @@ export async function GET(request: Request) {
     console.log("Supabase 세션 확인 요청 수신");
     
     // Supabase 세션 확인
-    const { data: { session } } = await supabase.auth.getSession();
-    
+    const supabase = createAdminClient();
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("Supabase 세션 확인 오류:", error);
+      return NextResponse.json({
+        authenticated: false,
+        error: "세션 확인 중 오류가 발생했습니다.",
+      });
+    }
+
     if (!session) {
       console.log("Supabase 세션 없음");
       return NextResponse.json({
@@ -43,7 +52,7 @@ export async function GET(request: Request) {
     
     // JWT 토큰 생성
     const token = generateAccessToken(
-      1, // 임시 ID (실제로는 사용자 ID를 숫자로 변환하거나 매핑해야 함)
+      parseInt(userData.id, 10),
       userData.email || "unknown@example.com",
       userData.role
     );
@@ -75,6 +84,7 @@ export async function GET(request: Request) {
     });
     
     return response;
+
   } catch (error) {
     console.error("Supabase 세션 확인 중 오류:", error);
     return NextResponse.json({ 

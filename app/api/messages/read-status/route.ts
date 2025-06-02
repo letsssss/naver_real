@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { verifyToken } from '@/lib/auth';
 
 // 메시지 읽음 상태 조회 API 핸들러
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      const { data: message, error: messageError } = await supabase
+      const { data: message, error: messageError } = await createAdminClient()
         .from('messages')
         .select('*')
         .eq('id', messageIdInt)
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     // 채팅방 ID가 제공된 경우
     if (roomId) {
       // roomId를 방 이름으로 사용하는 경우
-      const { data: room, error: roomError } = await supabase
+      const { data: room, error: roomError } = await createAdminClient()
         .from('rooms')
         .select('*')
         .eq('order_number', roomId)
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 채팅방의 참여자인지 확인
-      const { data: participant, error: participantError } = await supabase
+      const { data: participant, error: participantError } = await createAdminClient()
         .from('room_participants')
         .select('id')
         .eq('room_id', room.id)
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 보낸 메시지 중 읽음 상태 확인
-      const { data: messages, error: messagesError } = await supabase
+      const { data: messages, error: messagesError } = await createAdminClient()
         .from('messages')
         .select('id, content, is_read, created_at')
         .eq('room_id', room.id)

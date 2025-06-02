@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createBrowserClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase-admin'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const supabase = createBrowserClient()
+    const supabase = createAdminClient()
 
     // 🚀 성능 최적화: 단일 쿼리로 모든 신고 데이터 조회
     // RPC 함수를 사용하여 서버 측에서 복잡한 로직 처리

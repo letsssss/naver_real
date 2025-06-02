@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { sendTicketConfirmedNotification, sendOrderConfirmedNotification, sendOrderCancelledNotification } from '@/services/kakao-notification-service';
 
 export async function POST(

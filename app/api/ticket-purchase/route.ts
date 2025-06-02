@@ -2,8 +2,8 @@ import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
-import { adminSupabase, supabase } from "@/lib/supabase";
-import { createAdminClient } from "@/lib/supabase";
+import { adminSupabase, createAdminClient } from "@/lib/supabase-admin";
+import { supabase } from "@/lib/supabase";
 import { verifyToken } from "@/lib/auth";
 import { sendPurchaseCompletedNotification } from '@/services/kakao-notification-service';
 

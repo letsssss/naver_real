@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTokenFromHeaders, verifyAccessToken, generateAccessToken } from "@/lib/auth";
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 // OPTIONS 메서드 처리
 export async function OPTIONS() {
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     
     // Supabase 세션 확인 시도
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await createAdminClient().auth.getSession();
       
       if (session) {
         console.log("Supabase 세션 발견");

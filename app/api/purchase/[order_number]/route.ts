@@ -2,8 +2,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // ✅ 캐싱 막기
 export const preferredRegion = 'auto';  // ✅ 자동 라우팅
 
-import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase"
+import { NextRequest, NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase-admin"
 import { sendOrderConfirmedNotification } from '@/services/kakao-notification-service'
 
 // ✅ CORS 헤더를 상수로 정의하여 중복 제거

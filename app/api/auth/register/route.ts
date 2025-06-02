@@ -13,7 +13,7 @@ declare global {
 }
 
 import { NextResponse } from "next/server";
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { logAuthEventWithRequest } from '@/lib/auth-logger';
 
 // 이메일 유효성 검사 함수
@@ -36,29 +36,48 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    // 요청 본문 파싱
-    const { email, password, name } = await request.json();
+    const body = await request.json();
+    const { email, password, name, phoneNumber } = body;
     
-    // 기본 유효성 검사
+    // 이메일 소문자 변환
+    const emailLowerCase = email.toLowerCase();
+    
+    // 필수 필드 검증
     if (!email || !password || !name) {
-      await logAuthEventWithRequest(request, "signup", email || "unknown", "fail", "필수 입력값 누락");
-      return NextResponse.json({ error: "이메일, 비밀번호, 이름은 필수 입력값입니다." }, { status: 400 });
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "필수 필드 누락");
+      return NextResponse.json({ error: "이메일, 비밀번호, 이름은 필수 입력 사항입니다." }, { status: 400 });
     }
     
     // 이메일 형식 검증
-    if (!isValidEmail(email)) {
-      await logAuthEventWithRequest(request, "signup", email, "fail", "유효하지 않은 이메일 형식");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLowerCase)) {
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 형식 오류");
       return NextResponse.json({ error: "유효하지 않은 이메일 형식입니다." }, { status: 400 });
     }
     
-    // 비밀번호 복잡도 검증 (최소 6자 이상)
+    // 비밀번호 길이 검증
     if (password.length < 6) {
-      await logAuthEventWithRequest(request, "signup", email, "fail", "비밀번호 길이 부족");
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "비밀번호 길이 부족");
       return NextResponse.json({ error: "비밀번호는 최소 6자 이상이어야 합니다." }, { status: 400 });
     }
     
-    // 이메일을 소문자로 변환
-    const emailLowerCase = email.toLowerCase();
+    // 이름 길이 검증
+    if (name.length < 2) {
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이름 길이 부족");
+      return NextResponse.json({ error: "이름은 최소 2자 이상이어야 합니다." }, { status: 400 });
+    }
+    
+    // 전화번호 형식 검증 (선택적)
+    if (phoneNumber) {
+      const phoneRegex = /^[0-9]{10,11}$/;
+      if (!phoneRegex.test(phoneNumber.replace(/-/g, ''))) {
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "전화번호 형식 오류");
+        return NextResponse.json({ error: "유효하지 않은 전화번호 형식입니다." }, { status: 400 });
+      }
+    }
+    
+    // Supabase 클라이언트 초기화
+    const supabase = createAdminClient();
     
     // Supabase 클라이언트 검증
     if (!supabase || !supabase.auth) {
@@ -78,17 +97,19 @@ export async function POST(request: Request) {
         .eq('email', emailLowerCase);
       
       if (getUsersError) {
-        console.error("사용자 검색 중 오류:", getUsersError);
-      } else if (existingUsers && existingUsers.length > 0) {
-        console.log("이미 가입된 이메일:", emailLowerCase);
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이미 가입된 이메일");
-        return NextResponse.json({ 
-          error: "이미 가입된 이메일입니다. 로그인을 시도하거나 다른 이메일을 사용해 주세요." 
-        }, { status: 400 });
+        console.error("사용자 조회 오류:", getUsersError);
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 조회 오류");
+        return NextResponse.json({ error: "사용자 조회 중 오류가 발생했습니다." }, { status: 500 });
       }
-    } catch (checkError) {
-      console.error("이메일 중복 검사 중 오류:", checkError);
-      // 중복 검사 실패는 회원가입 시도에 영향을 주지 않도록 처리 (진행 허용)
+      
+      if (existingUsers && existingUsers.length > 0) {
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 중복");
+        return NextResponse.json({ error: "이미 등록된 이메일입니다." }, { status: 409 });
+      }
+    } catch (error) {
+      console.error("이메일 중복 검사 오류:", error);
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 중복 검사 오류");
+      return NextResponse.json({ error: "이메일 중복 검사 중 오류가 발생했습니다." }, { status: 500 });
     }
     
     // 1. Supabase Auth에 사용자 등록
@@ -97,81 +118,67 @@ export async function POST(request: Request) {
         email: emailLowerCase,
         password,
         options: {
-          data: { 
+          data: {
             name,
-            role: "USER"
+            phone_number: phoneNumber,
+            role: 'USER',
           }
         }
       });
       
-      // Supabase에 로그 기록
       if (error) {
-        // Supabase 오류 메시지 맞춤화
-        let errorMessage = error.message;
-        if (error.message.includes("already registered")) {
-          errorMessage = "이미 가입된 이메일입니다. 로그인 페이지에서 로그인해 주세요.";
-        }
-        
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", errorMessage);
-        console.error("Supabase Auth 등록 오류:", errorMessage);
-        return NextResponse.json({ error: errorMessage }, { status: 400 });
+        console.error("Supabase Auth 등록 오류:", error);
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "Supabase Auth 등록 오류");
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
       
-      const userId = data.user?.id;
-      if (!userId) {
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 생성 실패 (ID 없음)");
-        return NextResponse.json({ error: "사용자 생성 실패" }, { status: 500 });
+      if (!data.user) {
+        console.error("사용자 데이터 없음");
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 데이터 없음");
+        return NextResponse.json({ error: "사용자 등록에 실패했습니다." }, { status: 500 });
       }
-      
-      console.log("Supabase Auth 사용자 생성 완료:", userId);
       
       // 2. Supabase public.users 테이블에 사용자 정보 저장
       const { error: insertError } = await supabase
         .from('users')
         .insert({
-          id: userId,
+          id: data.user.id,
           email: emailLowerCase,
           name,
-          role: "USER"
+          phone_number: phoneNumber,
+          role: 'USER',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
       
       if (insertError) {
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", `데이터 테이블 저장 오류: ${insertError.message}`);
-        console.error("Supabase 데이터 테이블 저장 오류:", insertError.message);
-        return NextResponse.json({ error: insertError.message }, { status: 400 });
+        console.error("사용자 정보 저장 오류:", insertError);
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 정보 저장 오류");
+        return NextResponse.json({ error: "사용자 정보 저장에 실패했습니다." }, { status: 500 });
       }
       
-      // 회원가입 성공 로그 기록
+      // 성공 로그 기록
       await logAuthEventWithRequest(request, "signup", emailLowerCase, "success");
-      console.log("Supabase 데이터 테이블에 사용자 정보 저장 성공");
       
-      // 3. 성공 응답 반환
       return NextResponse.json({
         success: true,
-        message: "회원가입이 완료되었습니다.",
-        user: { 
-          id: userId, 
-          email: emailLowerCase, 
-          name 
+        message: "회원가입이 완료되었습니다. 이메일 인증을 진행해주세요.",
+        user: {
+          id: data.user.id,
+          email: emailLowerCase,
+          name,
+          role: 'USER'
         }
-      }, { status: 201 });
-    } catch (signUpError) {
-      console.error("Supabase Auth.signUp 호출 중 오류:", signUpError);
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "회원가입 처리 중 오류 발생");
-      return NextResponse.json({ 
-        error: "회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." 
-      }, { status: 500 });
+      });
+      
+    } catch (error) {
+      console.error("회원가입 처리 중 오류:", error);
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "회원가입 처리 오류");
+      return NextResponse.json({ error: "회원가입 처리 중 오류가 발생했습니다." }, { status: 500 });
     }
-  } catch (error: any) {
-    console.error("회원가입 처리 오류:", error);
-    try {
-      // 문맥상 이메일을 알 수 없는 경우
-      await logAuthEventWithRequest(request, "signup", "unknown", "fail", error?.message || "알 수 없는 오류");
-    } catch {}
     
-    return NextResponse.json({ 
-      error: "회원가입 중 오류가 발생했습니다.",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }, { status: 500 });
+  } catch (error) {
+    console.error("회원가입 요청 처리 중 오류:", error);
+    return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 } 

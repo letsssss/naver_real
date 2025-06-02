@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 /**
  * 사용자의 미납 수수료를 확인하는 함수

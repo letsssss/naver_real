@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs'; // ✅ Edge 런타임에서 인증 문제 방지
 

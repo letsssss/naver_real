@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { generateAccessToken, hashPassword } from '@/lib/auth';
 import crypto from 'crypto';
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     // ✅ 1. Supabase에서 사용자 조회
-    let { data: user, error } = await supabase
+    let { data: user, error } = await createAdminClient()
       .from('users')
       .select('*')
       .eq('email', email)
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       const randomPassword = crypto.randomBytes(16).toString('hex');
       const hashedPassword = await hashPassword(randomPassword);
 
-      const { data: createdUser, error: insertError } = await supabase
+      const { data: createdUser, error: insertError } = await createAdminClient()
         .from('users')
         .insert([
           {

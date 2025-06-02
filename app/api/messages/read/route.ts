@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { verifyToken } from '@/lib/auth';
 
 // 메시지 읽음 상태 업데이트 API 핸들러
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const roomIdInt = parseInt(roomId);
     
     // 방 존재 여부 확인 및 사용자가 해당 방의 참여자인지 확인
-    const { data: participant, error: participantError } = await supabase
+    const { data: participant, error: participantError } = await createAdminClient()
       .from('room_participants')
       .select('id')
       .eq('room_id', roomIdInt)
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
     
     // 읽지 않은 메시지 조회
-    const { data: unreadMessages, error: selectError } = await supabase
+    const { data: unreadMessages, error: selectError } = await createAdminClient()
       .from('messages')
       .select('id')
       .eq('room_id', roomIdInt)
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     
     // 읽지 않은 메시지 업데이트
     const messageIds = unreadMessages.map(msg => msg.id);
-    const { error: updateError } = await supabase
+    const { error: updateError } = await createAdminClient()
       .from('messages')
       .update({ is_read: true })
       .in('id', messageIds);

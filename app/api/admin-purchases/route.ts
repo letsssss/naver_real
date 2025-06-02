@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { getSupabaseClient } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Supabase 클라이언트 인스턴스 가져오기
-    const supabase = getSupabaseClient();
+    const supabase = createAdminClient();
     console.log("Supabase 클라이언트 있음:", !!supabase);
     
     try {

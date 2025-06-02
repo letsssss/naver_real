@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, adminSupabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { adminSupabase } from '@/lib/supabase-admin'
 import { getAuthenticatedUser } from "@/lib/auth"
 
 // CORS 헤더 설정을 위한 함수

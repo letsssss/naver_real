@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabase } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { getTokenFromHeaders, verifyAccessToken } from "@/lib/auth"
 
 // OPTIONS 메서드 처리
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     
     // Supabase 로그아웃 시도
     try {
-      await supabase.auth.signOut();
+      await createAdminClient().auth.signOut();
       console.log("Supabase 로그아웃 성공");
     } catch (supaError) {
       console.error("Supabase 로그아웃 오류:", supaError);

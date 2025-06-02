@@ -1,7 +1,8 @@
 // 목적: 주문번호(order_number)로 특정 구매의 상태를 'COMPLETED'로 업데이트하는 Supabase 기반 API
 
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase";
+import { NextRequest, NextResponse } from "next/server";
+import { sendTicketConfirmedNotification } from '@/services/kakao-notification-service';
+import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(
   req: Request,

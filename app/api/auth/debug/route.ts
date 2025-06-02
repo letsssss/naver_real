@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 
 // OPTIONS 메서드 처리
 export async function OPTIONS() {
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     // Supabase 세션 정보
     let supabaseSession = null;
     try {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await createAdminClient().auth.getSession();
       if (data.session) {
         supabaseSession = {
           userId: data.session.user.id,

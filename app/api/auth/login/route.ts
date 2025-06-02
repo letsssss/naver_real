@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateRefreshToken } from "@/lib/auth";
+import { generateAccessToken } from "@/lib/auth";
+import { createAdminClient } from '@/lib/supabase-admin';
 import jwt from "jsonwebtoken";
 import { supabase } from "@/lib/supabase";
 
@@ -94,128 +95,82 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
-
+    
     if (!email || !password) {
-      return NextResponse.json({ error: "이메일과 비밀번호는 필수 입력값입니다." }, { status: 400 });
+      return NextResponse.json({ error: "이메일과 비밀번호를 입력해주세요." }, { status: 400 });
     }
 
-    if (!supabase || !supabase.auth) {
-      console.error("Supabase 클라이언트 초기화되지 않음");
-      return NextResponse.json({ error: "내부 서버 오류가 발생했습니다." }, { status: 500 });
-    }
-
-    console.log("🔐 로그인 시도:", email);
-
-    // 🚀 성능 최적화: Supabase 로그인과 동시에 JWT 토큰 생성 준비
-    const { data: supabaseData, error: supabaseError } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase(),
-      password,
+    const supabase = createAdminClient();
+    
+    // Supabase Auth로 로그인 시도
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
     });
 
-    if (supabaseError) {
-      console.log("❌ Supabase 로그인 실패:", supabaseError.message);
-      return NextResponse.json({ error: "이메일 또는 비밀번호가 올바르지 않습니다." }, { status: 401 });
+    if (error) {
+      console.error("로그인 오류:", error);
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    console.log("✅ Supabase 로그인 성공:", supabaseData.user.email);
-
-    // 🚀 성능 최적화: 사용자 정보 조회와 JWT 토큰 생성을 병렬 처리
-    const [userResult, jwtToken] = await Promise.allSettled([
-      // 사용자 정보 조회
-      supabase
-        .from('users')
-        .select('id, name, email, role')
-        .eq('id', supabaseData.user.id)
-        .single(),
-      
-      // JWT 토큰 미리 생성 (기본 정보로)
-      Promise.resolve(jwt.sign({
-        userId: supabaseData.user.id,
-        email: supabaseData.user.email,
-        role: 'USER', // 기본값
-      }, JWT_SECRET, { expiresIn: '7d' }))
-    ]);
-
-    // 사용자 정보 처리
-    let userData = null;
-    if (userResult.status === 'fulfilled' && userResult.value.data) {
-      userData = userResult.value.data;
-    } else {
-      console.log("❌ 사용자 정보 조회 실패, 기본 정보 사용");
-      // 기본 사용자 정보 사용
-      userData = {
-        id: supabaseData.user.id,
-        name: supabaseData.user.user_metadata?.name || '사용자',
-        email: supabaseData.user.email,
-        role: 'USER'
-      };
+    if (!data.user) {
+      return NextResponse.json({ error: "사용자 정보를 찾을 수 없습니다." }, { status: 401 });
     }
 
-    console.log("✅ 사용자 정보 확인:", userData.email);
-
-    // JWT 토큰 (실제 사용자 정보로 재생성 필요시)
-    let customToken;
-    if (jwtToken.status === 'fulfilled') {
-      // 실제 사용자 정보와 다르면 재생성
-      if (userData.role !== 'USER') {
-        customToken = jwt.sign({
-          userId: userData.id,
-          email: userData.email,
-          role: userData.role,
-        }, JWT_SECRET, { expiresIn: '7d' });
-      } else {
-        customToken = jwtToken.value;
-      }
-    } else {
-      // 폴백: 새로 생성
-      customToken = jwt.sign({
-        userId: userData.id,
-        email: userData.email,
-        role: userData.role,
-      }, JWT_SECRET, { expiresIn: '7d' });
-    }
-
-    // 🚀 성능 최적화: 리프레시 토큰 저장을 비동기로 처리 (응답 지연 방지)
-    const refreshToken = generateRefreshToken(userData.id);
-    supabase
+    // 사용자 정보 가져오기
+    const { data: userData, error: userError } = await supabase
       .from('users')
-      .update({ refresh_token: refreshToken })
-      .eq('id', userData.id)
-      .then(({ error: updateError }) => {
-        if (updateError) {
-          console.log("⚠️ 리프레시 토큰 저장 실패:", updateError.message);
-        } else {
-          console.log("✅ 리프레시 토큰 저장 완료 (비동기)");
-        }
-      });
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    if (userError || !userData) {
+      console.error("사용자 정보 조회 오류:", userError);
+      return NextResponse.json({ error: "사용자 정보 조회에 실패했습니다." }, { status: 500 });
+    }
+
+    // 액세스 토큰 생성
+    const accessToken = generateAccessToken(
+      userData.id,
+      userData.email,
+      userData.role || 'USER'
+    );
 
     // 응답 생성
     const response = NextResponse.json({
       success: true,
-      message: "로그인 성공",
       user: {
         id: userData.id,
-        name: userData.name,
         email: userData.email,
-        role: userData.role,
+        name: userData.name,
+        role: userData.role
       },
-      token: customToken,
-      supabaseSession: supabaseData?.session,
+      session: data.session,
+      accessToken
     });
 
-    // 쿠키 설정
-    setAuthCookies(response, supabaseData.session, customToken);
+    // 쿠키에 토큰 설정
+    response.cookies.set('auth-token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
 
-    // 캐시 방지 헤더 추가
-    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
+    // 인증 상태 쿠키 설정
+    response.cookies.set('auth-status', 'authenticated', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
 
-    console.log("🎉 로그인 완료:", userData.email);
     return response;
 
   } catch (error) {
-    console.error("💥 로그인 중 오류 발생:", error);
+    console.error("로그인 처리 중 오류:", error);
     return NextResponse.json({ error: "로그인 처리 중 오류가 발생했습니다." }, { status: 500 });
   }
 }

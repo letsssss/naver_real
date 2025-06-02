@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { verifyToken } from '@/lib/auth';
 
 // 메시지 API 핸들러
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // 1️⃣ 구매 ID로 채팅방 조회 or 생성
     if (purchaseId) {
-      const purchaseRes = await supabase
+      const purchaseRes = await createAdminClient()
         .from('purchases')
         .select('id, buyer_id, seller_id')
         .eq(typeof purchaseId === 'number' ? 'id' : 'order_number', purchaseId)
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
       const { id: purchase_id, buyer_id, seller_id } = purchaseRes.data;
 
-      const roomRes = await supabase
+      const roomRes = await createAdminClient()
         .from('rooms')
         .select('id')
         .eq('purchase_id', purchase_id)
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
       // 없으면 생성
       if (!roomRes.data) {
-        const createRoom = await supabase
+        const createRoom = await createAdminClient()
           .from('rooms')
           .insert({ name: `purchase_${purchase_id}`, purchase_id })
           .select()
@@ -76,10 +76,12 @@ export async function POST(request: NextRequest) {
         roomId = createRoom.data.id;
 
         // 참여자 등록
-        await supabase.from('room_participants').insert([
-          { room_id: roomId, user_id: buyer_id },
-          { room_id: roomId, user_id: seller_id },
-        ]);
+        await createAdminClient()
+          .from('room_participants')
+          .insert([
+            { room_id: roomId, user_id: buyer_id },
+            { room_id: roomId, user_id: seller_id },
+          ]);
       } else {
         roomId = roomRes.data.id;
       }
@@ -90,8 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2️⃣ 메시지 저장
-    const messageInsert = await supabase
-      .schema('public')
+    const messageInsert = await createAdminClient()
       .from('messages')
       .insert({
         content,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     // 3️⃣ 채팅방 최신 정보 업데이트
     if (roomId) {
-      await supabase
+      await createAdminClient()
         .from('rooms')
         .update({ last_chat: content, time_of_last_chat: new Date().toISOString() })
         .eq('id', roomId);
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 해당 채팅방의 참여자인지 확인
-      const { data: participant, error: participantError } = await supabase
+      const { data: participant, error: participantError } = await createAdminClient()
         .from('room_participants')
         .select('id')
         .eq('room_id', roomIdInt)
@@ -191,7 +192,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 메시지 조회
-      const { data: messages, error: messagesError } = await supabase
+      const { data: messages, error: messagesError } = await createAdminClient()
         .from('messages')
         .select(`
           id, 
@@ -221,8 +222,7 @@ export async function GET(request: NextRequest) {
         .map(msg => msg.id) || [];
       
       if (unreadMessageIds.length > 0) {
-        await supabase
-          .schema('public')
+        await createAdminClient()
           .from('messages')
           .update({ is_read: true })
           .in('id', unreadMessageIds);
@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
       // 구매 정보 조회
       if (!isNaN(Number(purchaseId))) {
         // 숫자인 경우 id로 조회
-        const { data, error } = await supabase
+        const { data, error } = await createAdminClient()
           .from('purchases')
           .select('id, buyer_id, seller_id')
           .eq('id', parseInt(purchaseId))
@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
         purchaseData = data;
       } else {
         // 문자열인 경우 order_number로 조회
-        const { data, error } = await supabase
+        const { data, error } = await createAdminClient()
           .from('purchases')
           .select('id, buyer_id, seller_id')
           .eq('order_number', purchaseId)
@@ -299,7 +299,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 메시지 조회
-      const { data: messages, error: messagesError } = await supabase
+      const { data: messages, error: messagesError } = await createAdminClient()
         .from('messages')
         .select(`
           id, 

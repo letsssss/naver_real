@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { getAuthenticatedUser } from "@/lib/auth";
 
 // CORS 헤더 추가 함수
@@ -31,7 +31,7 @@ export async function GET(
     }
 
     // 데이터베이스에서 사용자 정보 조회 (Supabase 사용)
-    const { data: user, error } = await supabase
+    const { data: user, error } = await createAdminClient()
       .from('users')
       .select('id, name, email, profileImage, role, createdAt')
       .eq('id', userId)
