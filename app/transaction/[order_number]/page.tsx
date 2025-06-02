@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, use } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -17,6 +17,7 @@ import type { Database } from "@/types/supabase.types"
 import ReportButton from "./ReportButton"
 import { confirmPurchase } from "@/services/mypage-service"
 import { TransactionStatus } from "@/types/mypage"
+import { getSupabaseClient } from "@/lib/supabase"
 
 interface Transaction {
   id: string;
@@ -135,9 +136,16 @@ const getTicketingStatusText = (status: string) => {
   }
 }
 
-export default function TransactionPage({ params }: { params: { order_number: string } }) {
+interface PageProps {
+  params: Promise<{ order_number: string }>;  // params를 Promise 타입으로 변경
+}
+
+
+export default function TransactionPage({ params }: PageProps) {
   const router = useRouter()
-  const orderNumber = params?.order_number as string
+  const resolvedParams = use(params);
+  const orderNumber = resolvedParams.order_number;
+
   const { user: currentUser } = useAuth() // 로그인한 사용자 정보
   const { toast } = useToast()
   
@@ -269,7 +277,7 @@ export default function TransactionPage({ params }: { params: { order_number: st
       setIsInitializingChat(true)
       
       // Supabase 클라이언트 생성 (쿠키 자동 처리)
-      const supabase = createClientComponentClient<Database>()
+      const supabase = getSupabaseClient();
       
       // 현재 세션 가져오기
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -281,11 +289,11 @@ export default function TransactionPage({ params }: { params: { order_number: st
 
       if (!session) {
         // 세션이 없으면 재인증 시도
-        const { error: refreshError } = await supabase.auth.refreshSession()
-        if (refreshError) {
-          console.error('[TransactionDetail] 세션 갱신 오류:', refreshError)
+        //const { error: refreshError } = await supabase.auth.refreshSession()
+        //if (refreshError) {
+          console.error('[TransactionDetail] 세션 없음')
           throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.')
-        }
+        //}
       }
       
       // 채팅방 초기화 API 호출
@@ -612,7 +620,7 @@ export default function TransactionPage({ params }: { params: { order_number: st
 
             <div className="mt-10 pt-6 flex flex-col sm:flex-row justify-end gap-4">
               {transaction.currentStep === "confirmed" && (
-                <Link href={`/review/${params.order_number}`}>
+                <Link href={`/review/${resolvedParams.order_number}`}>
                   <Button variant="outline" className="w-full sm:w-auto">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"

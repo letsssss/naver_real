@@ -13,6 +13,13 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   console.log('환경 변수 누락: NEXT_PUBLIC_SUPABASE_ANON_KEY 하드코딩 값으로 설정됨');
 }
 
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWJyamN6ZHlxcXRzcHBvamd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzA1MTk3NywiZXhwIjoyMDU4NjI3OTc3fQ.zsS91TzGsaInXzIdj3uY-2JSc7672nNipNvzCVANMkU';
+  console.log('환경 변수 누락: SUPABASE_SERVICE_ROLE_KEY 하드코딩 값으로 설정됨');
+}
+
+
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {

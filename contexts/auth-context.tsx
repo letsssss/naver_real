@@ -511,12 +511,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// 커스텀 훅으로 AuthContext 사용하기 쉽게 만들기
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext);
 
