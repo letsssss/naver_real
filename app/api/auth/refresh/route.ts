@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { getTokenFromHeaders, verifyAccessToken, generateAccessToken } from "@/lib/auth";
+import { getTokenFromHeaders, verifyToken, generateAccessToken } from "@/lib/auth";
 import { createAdminClient } from '@/lib/supabase-admin';
+
+interface DecodedToken {
+  userId: string | number;
+  email: string;
+  role: string;
+}
 
 // OPTIONS 메서드 처리
 export async function OPTIONS() {
@@ -8,7 +14,7 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
@@ -24,16 +30,16 @@ export async function POST(request: Request) {
     // 토큰이 없으면 권한 없음 응답
     if (!token) {
       console.log("토큰 없음: 권한 없음");
-      return NextResponse.json({ error: "권한이 없습니다." }, { status: 401 });
+      return NextResponse.json({ error: "토큰이 제공되지 않았습니다." }, { status: 401 });
     }
     
     // 개발 환경 확인
     const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
     
     // 토큰 검증
-    const decoded = verifyAccessToken(token);
+    const decoded = await verifyToken(token) as DecodedToken;
     
-    if (!decoded || typeof decoded !== 'object' || !('userId' in decoded)) {
+    if (!decoded || !decoded.userId) {
       console.log("유효하지 않은 토큰");
       return NextResponse.json({ error: "유효하지 않은 토큰입니다." }, { status: 401 });
     }
@@ -46,23 +52,22 @@ export async function POST(request: Request) {
     let role = decoded.role || "USER";
     
     // Supabase 세션 확인 시도
-    try {
-      const { data: { session } } = await createAdminClient().auth.getSession();
-      
-      if (session) {
-        console.log("Supabase 세션 발견");
-        userId = session.user.id;
-        email = session.user.email || email;
-        
-        // 사용자 메타데이터에서 역할 추출
-        const userMetadata = session.user.user_metadata;
-        if (userMetadata && userMetadata.role) {
-          role = userMetadata.role;
-        }
-      }
-    } catch (supaError) {
-      console.warn("Supabase 세션 확인 오류:", supaError);
-      // Supabase 세션 확인 실패해도 계속 진행
+    const supabase = createAdminClient();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error("Supabase 세션 확인 오류:", sessionError);
+      return NextResponse.json({ error: "세션 확인 중 오류가 발생했습니다." }, { status: 500 });
+    }
+
+    if (!session) {
+      return NextResponse.json({ error: "유효한 세션이 없습니다." }, { status: 401 });
+    }
+    
+    // 사용자 메타데이터에서 역할 추출
+    const userMetadata = session.user.user_metadata;
+    if (userMetadata && userMetadata.role) {
+      role = userMetadata.role;
     }
     
     // 새 토큰 생성
@@ -81,16 +86,19 @@ export async function POST(request: Request) {
     
     // 응답 생성
     const response = NextResponse.json({
-      message: "토큰 갱신 성공",
+      success: true,
       token: newToken,
       expiresIn: 86400, // 24시간 (초 단위)
     });
     
     // 쿠키에 토큰 설정
-    //setSecureCookie(response, 'auth-token', newToken);
-    
-    // auth-status 쿠키 설정 (클라이언트에서 접근 가능)
-    //setSecureCookie(response, 'auth-status', 'authenticated', { httpOnly: false });
+    response.cookies.set('auth-token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
     
     return response;
   } catch (error) {

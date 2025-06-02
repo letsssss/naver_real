@@ -28,7 +28,7 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
@@ -49,9 +49,8 @@ export async function POST(request: Request) {
     }
     
     // 이메일 형식 검증
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailLowerCase)) {
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 형식 오류");
+    if (!isValidEmail(emailLowerCase)) {
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "잘못된 이메일 형식");
       return NextResponse.json({ error: "유효하지 않은 이메일 형식입니다." }, { status: 400 });
     }
     
@@ -76,109 +75,76 @@ export async function POST(request: Request) {
       }
     }
     
-    // Supabase 클라이언트 초기화
-    const supabase = createAdminClient();
-    
-    // Supabase 클라이언트 검증
-    if (!supabase || !supabase.auth) {
-      console.error("Supabase 클라이언트 초기화되지 않음");
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "Supabase 클라이언트 초기화 실패");
-      return NextResponse.json({ error: "내부 서버 오류가 발생했습니다." }, { status: 500 });
-    }
-    
-    console.log("Supabase 정상 초기화 확인, auth.signUp 함수 유무:", !!supabase.auth.signUp);
-    
-    // 이메일 중복 검사
-    try {
-      // Supabase에서 사용자 이메일 검색
-      const { data: existingUsers, error: getUsersError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', emailLowerCase);
-      
-      if (getUsersError) {
-        console.error("사용자 조회 오류:", getUsersError);
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 조회 오류");
-        return NextResponse.json({ error: "사용자 조회 중 오류가 발생했습니다." }, { status: 500 });
-      }
-      
-      if (existingUsers && existingUsers.length > 0) {
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 중복");
-        return NextResponse.json({ error: "이미 등록된 이메일입니다." }, { status: 409 });
-      }
-    } catch (error) {
-      console.error("이메일 중복 검사 오류:", error);
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이메일 중복 검사 오류");
-      return NextResponse.json({ error: "이메일 중복 검사 중 오류가 발생했습니다." }, { status: 500 });
-    }
-    
-    // 1. Supabase Auth에 사용자 등록
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: emailLowerCase,
-        password,
-        options: {
-          data: {
-            name,
-            phone_number: phoneNumber,
-            role: 'USER',
-          }
-        }
-      });
-      
-      if (error) {
-        console.error("Supabase Auth 등록 오류:", error);
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "Supabase Auth 등록 오류");
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-      
-      if (!data.user) {
-        console.error("사용자 데이터 없음");
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 데이터 없음");
-        return NextResponse.json({ error: "사용자 등록에 실패했습니다." }, { status: 500 });
-      }
-      
-      // 2. Supabase public.users 테이블에 사용자 정보 저장
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: data.user.id,
-          email: emailLowerCase,
-          name,
-          phone_number: phoneNumber,
+    // Supabase Auth로 회원가입
+    const { data: authData, error: authError } = await createAdminClient().auth.signUp({
+      email: emailLowerCase,
+      password: password,
+      options: {
+        data: {
+          name: name,
           role: 'USER',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+          phone_number: phoneNumber || null
+        }
+      }
+    });
+
+    if (authError) {
+      console.error("Supabase 회원가입 오류:", authError);
       
-      if (insertError) {
-        console.error("사용자 정보 저장 오류:", insertError);
-        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 정보 저장 오류");
-        return NextResponse.json({ error: "사용자 정보 저장에 실패했습니다." }, { status: 500 });
+      // 이미 가입된 이메일인 경우
+      if (authError.message.includes('already registered')) {
+        await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "이미 가입된 이메일");
+        return NextResponse.json({ error: "이미 가입된 이메일입니다." }, { status: 409 });
       }
       
-      // 성공 로그 기록
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "success");
-      
-      return NextResponse.json({
-        success: true,
-        message: "회원가입이 완료되었습니다. 이메일 인증을 진행해주세요.",
-        user: {
-          id: data.user.id,
-          email: emailLowerCase,
-          name,
-          role: 'USER'
-        }
-      });
-      
-    } catch (error) {
-      console.error("회원가입 처리 중 오류:", error);
-      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "회원가입 처리 오류");
-      return NextResponse.json({ error: "회원가입 처리 중 오류가 발생했습니다." }, { status: 500 });
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", authError.message);
+      return NextResponse.json({ error: "회원가입 중 오류가 발생했습니다." }, { status: 500 });
     }
-    
+
+    if (!authData.user) {
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 생성 실패");
+      return NextResponse.json({ error: "사용자 생성에 실패했습니다." }, { status: 500 });
+    }
+
+    // 사용자 정보를 users 테이블에 저장
+    const { error: userError } = await createAdminClient()
+      .from('users')
+      .insert([
+        {
+          id: authData.user.id,
+          email: emailLowerCase,
+          name: name,
+          role: 'USER',
+          phone_number: phoneNumber || null
+        }
+      ]);
+
+    if (userError) {
+      console.error("사용자 정보 저장 오류:", userError);
+      await logAuthEventWithRequest(request, "signup", emailLowerCase, "fail", "사용자 정보 저장 실패");
+      
+      // 사용자 정보 저장 실패 시 인증 데이터 삭제
+      await createAdminClient().auth.admin.deleteUser(authData.user.id);
+      
+      return NextResponse.json({ error: "사용자 정보 저장에 실패했습니다." }, { status: 500 });
+    }
+
+    // 성공 로그 기록
+    await logAuthEventWithRequest(request, "signup", emailLowerCase, "success");
+
+    return NextResponse.json({
+      success: true,
+      message: "회원가입이 완료되었습니다. 이메일 인증을 진행해주세요.",
+      user: {
+        id: authData.user.id,
+        email: emailLowerCase,
+        name: name,
+        role: 'USER'
+      }
+    });
+
   } catch (error) {
-    console.error("회원가입 요청 처리 중 오류:", error);
-    return NextResponse.json({ error: "요청 처리 중 오류가 발생했습니다." }, { status: 500 });
+    console.error("회원가입 처리 중 오류:", error);
+    return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
   }
 } 

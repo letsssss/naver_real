@@ -8,7 +8,7 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
@@ -24,12 +24,15 @@ export async function POST(request: Request) {
     // 개발 환경 확인
     const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
     
-    // Supabase 로그아웃 시도
-    try {
-      await createAdminClient().auth.signOut();
-      console.log("Supabase 로그아웃 성공");
-    } catch (supaError) {
-      console.error("Supabase 로그아웃 오류:", supaError);
+    // Supabase 로그아웃
+    const { error } = await createAdminClient().auth.signOut();
+
+    if (error) {
+      console.error('Supabase 로그아웃 오류:', error);
+      return NextResponse.json(
+        { error: '로그아웃 중 오류가 발생했습니다.' },
+        { status: 500 }
+      );
     }
     
     // 응답 객체 생성

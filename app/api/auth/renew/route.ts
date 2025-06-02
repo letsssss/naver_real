@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { cookies } from 'next/headers';
 import { getTokenFromHeaders, verifyToken, generateAccessToken } from "@/lib/auth";
 import { createAdminClient } from '@/lib/supabase-admin';
+
+interface DecodedToken {
+  userId: string | number;
+  email: string;
+  role: string;
+}
 
 // OPTIONS 메서드 처리
 export async function OPTIONS() {
@@ -9,7 +14,7 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
@@ -24,8 +29,9 @@ export async function POST(request: Request) {
     }
 
     // 2. 토큰 검증
-    const decoded = await verifyToken(token);
-    if (!decoded) {
+    const decoded = await verifyToken(token) as DecodedToken;
+    
+    if (!decoded || !decoded.userId) {
       return NextResponse.json({ error: "유효하지 않은 토큰입니다." }, { status: 401 });
     }
 
@@ -44,7 +50,7 @@ export async function POST(request: Request) {
 
     // 4. 새 토큰 생성
     const newToken = generateAccessToken(
-      decoded.userId,
+      typeof decoded.userId === 'string' ? parseInt(decoded.userId, 10) : decoded.userId,
       decoded.email,
       decoded.role
     );
