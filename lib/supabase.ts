@@ -2,12 +2,16 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase.types';
 
 // 브라우저용 Supabase 클라이언트 싱글톤
 let browserClient: ReturnType<typeof createClientComponentClient> | null = null;
 let currentSubscription: { unsubscribe: () => void } | null = null;
 let isInitialized = false;
+
+// Admin 클라이언트 싱글톤
+let adminClient: ReturnType<typeof createClient> | null = null;
 
 // PKCE 관련 스토리지 키
 const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
@@ -22,6 +26,41 @@ const PKCE_INIT_KEY = 'supabase.auth.initialized';
 
 // 세션 변경 이벤트를 위한 커스텀 이벤트
 const SESSION_CHANGE_EVENT = 'supabase.session.change';
+
+// getSupabaseClient 함수 추가
+export const getSupabaseClient = () => {
+  if (typeof window === 'undefined') return null;
+  return createBrowserClient();
+};
+
+// Admin 클라이언트 생성 함수 추가
+export const createAdminClient = () => {
+  if (typeof window !== 'undefined') {
+    console.warn('Admin client should only be used on the server side');
+    return null;
+  }
+
+  if (!adminClient) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Required environment variables are not set');
+    }
+
+    adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  }
+
+  return adminClient;
+};
+
+// Admin 클라이언트 인스턴스 생성 및 내보내기
+export const adminSupabase = typeof window === 'undefined' ? createAdminClient() : null;
 
 // PKCE 초기화 함수
 const initializePKCE = () => {
@@ -421,8 +460,8 @@ const onSessionChange = (callback: (session: any) => void) => {
 };
 
 // 기본 클라이언트 인스턴스 생성
-const defaultClient = createBrowserClient();
+export const supabase = createBrowserClient();
 
 // Exports
 export { createBrowserClient, onSessionChange };
-export default defaultClient;
+export default supabase;
