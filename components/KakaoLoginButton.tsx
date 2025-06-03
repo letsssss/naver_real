@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface KakaoLoginButtonProps {
@@ -9,14 +10,21 @@ interface KakaoLoginButtonProps {
 
 export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginButtonProps) {
   const supabase = createClientComponentClient();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo') || '/';
 
   async function signInWithKakao() {
-        
+
+    console.log(`${window.location.origin}`);
+    
     // Supabase 공식 문서 방식: 커스텀 콜백 사용
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "kakao",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `https://www.easyticket82.com/auth/callback?redirect=${redirectTo}`,
+        queryParams: {
+          response_type: 'code'
+        }
       },
     });  
   }

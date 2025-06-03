@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
@@ -9,25 +9,23 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 //import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
+import { supabase } from '@/lib/supabase'
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { redirectTo?: string }
-}) {
+export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo') || '/';
 
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        router.push(searchParams?.redirectTo || '/')
+        router.push(redirectTo)
       }
     }
     
     checkSession()
-  }, [router, searchParams, supabase.auth])
+  }, [router, redirectTo])
 
   // 소셜 로그인 준비중 메시지 표시 함수
   const handleSocialLogin = (provider: string) => {
