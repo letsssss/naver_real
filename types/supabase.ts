@@ -119,4 +119,95 @@ export type ErrorResponse = {
   timestamp: string;
   details?: any;
   userMessage?: string;
+}
+
+export interface Database {
+  public: {
+    Tables: {
+      users: {
+        Row: {
+          id: string;
+          email: string;
+          name: string;
+          profile_image?: string;
+          created_at: string;
+          updated_at?: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          name: string;
+          profile_image?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          name?: string;
+          profile_image?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      chats: {
+        Row: {
+          id: string;
+          room_id: string;
+          user_id: string;
+          message: string;
+          created_at: string;
+          updated_at?: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          user_id: string;
+          message: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          room_id?: string;
+          user_id?: string;
+          message?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      rooms: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string;
+          created_at: string;
+          updated_at?: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+  };
 } 

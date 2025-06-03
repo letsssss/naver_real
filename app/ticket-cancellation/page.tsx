@@ -8,7 +8,7 @@ import Image from "next/image"
 import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, RefreshCw, TicketX } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { createBrowserClient } from "@/lib/supabase"
+import { getSupabaseClient } from '@/lib/supabase'
 import { fetchTicketingSuccessRate } from "@/services/statistics-service"
 import SuccessRateBadge from "@/components/SuccessRateBadge"
 import RequestBadge from "@/components/RequestBadge"
@@ -55,7 +55,6 @@ interface PopularTicket {
   date: string;
   venue: string;
 }
-
 export default function TicketCancellationPage() {
   const { user, logout } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
@@ -139,11 +138,16 @@ export default function TicketCancellationPage() {
       const sellerIds = [...new Set(posts.map((post: any) => post.author?.id).filter(Boolean))];
 
       // 2. 평균 별점 뷰에서 조회
-      const supabase = createBrowserClient();
-      const { data: avgRatings } = await supabase
+      const supabaseClient = await getSupabaseClient();
+      const { data: avgRatings, error: ratingsError } = await supabaseClient
         .from("seller_avg_rating")
         .select("seller_id, avg_rating")
         .in("seller_id", sellerIds);
+
+      if (ratingsError) {
+        console.error("판매자 평점 조회 실패:", ratingsError);
+        throw new Error("판매자 평점 정보를 불러오는데 실패했습니다.");
+      }
 
       const avgRatingMap = new Map(avgRatings?.map(r => [r.seller_id, r.avg_rating]));
 
@@ -166,7 +170,7 @@ export default function TicketCancellationPage() {
       setTickets(enrichedPosts);
     } catch (err) {
       console.error("취켓팅 티켓 불러오기 오류:", err);
-      setError("데이터를 불러오는데 실패했습니다.");
+      setError(err instanceof Error ? err.message : "데이터를 불러오는데 실패했습니다.");
       setTickets([]);
     } finally {
       setLoading(false);
@@ -656,4 +660,3 @@ export default function TicketCancellationPage() {
     </div>
   )
 }
-

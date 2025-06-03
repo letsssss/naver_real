@@ -5,7 +5,13 @@ import type { Database } from '@/types/supabase.types';
 import { Button } from '@/components/ui/button';
 import { X, Send } from 'lucide-react';
 import { useRealtimeMessages } from '@/hooks/useRealtimeMessages';
-import { createBrowserClient } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { useAuth } from '@/contexts/auth-context';
+
+type MessageRow = Database['public']['Tables']['messages']['Row'];
+type RoomRow = Database['public']['Tables']['rooms']['Row'];
+type UserRow = Database['public']['Tables']['users']['Row'];
 
 interface Message {
   id: string;
@@ -18,23 +24,220 @@ interface Message {
   clientId?: string;
 }
 
+interface RoomWithUsers {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  buyer: UserRow;
+  seller: UserRow;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface MessageWithSender extends Omit<MessageRow, 'sender'> {
+  sender: UserRow;
+  is_read: boolean;
+}
+
 interface ChatModalProps {
   roomId: string;
   onClose: () => void;
   onError?: (error: string) => void;
 }
 
+// 사용자 타입 정의
+type User = Database['public']['Tables']['users']['Row'];
+
+// ChatModalManager 싱글톤 클래스
+class ChatModalManager {
+  private static instance: ChatModalManager | null = null;
+  private activeRooms: Set<string> = new Set();
+  private messageCache: Map<string, Message[]> = new Map();
+  private currentUser: User | null = null;
+  private supabase: any = null;
+  private isInitialized: boolean = false;
+
+  private constructor() {}
+
+  public static getInstance(): ChatModalManager {
+    if (!ChatModalManager.instance) {
+      ChatModalManager.instance = new ChatModalManager();
+    }
+    return ChatModalManager.instance;
+  }
+
+  public async initialize(user: User | null): Promise<void> {
+    if (this.isInitialized && this.currentUser?.id === user?.id) return;
+
+    try {
+      this.supabase = await getSupabaseClient();
+      this.currentUser = user;
+      this.isInitialized = true;
+
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+    } catch (error) {
+      console.error('[ChatModalManager] 초기화 실패:', error);
+      this.isInitialized = false;
+      this.currentUser = null;
+      throw error;
+    }
+  }
+
+  public isReady(): boolean {
+    return this.isInitialized && !!this.supabase && !!this.currentUser;
+  }
+
+  public getCurrentUser(): User | null {
+    return this.currentUser;
+  }
+
+  public async loadRoomData(roomId: string): Promise<{ room: RoomWithUsers; otherUser: UserRow }> {
+    if (!this.isReady()) {
+      throw new Error('ChatModalManager가 초기화되지 않았습니다.');
+    }
+
+    const { data: roomData, error: roomError } = await this.supabase
+      .from('rooms')
+      .select('*, buyer:users!rooms_buyer_id_fkey(*), seller:users!rooms_seller_id_fkey(*)')
+      .eq('id', roomId)
+      .single();
+
+    if (roomError || !roomData) {
+      throw new Error(`채팅방 정보를 찾을 수 없습니다 (${roomId})`);
+    }
+
+    const typedRoomData = roomData as unknown as RoomWithUsers;
+    const otherUserId = typedRoomData.buyer_id === this.currentUser!.id ? typedRoomData.seller_id : typedRoomData.buyer_id;
+    const otherUserData = typedRoomData.buyer_id === this.currentUser!.id ? typedRoomData.seller : typedRoomData.buyer;
+
+    return { room: typedRoomData, otherUser: otherUserData };
+  }
+
+  public async loadMessages(roomId: string): Promise<Message[]> {
+    if (!this.isReady()) {
+      throw new Error('ChatModalManager가 초기화되지 않았습니다.');
+    }
+
+    // Check cache first
+    const cachedMessages = this.messageCache.get(roomId);
+    if (cachedMessages) {
+      return cachedMessages;
+    }
+
+    const { data: messagesData, error: messagesError } = await this.supabase
+      .from('messages')
+      .select(`
+        id,
+        content,
+        created_at,
+        sender_id,
+        room_id,
+        is_read,
+        sender:users(*)
+      `)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: true });
+
+    if (messagesError) {
+      throw new Error('메시지 목록을 불러올 수 없습니다.');
+    }
+
+    const messages = (messagesData || []).map((msg: MessageWithSender) => ({
+      id: msg.id,
+      text: msg.content,
+      timestamp: msg.created_at,
+      sender_id: msg.sender.id,
+      isMine: msg.sender.id === this.currentUser!.id,
+      isRead: msg.is_read
+    }));
+
+    // Cache the messages
+    this.messageCache.set(roomId, messages);
+    return messages;
+  }
+
+  public async sendMessage(roomId: string, content: string): Promise<Message> {
+    if (!this.isReady()) {
+      throw new Error('ChatModalManager가 초기화되지 않았습니다.');
+    }
+
+    const { data, error } = await this.supabase
+      .from('messages')
+      .insert([
+        {
+          room_id: roomId,
+          content,
+          sender_id: this.currentUser!.id,
+          created_at: new Date().toISOString()
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error('메시지 전송에 실패했습니다.');
+    }
+
+    const message: Message = {
+      id: data.id,
+      text: data.content,
+      timestamp: data.created_at,
+      sender_id: data.sender_id,
+      isMine: true,
+      status: 'sent'
+    };
+
+    // Update cache
+    const cachedMessages = this.messageCache.get(roomId) || [];
+    this.messageCache.set(roomId, [...cachedMessages, message]);
+
+    return message;
+  }
+
+  public async markAsRead(roomId: string, messageId: string): Promise<void> {
+    if (!this.isReady()) {
+      throw new Error('ChatModalManager가 초기화되지 않았습니다.');
+    }
+
+    await this.supabase
+      .from('messages')
+      .update({ is_read: true })
+      .eq('id', messageId)
+      .eq('receiver_id', this.currentUser!.id);
+
+    // Update cache
+    const cachedMessages = this.messageCache.get(roomId);
+    if (cachedMessages) {
+      const updatedMessages = cachedMessages.map(msg =>
+        msg.id === messageId ? { ...msg, isRead: true } : msg
+      );
+      this.messageCache.set(roomId, updatedMessages);
+    }
+  }
+
+  public clearCache(roomId: string): void {
+    this.messageCache.delete(roomId);
+  }
+}
+
 export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) {
+  const { user: authUser, loading: authLoading } = useAuth();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [otherUser, setOtherUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
-  const [otherUser, setOtherUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isSessionChecked, setIsSessionChecked] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatManager = useRef(ChatModalManager.getInstance());
 
-  const handleNewMessage = (newMessage: any) => {
+  const handleNewMessage = async (newMessage: any) => {
     if (!currentUser) return;
 
     setMessages(prev => {
@@ -53,298 +256,205 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
     });
 
     if (newMessage.sender_id !== currentUser.id) {
-      createBrowserClient()
-        .from('messages')
-        .update({ is_read: true })
-        .eq('id', newMessage.id)
-        .eq('receiver_id', currentUser.id);
+      await chatManager.current.markAsRead(roomId, newMessage.id);
     }
 
     scrollToBottom();
   };
 
-  const hasUserId = !!currentUser?.id;
-
-  const { isConnected, error: realtimeError } = useRealtimeMessages(
-    hasUserId ? roomId : null,
-    handleNewMessage
-  );
-
+  // 세션 체크를 먼저 수행
   useEffect(() => {
-    const fetchChatData = async () => {
-      try {
+    const initializeChat = async () => {
+      if (authLoading) {
         setIsLoading(true);
-        console.log(`🔄 ChatModal - 채팅 데이터 불러오기 시작 (roomId: ${roomId})`);
-        
-        // 1. 현재 사용자 정보 확인
-        const { data: { user }, error: userError } = await createBrowserClient().auth.getUser();
-        if (userError || !user) {
-          console.error(`❌ ChatModal - 로그인 오류:`, userError);
+        return;
+      }
+
+      try {
+        // Wait for auth to be ready
+        if (!authUser) {
           setError('로그인이 필요합니다.');
           if (onError) onError('로그인이 필요합니다.');
           return;
         }
-        setCurrentUser(user);
-        console.log(`👤 ChatModal - 현재 사용자:`, user.id);
 
-        // 2. 채팅방 정보 확인
-        console.log(`🔍 ChatModal - 채팅방 정보 조회 (roomId: ${roomId})`);
-        const { data: roomData, error: roomError } = await createBrowserClient()
-          .from('rooms')
-          .select('*, buyer:buyer_id(*), seller:seller_id(*)')
-          .eq('id', roomId)
-          .single();
-          
-        if (roomError) {
-          console.error(`❌ ChatModal - 채팅방 정보 조회 오류:`, roomError);
-          const errorMessage = `채팅방 정보를 찾을 수 없습니다 (${roomId})`;
-          setError(errorMessage);
-          if (onError) onError(errorMessage);
-          return;
-        }
-        
-        console.log(`✅ ChatModal - 채팅방 정보 조회 성공:`, roomData);
-        const otherUserId = roomData.buyer_id === user.id ? roomData.seller_id : roomData.buyer_id;
-        const otherUserData = roomData.buyer_id === user.id ? roomData.seller : roomData.buyer;
-        setOtherUser(otherUserData);
-        console.log(`👥 ChatModal - 상대방 사용자:`, otherUserData?.id);
-
-        // 3. 메시지 목록 조회
-        console.log(`💬 ChatModal - 메시지 목록 조회 (roomId: ${roomId})`);
-        const { data: messagesData, error: messagesError } = await createBrowserClient()
-          .from('messages')
-          .select('*')
-          .eq('room_id', roomId)
-          .order('created_at', { ascending: true });
-          
-        if (messagesError) {
-          console.error(`❌ ChatModal - 메시지 목록 조회 오류:`, messagesError);
-          // 메시지 오류는 치명적이지 않으므로 계속 진행
-        }
-
-        console.log(`📝 ChatModal - ${messagesData?.length || 0}개의 메시지 로드`);
-        const formatted = messagesData ? messagesData.map(msg => ({
-          id: msg.id,
-          text: msg.content,
-          timestamp: msg.created_at,
-          sender_id: msg.sender_id,
-          isMine: msg.sender_id === user.id,
-          isRead: msg.is_read,
-        })) : [];
-        setMessages(formatted);
-
-        // 4. 읽지 않은 메시지 읽음 처리
-        try {
-          await createBrowserClient()
-            .schema('public')
-            .from('messages')
-            .update({ is_read: true })
-            .eq('room_id', roomId)
-            .eq('receiver_id', user.id)
-            .eq('is_read', false);
-            
-          setMessages(prev =>
-            prev.map(msg =>
-              !msg.isMine && !msg.isRead ? { ...msg, isRead: true } : msg
-            )
-          );
-        } catch (readError) {
-          console.error(`⚠️ ChatModal - 읽음 처리 오류:`, readError);
-          // 읽음 처리 실패는 무시하고 진행
-        }
-        
-        console.log(`✅ ChatModal - 채팅 데이터 로드 완료`);
-      } catch (err) {
-        console.error(`❌ ChatModal - 전체 오류:`, err);
-        const errorMessage = '채팅 데이터를 불러오는 중 오류가 발생했습니다.';
-        setError(errorMessage);
-        if (onError) onError(errorMessage);
+        await chatManager.current.initialize(authUser);
+        setCurrentUser(authUser);
+        setIsSessionChecked(true);
+        setError(null);
+      } catch (error) {
+        console.error('[채팅] 초기화 오류:', error);
+        setError(error instanceof Error ? error.message : '채팅을 시작할 수 없습니다.');
+        if (onError) onError(error instanceof Error ? error.message : '채팅을 시작할 수 없습니다.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchChatData();
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [roomId, onError]);
+    initializeChat();
+  }, [authUser, authLoading, onError]);
+
+  // 실시간 구독은 세션 체크가 완료된 후에만 시작
+  const { isConnected, error: realtimeError } = useRealtimeMessages(
+    isSessionChecked ? roomId : null,
+    handleNewMessage
+  );
+
+  useEffect(() => {
+    if (realtimeError) {
+      console.error('[채팅] 실시간 구독 오류:', realtimeError);
+      setError(realtimeError);
+      setIsReconnecting(true);
+    } else {
+      setError(null);
+      setIsReconnecting(false);
+    }
+  }, [realtimeError]);
+
+  useEffect(() => {
+    const loadChatData = async () => {
+      if (!isSessionChecked || !currentUser) return;
+
+      try {
+        setIsLoading(true);
+        console.log(`🔄 ChatModal - 채팅 데이터 불러오기 시작 (roomId: ${roomId})`);
+
+        // Load room data and messages using ChatModalManager
+        const { otherUser: otherUserData } = await chatManager.current.loadRoomData(roomId);
+        const messagesData = await chatManager.current.loadMessages(roomId);
+
+        setOtherUser(otherUserData);
+        setMessages(messagesData);
+        setError(null);
+      } catch (error) {
+        console.error('[채팅] 데이터 로드 오류:', error);
+        setError(error instanceof Error ? error.message : '채팅 데이터를 불러올 수 없습니다.');
+        if (onError) onError(error instanceof Error ? error.message : '채팅 데이터를 불러올 수 없습니다.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadChatData();
+  }, [roomId, currentUser, isSessionChecked, onError]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleSendMessage = async () => {
-    if (!currentUser || !newMessage.trim()) return;
+    if (!newMessage.trim() || !currentUser) return;
 
-    console.log("📩 전송하는 user:", currentUser.id);
-    
-    const tempId = Date.now().toString();
     const tempMessage: Message = {
-      id: tempId,
+      id: `temp-${Date.now()}`,
       text: newMessage,
       timestamp: new Date().toISOString(),
       sender_id: currentUser.id,
       isMine: true,
-      status: 'sending',
-      clientId: tempId,
+      status: 'sending'
     };
 
     setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
+    scrollToBottom();
 
-    console.log("🔥 sender_id:", currentUser.id);
-    console.log("💬 메시지 내용:", newMessage);
-
-    const { data, error } = await createBrowserClient()
-      .schema('public')
-      .from('messages')
-      .insert([
-        {
-          room_id: roomId,
-          sender_id: currentUser.id,
-          receiver_id: otherUser.id,
-          content: newMessage,
-          is_read: false,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ 메시지 전송 오류:", error);
+    try {
+      const sentMessage = await chatManager.current.sendMessage(roomId, newMessage.trim());
+      setMessages(prev => 
+        prev.map(msg => msg.id === tempMessage.id ? sentMessage : msg)
+      );
+    } catch (error) {
+      console.error('[채팅] 메시지 전송 오류:', error);
       setMessages(prev =>
         prev.map(msg =>
-          msg.clientId === tempId ? { ...msg, status: 'failed' } : msg
+          msg.id === tempMessage.id ? { ...msg, status: 'failed' } : msg
         )
       );
-      return;
-    }
-
-    console.log("✅ 메시지 전송 성공:", data);
-
-    setMessages(prev =>
-      prev.map(msg =>
-        msg.clientId === tempId
-          ? {
-              id: data.id,
-              text: data.content,
-              timestamp: data.created_at,
-              sender_id: data.sender_id,
-              isMine: true,
-              isRead: data.is_read,
-              status: 'sent',
-              clientId: tempId,
-            }
-          : msg
-      )
-    );
-
-    // 알림 전송 API 호출 (메시지 전송 성공 시)
-    try {
-      // 수신자(상대방) 정보 확인
-      if (otherUser?.phone_number) {
-        console.log(`📱 카카오 알림톡 전송 시도: ${otherUser.name}님(${otherUser.phone_number})`);
-        
-        // 카카오 알림 API 호출 - 필수 파라미터 추가
-        const notifyResponse = await fetch('/api/kakao/notify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to: otherUser.phone_number,
-            name: otherUser.name || '사용자',
-            message: newMessage // 보낸 메시지 내용 추가
-          }),
-        });
-        
-        const notifyResult = await notifyResponse.json();
-        
-        if (notifyResult.success) {
-          console.log('✅ 카카오 알림톡 전송 성공:', notifyResult);
-        } else {
-          console.error('⚠️ 카카오 알림톡 전송 실패:', notifyResult.error);
-        }
-      } else {
-        console.log('⚠️ 수신자 전화번호 없음: 알림톡 전송 건너뜀');
-      }
-    } catch (notifyError) {
-      // 알림 전송 오류가 발생해도 메시지 전송에는 영향을 주지 않음
-      console.error('❌ 카카오 알림톡 전송 중 오류:', notifyError);
     }
   };
 
+  // 연결 상태 UI 표시
+  const renderConnectionStatus = () => {
+    if (isReconnecting) {
+      return (
+        <div className="text-center py-2 bg-yellow-50 text-yellow-700">
+          <span className="animate-pulse">재연결 시도 중...</span>
+        </div>
+      );
+    }
+    if (!isConnected) {
+      return (
+        <div className="text-center py-2 bg-red-50 text-red-700">
+          연결이 끊어졌습니다
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-          <div className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-full bg-teal-500 flex items-center justify-center text-white">
-              {otherUser?.name?.charAt(0).toUpperCase() || '?'}
-            </div>
-            <div>
-              <h3 className="font-medium">{otherUser?.name || '사용자'}</h3>
-              <p className="text-xs text-gray-500">{otherUser?.role === 'seller' ? '판매자' : '구매자'}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100">
-            <X className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-semibold">채팅</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <span className="sr-only">닫기</span>
+            ✕
           </button>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center flex-1">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center flex-1 p-4">
-            <div className="bg-red-50 text-red-500 p-4 rounded-md">
-              <p>{error}</p>
+        {/* 연결 상태 표시 */}
+        {renderConnectionStatus()}
+
+        {/* 채팅 내용 */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {error ? (
+            <div className="text-center text-red-600 py-4">
+              {error}
             </div>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 text-center">
-                  아직 메시지가 없습니다.<br />첫 메시지를 보내보세요!
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-lg p-3 ${
-                      message.isMine
-                        ? 'bg-teal-500 text-white rounded-tr-none'
-                        : 'bg-gray-200 text-gray-800 rounded-tl-none'
-                    }`}>
-                      <p className="text-sm break-words">{message.text}</p>
-                      <div className="flex items-center justify-end mt-1 space-x-1">
-                        <span className="text-xs opacity-80">
-                          {new Date(message.timestamp).toLocaleTimeString('ko-KR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            hour12: true,
-                            timeZone: 'Asia/Seoul' 
-                          })}
+          ) : isLoading ? (
+            <div className="text-center py-4">
+              <span className="animate-pulse">로딩 중...</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {messages.map((message) => (
+                <div key={message.id} className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] rounded-lg p-3 ${
+                    message.isMine
+                      ? 'bg-teal-500 text-white rounded-tr-none'
+                      : 'bg-gray-200 text-gray-800 rounded-tl-none'
+                  }`}>
+                    <p className="text-sm break-words">{message.text}</p>
+                    <div className="flex items-center justify-end mt-1 space-x-1">
+                      <span className="text-xs opacity-80">
+                        {new Date(message.timestamp).toLocaleTimeString('ko-KR', { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          hour12: true,
+                          timeZone: 'Asia/Seoul' 
+                        })}
+                      </span>
+                      {message.isMine && (
+                        <span className="text-xs">
+                          {message.status === 'sending' && '전송 중...'}
+                          {message.status === 'failed' && '⚠️'}
+                          {message.status === 'sent' && (message.isRead ? '읽음' : '전송됨')}
+                          {!message.status && (message.isRead ? '읽음' : '전송됨')}
                         </span>
-                        {message.isMine && (
-                          <span className="text-xs">
-                            {message.status === 'sending' && '전송 중...'}
-                            {message.status === 'failed' && '⚠️'}
-                            {message.status === 'sent' && (message.isRead ? '읽음' : '전송됨')}
-                            {!message.status && (message.isRead ? '읽음' : '전송됨')}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
 
         <div className="p-4 border-t bg-white">
           <div className="flex items-center space-x-2">

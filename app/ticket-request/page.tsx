@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, X, Calendar, MapPin, Trash2 } from 'lucide-react'
 import { useAuth } from "@/contexts/auth-context"
-import supabase from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -64,6 +64,7 @@ export default function TicketRequestPage() {
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [sections, setSections] = useState<SeatSection[]>([])
+  const supabase = getSupabaseClient()
 
   // 구역 추가 함수
   const addSection = () => {

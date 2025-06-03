@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import TicketList from "@/components/ticket-list"
-import { createBrowserClient } from "@/lib/supabase"
+import { supabase, getSupabaseClient } from '@/lib/supabase'
 import { Skeleton } from "@/components/ui/skeleton"
 
 // 카테고리 이름 매핑 (URL에 사용되는 값 -> 화면에 표시할 값)
@@ -37,7 +37,6 @@ interface CategoryTicket {
 export default function CategoryPage({ params }: { params: { name: string } }) {
   // URL 디코딩 및 매핑 적용
   const displayName = categoryDisplayNames[params.name] || decodeURIComponent(params.name);
-  const supabase = createBrowserClient();
   
   const [tickets, setTickets] = useState<CategoryTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,143 +46,138 @@ export default function CategoryPage({ params }: { params: { name: string } }) {
   // 콘서트 카테고리의 경우 TicketList 컴포넌트 사용
   const isConcertCategory = params.name.toLowerCase() === "콘서트" || params.name.toLowerCase() === "concert";
   
-  useEffect(() => {
-    if (isConcertCategory) {
-      // 콘서트 카테고리는 TicketList 컴포넌트에서 처리
-      setLoading(false);
-      return;
-    }
-    
-    async function fetchCategoryTickets() {
-      try {
-        setLoading(true);
+  const fetchCategoryTickets = async () => {
+    try {
+      setLoading(true);
+      const supabaseClient = await getSupabaseClient();
+      
+      // 카테고리에 맞는 게시물 가져오기
+      let query = supabaseClient
+        .from("posts")
+        .select(`
+          id, 
+          title, 
+          content, 
+          event_name,
+          event_date,
+          event_venue,
+          ticket_price,
+          status,
+          image_url,
+          author_id,
+          created_at
+        `)
+        .eq("category", displayName)
+        .eq("status", "판매중");
         
-        // 카테고리에 맞는 게시물 가져오기
-        let query = supabase
-          .from("posts")
-          .select(`
-            id, 
-            title, 
-            content, 
-            event_name,
-            event_date,
-            event_venue,
-            ticket_price,
-            status,
-            image_url,
-            author_id,
-            created_at
-          `)
-          .eq("category", displayName)
-          .eq("status", "판매중");
-          
-        // 정렬 방식 적용
-        switch (sortBy) {
-          case "latest":
-            query = query.order("created_at", { ascending: false });
-            break;
-          case "popular":
-            query = query.order("view_count", { ascending: false });
-            break;
-          case "lowPrice":
-            query = query.order("ticket_price", { ascending: true });
-            break;
-          case "highPrice":
-            query = query.order("ticket_price", { ascending: false });
-            break;
-          default:
-            query = query.order("created_at", { ascending: false });
-        }
-        
-        const { data: posts, error: postsError } = await query;
-        
-        if (postsError) {
-          throw new Error("게시물을 불러오는 중 오류가 발생했습니다.");
-        }
-        
-        if (!posts || posts.length === 0) {
-          setTickets([]);
-          setLoading(false);
-          return;
-        }
-        
-        // 작성자 정보 가져오기
-        const authorIds = [...new Set(posts.map(post => post.author_id))];
-        const { data: authors, error: authorsError } = await supabase
-          .from("users")
-          .select("id, name")
-          .in("id", authorIds);
-          
-        if (authorsError) {
-          console.error("작성자 정보를 불러오는 중 오류가 발생했습니다:", authorsError);
-        }
-        
-        // 평점 정보 가져오기
-        const { data: ratings, error: ratingsError } = await supabase
-          .from("seller_avg_rating")
-          .select("seller_id, avg_rating")
-          .in("seller_id", authorIds);
-          
-        if (ratingsError) {
-          console.error("평점 정보를 불러오는 중 오류가 발생했습니다:", ratingsError);
-        }
-        
-        // 작성자 ID를 키로 하는 맵 생성
-        const authorMap = new Map();
-        authors?.forEach(author => {
-          authorMap.set(author.id, { name: author.name, rating: 0 });
-        });
-        
-        // 평점 정보 추가
-        ratings?.forEach(rating => {
-          if (authorMap.has(rating.seller_id)) {
-            const authorInfo = authorMap.get(rating.seller_id);
-            authorMap.set(rating.seller_id, {
-              ...authorInfo,
-              rating: rating.avg_rating || 0
-            });
-          }
-        });
-        
-        // 티켓 데이터 가공
-        const formattedTickets = posts.map(post => {
-          const eventDate = post.event_date ? new Date(post.event_date) : null;
-          const formattedDate = eventDate ? 
-            eventDate.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\. /g, ".") : 
-            "";
-          const formattedTime = eventDate ? 
-            eventDate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : 
-            "";
-            
-          const authorInfo = authorMap.get(post.author_id) || { name: "판매자", rating: 0 };
-          
-          return {
-            id: post.id,
-            title: post.title || post.event_name || "제목 없음",
-            artist: post.event_name || "",
-            date: formattedDate,
-            time: formattedTime,
-            venue: post.event_venue || "",
-            price: post.ticket_price || 0,
-            image: post.image_url || "/placeholder.svg",
-            status: post.status,
-            authorId: post.author_id,
-            authorName: authorInfo.name,
-            rating: authorInfo.rating
-          };
-        });
-        
-        setTickets(formattedTickets);
-      } catch (err) {
-        console.error("카테고리 티켓 로딩 오류:", err);
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
+      // 정렬 방식 적용
+      switch (sortBy) {
+        case "latest":
+          query = query.order("created_at", { ascending: false });
+          break;
+        case "popular":
+          query = query.order("view_count", { ascending: false });
+          break;
+        case "lowPrice":
+          query = query.order("ticket_price", { ascending: true });
+          break;
+        case "highPrice":
+          query = query.order("ticket_price", { ascending: false });
+          break;
+        default:
+          query = query.order("created_at", { ascending: false });
       }
+      
+      const { data: posts, error: postsError } = await query;
+      
+      if (postsError) {
+        throw new Error("게시물을 불러오는 중 오류가 발생했습니다.");
+      }
+      
+      if (!posts || posts.length === 0) {
+        setTickets([]);
+        setLoading(false);
+        return;
+      }
+      
+      // 작성자 정보 가져오기
+      const authorIds = [...new Set(posts.map(post => post.author_id))];
+      const { data: authors, error: authorsError } = await supabaseClient
+        .from("users")
+        .select("id, name")
+        .in("id", authorIds);
+        
+      if (authorsError) {
+        console.error("작성자 정보를 불러오는 중 오류가 발생했습니다:", authorsError);
+      }
+      
+      // 평점 정보 가져오기
+      const { data: ratings, error: ratingsError } = await supabaseClient
+        .from("seller_avg_rating")
+        .select("seller_id, avg_rating")
+        .in("seller_id", authorIds);
+        
+      if (ratingsError) {
+        console.error("평점 정보를 불러오는 중 오류가 발생했습니다:", ratingsError);
+      }
+      
+      // 작성자 ID를 키로 하는 맵 생성
+      const authorMap = new Map();
+      authors?.forEach(author => {
+        authorMap.set(author.id, { name: author.name, rating: 0 });
+      });
+      
+      // 평점 정보 추가
+      ratings?.forEach(rating => {
+        if (authorMap.has(rating.seller_id)) {
+          const authorInfo = authorMap.get(rating.seller_id);
+          authorMap.set(rating.seller_id, {
+            ...authorInfo,
+            rating: rating.avg_rating || 0
+          });
+        }
+      });
+      
+      // 티켓 데이터 가공
+      const formattedTickets = posts.map(post => {
+        const eventDate = post.event_date ? new Date(post.event_date) : null;
+        const formattedDate = eventDate ? 
+          eventDate.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\. /g, ".") : 
+          "";
+        const formattedTime = eventDate ? 
+          eventDate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : 
+          "";
+          
+        const authorInfo = authorMap.get(post.author_id) || { name: "판매자", rating: 0 };
+        
+        return {
+          id: post.id,
+          title: post.title || post.event_name || "제목 없음",
+          artist: post.event_name || "",
+          date: formattedDate,
+          time: formattedTime,
+          venue: post.event_venue || "",
+          price: post.ticket_price || 0,
+          image: post.image_url || "/placeholder.svg",
+          status: post.status,
+          authorId: post.author_id,
+          authorName: authorInfo.name,
+          rating: authorInfo.rating
+        };
+      });
+      
+      setTickets(formattedTickets);
+    } catch (error) {
+      console.error('Error fetching category tickets:', error);
+      setError('Failed to load tickets');
+    } finally {
+      setLoading(false);
     }
-    
+  };
+
+  useEffect(() => {
     fetchCategoryTickets();
-  }, [supabase, displayName, sortBy, isConcertCategory]);
+  }, [params.name]);
   
   const handleSortChange = (sortType: string) => {
     setSortBy(sortType);

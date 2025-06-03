@@ -4,10 +4,103 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/contexts/auth-context';
+import { getSupabaseClient } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
+
+// 채팅 관리자 싱글톤
+class ChatManager {
+  private static instance: ChatManager | null = null;
+  private activeChats: Set<string> = new Set();
+  private supabase: SupabaseClient<Database> | null = null;
+  private isInitialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
+
+  private constructor() {
+    this.initializationPromise = this.initialize();
+  }
+
+  private async initialize() {
+    if (this.isInitialized) return;
+    
+    try {
+      this.supabase = await getSupabaseClient();
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('ChatManager 초기화 실패:', error);
+      throw error;
+    }
+  }
+
+  public static getInstance(): ChatManager {
+    if (!ChatManager.instance) {
+      ChatManager.instance = new ChatManager();
+    }
+    return ChatManager.instance;
+  }
+
+  private async ensureInitialized() {
+    if (!this.isInitialized) {
+      if (this.initializationPromise) {
+        await this.initializationPromise;
+      } else {
+        this.initializationPromise = this.initialize();
+        await this.initializationPromise;
+      }
+    }
+  }
+
+  public async activateChat(orderNumber?: string, postId?: number): Promise<boolean> {
+    await this.ensureInitialized();
+    
+    if (!this.supabase) {
+      console.error('Supabase 클라이언트가 초기화되지 않았습니다.');
+      return false;
+    }
+
+    const chatId = orderNumber || `post-${postId}`;
+    
+    if (this.activeChats.has(chatId)) {
+      return true;
+    }
+
+    try {
+      // 채팅방 활성화 로직
+      const { data, error } = await this.supabase
+        .from('rooms')
+        .upsert([
+          {
+            id: chatId,
+            order_number: orderNumber,
+            post_id: postId,
+            status: 'active'
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      this.activeChats.add(chatId);
+      return true;
+    } catch (error) {
+      console.error('채팅방 활성화 실패:', error);
+      return false;
+    }
+  }
+
+  public deactivateChat(chatId: string): void {
+    this.activeChats.delete(chatId);
+  }
+
+  public isActive(chatId: string): boolean {
+    return this.activeChats.has(chatId);
+  }
+}
 
 interface MessageButtonProps {
   orderNumber?: string;
-  postId?: number;  // 상품 ID 추가
+  postId?: number;
   onClick?: () => void;
   disabled?: boolean;
   isLoading?: boolean;
@@ -17,108 +110,70 @@ interface MessageButtonProps {
 
 export default function MessageButton({ 
   orderNumber, 
-  postId, // 상품 ID
+  postId,
   onClick, 
   disabled = false, 
   isLoading = false,
   className = "text-sm flex items-center gap-2 border-2 border-pink-400 bg-pink-50 text-pink-700 hover:bg-pink-100 transition-colors font-medium",
   debug = false
 }: MessageButtonProps) {
-  const { user } = useAuth();
-  const [localOrderNumber, setLocalOrderNumber] = useState<string | undefined>(orderNumber);
-  const [isOrderNumberLoading, setIsOrderNumberLoading] = useState(false);
-  
-  // 주문번호가 없을 때 상품 ID로 주문번호 조회
-  useEffect(() => {
-    if (orderNumber) {
-      setLocalOrderNumber(orderNumber);
-    } else if (!localOrderNumber && postId && !isOrderNumberLoading) {
-      fetchOrderNumberByPostId();
-    }
-  }, [orderNumber, postId]);
-  
-  // 상품 ID로 주문번호 조회하는 함수
-  const fetchOrderNumberByPostId = async () => {
-    if (!postId) return;
-    
-    try {
-      if (debug) {
-        console.log(`🔍 MessageButton: postId ${postId}로 주문번호 조회 시도`);
-      }
-      
-      setIsOrderNumberLoading(true);
-      
-      const response = await fetch(`/api/purchase/from-post/${postId}`);
-      
-      if (!response.ok) {
-        throw new Error('주문번호 조회 실패');
-      }
-      
-      const data = await response.json();
-      
-      if (data.order_number) {
-        setLocalOrderNumber(data.order_number);
-        if (debug) {
-          console.log(`📝 MessageButton: postId ${postId}의 주문번호 조회 완료: ${data.order_number}`);
-        }
-      } else if (debug) {
-        console.log(`ℹ️ MessageButton: postId ${postId}에 대한 주문번호가 없음`);
-      }
-    } catch (error) {
-      if (debug) {
-        console.error(`❌ MessageButton: 주문번호 조회 중 오류: ${error}`);
-      }
-    } finally {
-      setIsOrderNumberLoading(false);
-    }
-  };
-  
-  // 읽지 않은 메시지 개수 가져오기 - 로컬 상태의 주문번호 사용
-  // 중요: 주문번호가 없는 경우 API를 호출하지 않도록 조건부 훅 호출
-  const { unreadCount, isLoading: loadingMessages, error, debugData } = useUnreadMessages(
-    localOrderNumber // 주문번호가 있는 경우에만 해당 주문번호로 메시지 카운트 조회
-  );
-  
-  // 디버깅: unreadCount 값 콘솔에 출력
-  useEffect(() => {
-    if (debug) {
-      console.log(`🔔 MessageButton - orderNumber: ${orderNumber}`);
-      console.log(`🔔 MessageButton - localOrderNumber: ${localOrderNumber}`);
-      console.log(`🔔 MessageButton - postId: ${postId}`);
-      console.log(`🔔 MessageButton - userId: ${user?.id || 'undefined'}`);
-      console.log(`🔔 읽지 않은 메시지 수: ${unreadCount}`);
-      console.log(`🔔 로딩 상태: ${loadingMessages || isOrderNumberLoading}`);
-      console.log(`🔔 에러: ${error?.message || 'none'}`);
-      
-      // 디버그 데이터가 있으면 출력
-      if (debugData) {
-        console.log(`🔍 MessageButton - 디버그 데이터:`, debugData);
-      }
-      
-      // localStorage에 있는 토큰 확인
-      const token = localStorage.getItem('token') || 
-                    localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
-      console.log(`🔑 토큰 존재 여부: ${!!token}`);
-      
-      // 토큰이 있으면 앞부분만 표시
-      if (token) {
-        console.log(`🔑 토큰 미리보기: ${token.substring(0, 20)}...`);
-      }
-    }
-  }, [localOrderNumber, orderNumber, postId, unreadCount, loadingMessages, error, debug, user, isOrderNumberLoading, debugData]);
+  const { user, loading: authLoading } = useAuth();
+  const { unreadCount, isLoading: isOrderNumberLoading } = useUnreadMessages(orderNumber);
+  const [chatManager] = useState(() => ChatManager.getInstance());
+  const [isActivating, setIsActivating] = useState(false);
 
-  // 수정: 주문번호가 없거나 불러오는 중이면 메시지 카운트를 표시하지 않도록 변경
-  // const shouldDisplayCount = !!localOrderNumber && unreadCount > 0;
-  const shouldDisplayCount = unreadCount > 0;
-  
-  // 사용자 정보나 주문번호가 없으면 버튼 비활성화
-  const buttonDisabled = disabled || isLoading || !user || isOrderNumberLoading;
+  const handleClick = useCallback(async () => {
+    if (onClick) {
+      onClick();
+      return;
+    }
+
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setIsActivating(true);
+    try {
+      const success = await chatManager.activateChat(orderNumber, postId);
+      if (!success) {
+        throw new Error('채팅방 활성화에 실패했습니다.');
+      }
+
+      // 채팅 UI 활성화 이벤트 발생
+      window.dispatchEvent(new CustomEvent('chat:activate', {
+        detail: { orderNumber, postId }
+      }));
+    } catch (error) {
+      console.error('채팅 활성화 오류:', error);
+      alert('채팅을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setIsActivating(false);
+    }
+  }, [onClick, user, orderNumber, postId, chatManager]);
+
+  const buttonDisabled = disabled || isLoading || isOrderNumberLoading || isActivating || authLoading;
+  const shouldDisplayCount = !isLoading && !isOrderNumberLoading && !authLoading && unreadCount > 0;
+
+  if (debug) {
+    console.log('MessageButton Debug:', {
+      orderNumber,
+      postId,
+      unreadCount,
+      isLoading,
+      isOrderNumberLoading,
+      isActivating,
+      authLoading,
+      buttonDisabled,
+      shouldDisplayCount
+    });
+  }
 
   return (
     <Button
       variant="outline"
       className={className}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={buttonDisabled}
     >
       <div className="relative">
@@ -142,7 +197,7 @@ export default function MessageButton({
           </span>
         )}
       </div>
-      {isLoading || isOrderNumberLoading ? "로딩 중..." : "메시지"}
+      {isLoading || isOrderNumberLoading || isActivating || authLoading ? "로딩 중..." : "메시지"}
     </Button>
   );
 } 

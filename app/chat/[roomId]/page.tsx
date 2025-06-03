@@ -4,13 +4,14 @@ import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase.types';
+import { getSupabaseClient } from '@/lib/supabase'; 
 
 export default function ChatRoomRedirect() {
   const params = useParams<{ roomId: string }>();
   const roomId = params?.roomId;
   const router = useRouter();
-  const supabase = createClientComponentClient<Database>();
-
+  //const supabase = createClientComponentClient<Database>();
+  const supabase = getSupabaseClient();
   useEffect(() => {
     const redirectToDashboard = async () => {
       console.log('[Redirect] 시작, roomId:', roomId);

@@ -6,6 +6,7 @@ import { ArrowLeft, User, ShoppingBag, Tag, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { getSupabaseClient } from '@/lib/supabase'
 
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -31,10 +32,72 @@ import {
   deletePost
 } from "@/services/mypage-service"
 
+// Supabase 세션 토큰 가져오기
+const getSupabaseSession = () => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    // 1. Supabase 세션 키 찾기 (정확한 패턴 매칭)
+    const supabaseKey = Object.keys(localStorage).find(key => 
+      key.startsWith('sb-') && key.endsWith('-auth-token')
+    );
+    
+    if (supabaseKey) {
+      console.log("✅ Supabase 키 발견:", supabaseKey);
+      const sessionStr = localStorage.getItem(supabaseKey);
+      
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          
+          // 세션 유효성 검사
+          if (session && session.access_token && session.user) {
+            console.log("✅ 유효한 세션 발견");
+            return session;
+          } else {
+            console.log("⚠️ 세션 형식이 올바르지 않음:", {
+              hasAccessToken: !!session?.access_token,
+              hasUser: !!session?.user
+            });
+          }
+        } catch (parseError) {
+          console.error("❌ 세션 JSON 파싱 오류:", parseError);
+        }
+      } else {
+        console.log("⚠️ 세션 문자열이 비어있음");
+      }
+    } else {
+      // 2. 대체 키 확인
+      const alternativeKeys = ['supabase.auth.token', 'auth-token'];
+      for (const key of alternativeKeys) {
+        const value = localStorage.getItem(key);
+        if (value) {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && parsed.access_token && parsed.user) {
+              console.log(`✅ 대체 키에서 세션 발견: ${key}`);
+              return parsed;
+            }
+          } catch (e) {
+            console.log(`⚠️ 대체 키 ${key} 파싱 실패:`, e);
+          }
+        }
+      }
+      
+      console.log("⚠️ Supabase 세션 키를 찾을 수 없음");
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("❌ 세션 처리 중 오류 발생:", error);
+    return null;
+  }
+};
+
 export default function MyPage() {
   const [activeTab, setActiveTab] = useState("profile")
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false)
-  const { user, isLoading, logout } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const [ongoingSales, setOngoingSales] = useState<Sale[]>([])
   const [isLoadingSales, setIsLoadingSales] = useState(false)
@@ -95,11 +158,11 @@ export default function MyPage() {
 
   // 로그인 상태 확인
   useEffect(() => {
-    if (mounted && !isLoading && !user) {
-      toast.error("로그인이 필요한 페이지입니다")
-      router.push("/login?callbackUrl=/mypage")
+    if (mounted && !loading && !user) {
+      toast.error("로그인이 필요한 페이지입니다");
+      router.push("/login?callbackUrl=/mypage");
     }
-  }, [user, isLoading, router, mounted])
+  }, [user, loading, router, mounted]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -163,19 +226,81 @@ export default function MyPage() {
       setIsLoadingRequests(true);
       console.log('요청중인 취켓팅 조회 시작 - 사용자 ID:', user.id);
       
-      const response = await fetch(`/api/my-ticket-requests?userId=${user.id}`);
+      const supabaseClient = await getSupabaseClient();
       
-      if (!response.ok) {
-        throw new Error('요청 목록을 불러오는데 실패했습니다');
+      // 먼저 posts 데이터를 가져옴
+      const { data: postsData, error: postsError } = await supabaseClient
+        .from('posts')
+        .select(`
+          id,
+          title,
+          content,
+          status,
+          created_at,
+          category,
+          ticket_price,
+          event_date,
+          event_venue
+        `)
+        .eq('author_id', user.id)
+        .eq('category', 'TICKET_REQUEST');
+
+      if (postsError) {
+        throw postsError;
       }
+
+      if (!postsData) {
+        setRequestedTickets([]);
+        return;
+      }
+
+      // 각 post에 대한 proposals 데이터를 별도로 가져옴
+      const postsWithProposalsPromises = postsData.map(async (post) => {
+        const { data: proposalsData, error: proposalsError } = await supabaseClient
+          .from('proposals')
+          .select(`
+            id,
+            status,
+            price,
+            message,
+            created_at,
+            user_id,
+            users:user_id (
+              id,
+              name,
+              email,
+              profile_image,
+              rating,
+              successful_sales,
+              response_rate
+            )
+          `)
+          .eq('post_id', post.id);
+
+        if (proposalsError) {
+          console.error('제안 데이터 조회 오류:', proposalsError);
+          return {
+            ...post,
+            proposals: [],
+            proposalCount: 0
+          };
+        }
+
+        return {
+          ...post,
+          proposals: proposalsData || [],
+          proposalCount: proposalsData?.length || 0,
+          acceptedProposal: proposalsData?.find(p => p.status === 'ACCEPTED')
+        };
+      });
+
+      const postsWithProposals = await Promise.all(postsWithProposalsPromises);
+
+      console.log('요청중인 취켓팅 조회 성공:', postsWithProposals);
+      setRequestedTickets(postsWithProposals);
       
-      const data = await response.json();
-      console.log('요청중인 취켓팅 조회 성공:', data);
-      
-      setRequestedTickets(data.requests || []);
-      
-      // 제안 수 저장 (다음 비교를 위해)
-      updateProposalCounts(data.requests || []);
+      // 제안 수 저장
+      updateProposalCounts(postsWithProposals);
       
     } catch (error) {
       console.error('요청중인 취켓팅 조회 오류:', error);
@@ -191,28 +316,39 @@ export default function MyPage() {
       setIsLoadingProposals(true);
       console.log('제안 목록 조회 시작 - 티켓 ID:', ticketId);
       
-      const response = await fetch(`/api/ticket-requests/${ticketId}/proposals`);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('제안 목록 조회 API 오류:', response.status, errorData);
-        throw new Error(errorData.message || '제안 목록을 불러오는데 실패했습니다');
+      const supabaseClient = await getSupabaseClient();
+      const { data, error } = await supabaseClient
+        .from('proposals')
+        .select(`
+          id,
+          status,
+          price,
+          message,
+          created_at,
+          user_id,
+          users:user_id (
+            id,
+            name,
+            email,
+            profile_image,
+            rating,
+            successful_sales,
+            response_rate
+          )
+        `)
+        .eq('post_id', ticketId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
       }
-      
-      const data = await response.json();
+
       console.log('제안 목록 조회 성공:', data);
-      
-      if (data.success) {
-        setProposals(data.proposals || []);
-        console.log(`제안 ${data.count || 0}개 로드됨`);
-      } else {
-        console.error('제안 목록 조회 실패:', data.message);
-        throw new Error(data.message || '제안 목록을 불러오는데 실패했습니다');
-      }
+      setProposals(data || []);
       
     } catch (error) {
       console.error('제안 목록 조회 오류:', error);
-      toast.error(error instanceof Error ? error.message : '제안 목록을 불러오는데 실패했습니다');
+      toast.error('제안 목록을 불러오는데 실패했습니다');
     } finally {
       setIsLoadingProposals(false);
     }
@@ -223,19 +359,15 @@ export default function MyPage() {
     try {
       console.log('제안 수락 시작 - 제안 ID:', proposalId);
       
-      const response = await fetch(`/api/proposals/${proposalId}/accept`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error('제안 수락에 실패했습니다');
+      const supabaseClient = await getSupabaseClient();
+      const { error } = await supabaseClient
+        .from('proposals')
+        .update({ status: 'accepted' })
+        .eq('id', proposalId);
+
+      if (error) {
+        throw error;
       }
-      
-      const data = await response.json();
-      console.log('제안 수락 성공:', data);
       
       toast.success('제안이 수락되었습니다!');
       
@@ -282,84 +414,63 @@ export default function MyPage() {
   // 읽지 않은 알림 카운트
   const unreadNotificationCount = notifications.filter(n => !n.isRead).length;
 
-  // Supabase 토큰 디버깅을 위한 useEffect 추가
+  // Supabase 토큰 디버깅을 위한 useEffect 수정
   useEffect(() => {
-    // 브라우저 환경인지 확인
     if (typeof window === 'undefined') return;
     
-    // Supabase 관련 키 찾기
-    const keys = Object.keys(localStorage).filter(k => k.includes('auth-token'));
-    console.log("🔑 Supabase 관련 키:", keys);
+    const session = getSupabaseSession();
+    if (session) {
+      console.log("✅ Supabase 세션 정보:", {
+        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'none',
+        expiresAt: session.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : 'unknown',
+        user: session.user?.id ? {
+          id: session.user.id,
+          email: session.user.email,
+          role: session.user.role
+        } : 'none'
+      });
 
-    if (keys.length > 0) {
-      const tokenKey = keys[0];
-      const session = localStorage.getItem(tokenKey);
-
-      if (session) {
+      // JWT 토큰 분해 시도
+      if (session.access_token) {
         try {
-          // 먼저 JWT 토큰 형식인지 확인 (eyJ로 시작하는지)
-          if (session.startsWith('eyJ')) {
-            console.log("✅ JWT 토큰으로 인식됨, 직접 사용");
-            
-            // JWT 토큰 분해 시도
-            const parts = session.split('.');
-            if (parts.length === 3) {
-              try {
-                // 페이로드 부분만 디코딩
-                const payload = JSON.parse(atob(parts[1]));
-                console.log("✅ 토큰 페이로드:", payload);
-                console.log("✅ 사용자 역할:", payload.role);
-                console.log("✅ 만료 시간:", new Date(payload.exp * 1000).toLocaleString());
-              } catch (e) {
-                console.error("❌ 토큰 페이로드 파싱 실패:", e);
-              }
-            }
-          } else {
-            // JSON 형식으로 시도
-            try {
-              const parsed = JSON.parse(session);
-              console.log("📦 Supabase 세션 정보:", parsed);
-              
-              if (parsed.access_token) {
-                console.log("✅ access_token:", parsed.access_token.substring(0, 20) + "...");
-                
-                // JWT 토큰 분해 시도
-                const parts = parsed.access_token.split('.');
-                if (parts.length === 3) {
-                  try {
-                    // 페이로드 부분만 디코딩
-                    const payload = JSON.parse(atob(parts[1]));
-                    console.log("✅ 토큰 페이로드:", payload);
-                    console.log("✅ 사용자 역할:", payload.role);
-                    console.log("✅ 만료 시간:", new Date(payload.exp * 1000).toLocaleString());
-                  } catch (e) {
-                    console.error("❌ 토큰 페이로드 파싱 실패:", e);
-                  }
-                }
-              }
-            } catch (e) {
-              console.error("❌ 세션 정보 파싱 실패:", e);
-            }
+          const parts = session.access_token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            console.log("✅ 토큰 페이로드:", {
+              role: payload.role,
+              expiresAt: new Date(payload.exp * 1000).toLocaleString(),
+              aud: payload.aud,
+              iss: payload.iss
+            });
           }
         } catch (e) {
-          console.error("❌ 세션 처리 중 오류:", e);
+          console.error("❌ 토큰 페이로드 파싱 실패:", e);
         }
-      } else {
-        console.warn("❌ 토큰 키는 있지만 세션 정보가 없음:", tokenKey);
       }
     } else {
-      console.warn("❌ Supabase 세션이 localStorage에 없음");
+      console.warn("⚠️ Supabase 세션을 찾을 수 없음");
       
-      // 추가 확인: 다른 형태의 키로 저장되어 있는지 확인
+      // 모든 스토리지 키 검사
       const allStorageKeys = Object.keys(localStorage);
-      console.log("📋 모든 localStorage 키:", allStorageKeys);
+      console.log("📋 localStorage 키 목록:", allStorageKeys);
       
+      // JWT 형식 토큰 검색
       const tokenValues = allStorageKeys
-        .filter(key => localStorage.getItem(key) && localStorage.getItem(key)!.includes('eyJ'))
-        .map(key => ({ key, value: localStorage.getItem(key) }));
+        .filter(key => {
+          const value = localStorage.getItem(key);
+          return value && (
+            value.includes('eyJ') || 
+            value.includes('"access_token"') ||
+            value.includes('"user"')
+          );
+        })
+        .map(key => ({
+          key,
+          value: localStorage.getItem(key)?.substring(0, 50) + '...'
+        }));
       
       if (tokenValues.length > 0) {
-        console.log("🔍 JWT 형식 토큰 발견:", tokenValues.map(t => t.key));
+        console.log("🔍 인증 관련 키 발견:", tokenValues);
       }
     }
   }, []);
@@ -394,39 +505,14 @@ export default function MyPage() {
     try {
       console.log('요청 삭제 시작 - 요청 ID:', requestId);
       
-      // 토큰 가져오기
-      let authToken = '';
-      if (typeof window !== 'undefined') {
-        const supabaseKey = Object.keys(localStorage).find(key => 
-          key.startsWith('sb-') && key.endsWith('-auth-token')
-        );
-        
-        if (supabaseKey) {
-          const supabaseData = JSON.parse(localStorage.getItem(supabaseKey) || '{}');
-          authToken = supabaseData.access_token || '';
-        }
-        
-        if (!authToken) {
-          authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
-        }
-      }
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-      
-      const response = await fetch(`/api/posts/${requestId}`, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        throw new Error('요청 삭제에 실패했습니다');
+      const supabaseClient = await getSupabaseClient();
+      const { error } = await supabaseClient
+        .from('posts')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) {
+        throw error;
       }
       
       toast.success('요청이 성공적으로 삭제되었습니다');
@@ -442,16 +528,38 @@ export default function MyPage() {
 
   // 게시물 삭제 핸들러
   const handleDeletePost = async (postId: number) => {
-    if (user) {
-      await deletePost(user, postId, router, setOngoingSales, setOriginalSales, setSaleStatus);
+    try {
+      const supabaseClient = await getSupabaseClient();
+      const { error } = await supabaseClient
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('게시글이 삭제되었습니다');
+      
+      // 목록 새로고침
+      fetchRequestedTickets();
+      
+    } catch (error) {
+      console.error('게시글 삭제 오류:', error);
+      toast.error('게시글 삭제에 실패했습니다');
     }
   };
 
+  // 로그아웃 핸들러
   const handleLogout = async () => {
-    await logout();
-    toast.success("로그아웃 되었습니다");
-    router.push("/");
-  }
+    try {
+      await signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('로그아웃 실패:', error);
+      toast.error('로그아웃에 실패했습니다.');
+    }
+  };
 
   // 판매자 통계 정보 업데이트 함수 추가
   useEffect(() => {
@@ -470,7 +578,7 @@ export default function MyPage() {
       if (!sellerId) return;
       
       // 토큰 가져오기
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("supabase.auth.token");
       if (!token) {
         console.warn("토큰이 없어 판매자 통계 업데이트를 건너뜁니다");
         return;
@@ -479,42 +587,44 @@ export default function MyPage() {
       console.log("판매자 통계 업데이트 시도:", { sellerId, completedSales });
       
       // seller-stats API 호출
-      const response = await fetch('/api/seller-stats/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          sellerId,
-          successfulSales: completedSales,
-          // 응답률은 실제 계산 로직이 필요
-          responseRate: 98 // 하드코딩된 값 (실제 구현시 계산 필요)
-        })
-      });
+      // const response = await fetch('/api/seller-stats/update', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     'Authorization': `Bearer ${token}`
+      //   },
+      //   body: JSON.stringify({
+      //     sellerId,
+      //     successfulSales: completedSales,
+      //     // 응답률은 실제 계산 로직이 필요
+      //     responseRate: 98 // 하드코딩된 값 (실제 구현시 계산 필요)
+      //   })
+      // });
       
-      if (response.ok) {
-        const result = await response.json();
-        console.log("판매자 통계 업데이트 성공:", result);
-      } else {
-        console.error("판매자 통계 업데이트 실패:", response.status);
-        const errorText = await response.text();
-        console.error("오류 응답:", errorText);
-      }
+      // if (response.ok) {
+      //   const result = await response.json();
+      //   console.log("판매자 통계 업데이트 성공:", result);
+      // } else {
+      //   console.error("판매자 통계 업데이트 실패:", response.status);
+      //   const errorText = await response.text();
+      //   console.error("오류 응답:", errorText);
+      // }
     } catch (error) {
       console.error("판매자 통계 업데이트 오류:", error);
     }
   };
 
   // 로딩 중이거나 마운트되지 않은 경우 로딩 표시
-  if (!mounted || isLoading) {
+  if (!mounted || loading) {
     return (
       <div className="min-h-screen bg-gray-100">
-        <div className="flex items-center justify-center h-screen">
-          <p>로딩 중...</p>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-center items-center h-[60vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+          </div>
         </div>
       </div>
-    )
+    );
   }
 
   // 로그인되지 않은 경우

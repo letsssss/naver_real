@@ -12,12 +12,13 @@ import { SyncUser } from "@/app/components/sync-user"
 import { Footer } from "@/components/Footer"
 import { ReviewSection } from "@/components/ReviewSection"
 import Script from 'next/script'
+import { ChatProvider } from '@/contexts/chat-context'
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "이지티켓",
-  description: "쉽고 빠른 티켓 거래 플랫폼",
+  title: "취켓팅 - 안전한 티켓 거래",
+  description: "안전하고 편리한 티켓 거래 플랫폼",
   generator: 'v0.dev',
   verification: {
     other: {
@@ -45,16 +46,18 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-gray-50 min-h-screen flex flex-col`} suppressHydrationWarning={true}>
         <AuthProvider>
-          <SyncUser />
-          <div className="flex-grow">
-            {children}
-          </div>
-          <ReviewSection />
-          <Footer />
-          <FeedbackForm />
-          <Toaster position="top-center" />
-          <GoogleAnalytics gaId="G-XXXXXXXXXX" />
-          <Analytics debug={false} />
+          <ChatProvider>
+            <SyncUser />
+            <div className="flex-grow">
+              {children}
+            </div>
+            <ReviewSection />
+            <Footer />
+            <FeedbackForm />
+            <Toaster position="top-center" />
+            <GoogleAnalytics gaId="G-XXXXXXXXXX" />
+            <Analytics debug={false} />
+          </ChatProvider>
         </AuthProvider>
       </body>
     </html>

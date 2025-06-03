@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,11 +23,6 @@ export default function LoginForm() {
     setErrorMessage('');
 
     try {
-      const supabase = createBrowserClient();
-      if (!supabase) {
-        throw new Error('Supabase 클라이언트 초기화 실패');
-      }
-      
       // Supabase를 통한 직접 로그인
       const { data, error } = await supabase.auth.signInWithPassword({
         email,

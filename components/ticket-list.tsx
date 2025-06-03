@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Star, ShoppingCart, CheckCircle } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from "@/lib/supabase";
+import { getSupabaseClient } from '@/lib/supabase'
 import { Skeleton } from "@/components/ui/skeleton";
 
 // 티켓 타입 정의
@@ -24,108 +24,108 @@ interface Ticket {
 
 export default function TicketList() {
   const router = useRouter();
-  const supabase = createBrowserClient();
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  useEffect(() => {
-    async function fetchTickets() {
-      try {
-        setLoading(true);
+  const fetchTickets = async () => {
+    let supabaseClient;
+    try {
+      setLoading(true);
+      supabaseClient = await getSupabaseClient();
+      
+      const { data: posts, error: postsError } = await supabaseClient
+        .from("posts")
+        .select("id, author_id")
+        .eq("category", "콘서트")
+        .eq("status", "판매중");
         
-        // 콘서트 카테고리의 게시물 가져오기
-        const { data: posts, error: postsError } = await supabase
-          .from("posts")
-          .select("id, author_id")
-          .eq("category", "콘서트")
-          .eq("status", "판매중");
-          
-        if (postsError) {
-          throw new Error("게시물을 불러오는 중 오류가 발생했습니다.");
-        }
-        
-        if (!posts || posts.length === 0) {
-          setTickets([]);
-          return;
-        }
-        
-        // 가져온 게시물에 해당하는 좌석 정보 가져오기
-        const postIds = posts.map(post => post.id);
-        const { data: seatsData, error: seatsError } = await supabase
-          .from("seats")
-          .select("*, posts!inner(id, title, event_name, event_date)")
-          .in("post_id", postIds)
-          .order("price", { ascending: true });
-          
-        if (seatsError) {
-          throw new Error("좌석 정보를 불러오는 중 오류가 발생했습니다.");
-        }
-        
-        // 판매자 정보 가져오기
-        const sellerIds = [...new Set(posts.map(post => post.author_id))];
-        const { data: sellersData, error: sellersError } = await supabase
-          .from("users")
-          .select("id, name")
-          .in("id", sellerIds);
-          
-        if (sellersError) {
-          throw new Error("판매자 정보를 불러오는 중 오류가 발생했습니다.");
-        }
-        
-        // 판매자 평점 가져오기
-        const { data: ratingsData, error: ratingsError } = await supabase
-          .from("seller_avg_rating")
-          .select("seller_id, avg_rating")
-          .in("seller_id", sellerIds);
-          
-        if (ratingsError) {
-          console.error("판매자 평점을 불러오는 중 오류가 발생했습니다:", ratingsError);
-        }
-        
-        // 판매자 ID를 키로, 이름과 평점을 값으로 하는 맵 생성
-        const sellerMap = new Map();
-        sellersData.forEach(seller => {
-          sellerMap.set(seller.id, { name: seller.name, rating: 0 });
-        });
-        
-        // 평점 정보 추가
-        ratingsData?.forEach(rating => {
-          if (sellerMap.has(rating.seller_id)) {
-            const sellerInfo = sellerMap.get(rating.seller_id);
-            sellerMap.set(rating.seller_id, { 
-              ...sellerInfo, 
-              rating: rating.avg_rating || 0 
-            });
-          }
-        });
-        
-        // 티켓 데이터 가공
-        const formattedTickets = seatsData.map((seat: any) => ({
-          id: seat.id,
-          post_id: seat.post_id,
-          section: seat.section || "",
-          row: seat.row || "",
-          seat_number: seat.seat_number || "",
-          price: seat.price,
-          status: seat.status || "판매중",
-          seller_id: seat.posts.author_id,
-          seller_name: sellerMap.get(seat.posts.author_id)?.name || "판매자",
-          seller_rating: sellerMap.get(seat.posts.author_id)?.rating || 0
-        }));
-        
-        setTickets(formattedTickets);
-      } catch (err) {
-        console.error("티켓 정보 로딩 오류:", err);
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
+      if (postsError) {
+        throw new Error("게시물을 불러오는 중 오류가 발생했습니다.");
       }
+      
+      if (!posts || posts.length === 0) {
+        setTickets([]);
+        return;
+      }
+      
+      // 가져온 게시물에 해당하는 좌석 정보 가져오기
+      const postIds = posts.map(post => post.id);
+      const { data: seatsData, error: seatsError } = await supabaseClient
+        .from("seats")
+        .select("*, posts!inner(id, title, event_name, event_date)")
+        .in("post_id", postIds)
+        .order("price", { ascending: true });
+        
+      if (seatsError) {
+        throw new Error("좌석 정보를 불러오는 중 오류가 발생했습니다.");
+      }
+      
+      // 판매자 정보 가져오기
+      const sellerIds = [...new Set(posts.map(post => post.author_id))];
+      const { data: sellersData, error: sellersError } = await supabaseClient
+        .from("users")
+        .select("id, name")
+        .in("id", sellerIds);
+        
+      if (sellersError) {
+        throw new Error("판매자 정보를 불러오는 중 오류가 발생했습니다.");
+      }
+      
+      // 판매자 평점 가져오기
+      const { data: ratingsData, error: ratingsError } = await supabaseClient
+        .from("seller_avg_rating")
+        .select("seller_id, avg_rating")
+        .in("seller_id", sellerIds);
+        
+      if (ratingsError) {
+        throw new Error("판매자 평점을 불러오는 중 오류가 발생했습니다.");
+      }
+      
+      // 판매자 ID를 키로, 이름과 평점을 값으로 하는 맵 생성
+      const sellerMap = new Map();
+      sellersData?.forEach(seller => {
+        sellerMap.set(seller.id, { name: seller.name, rating: 0 });
+      });
+      
+      // 평점 정보 추가
+      ratingsData?.forEach(rating => {
+        if (sellerMap.has(rating.seller_id)) {
+          const sellerInfo = sellerMap.get(rating.seller_id);
+          sellerMap.set(rating.seller_id, { 
+            ...sellerInfo, 
+            rating: rating.avg_rating || 0 
+          });
+        }
+      });
+      
+      // 티켓 데이터 가공
+      const formattedTickets = seatsData.map((seat: any) => ({
+        id: seat.id,
+        post_id: seat.post_id,
+        section: seat.section || "",
+        row: seat.row || "",
+        seat_number: seat.seat_number || "",
+        price: seat.price,
+        status: seat.status || "판매중",
+        seller_id: seat.posts.author_id,
+        seller_name: sellerMap.get(seat.posts.author_id)?.name || "판매자",
+        seller_rating: sellerMap.get(seat.posts.author_id)?.rating || 0
+      }));
+      
+      setTickets(formattedTickets);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load tickets');
+    } finally {
+      setLoading(false);
     }
-    
+  };
+  
+  useEffect(() => {
     fetchTickets();
-  }, [supabase]);
+  }, []);
   
   const handleSellerClick = (sellerId: string) => {
     router.push(`/seller/${sellerId}`);

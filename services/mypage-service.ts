@@ -1,6 +1,60 @@
 import { Sale, Notification, TransactionStatus, Purchase } from "@/types/mypage";
-import { API_BASE_URL, getAuthToken, getStatusText, getStatusColor, getStatusPriority } from "@/utils/mypage-utils";
+import { API_BASE_URL, getStatusText, getStatusColor, getStatusPriority } from "@/utils/mypage-utils";
 import { toast } from "sonner";
+import { getSupabaseClient } from '@/lib/supabase';
+
+// 데이터베이스 타입 정의
+interface DatabaseUser {
+  id: string;
+  name: string;
+  email: string;
+  profile_image: string;
+  rating: number;
+  successful_sales: number;
+  response_rate: number;
+}
+
+interface DatabasePost {
+  id: number;
+  title: string;
+  content: string;
+  status: string;
+  ticket_price: number;
+  created_at: string;
+  category: string;
+  author_id: string;
+}
+
+interface DatabasePurchase {
+  id: number;
+  status: string;
+  total_price: number;
+  created_at: string;
+  seller_id: string;
+  order_number: string;
+  post: DatabasePost;
+}
+
+interface DatabaseProposal {
+  id: number;
+  status: string;
+  price: number;
+  message: string;
+  created_at: string;
+  user_id: string;
+  post: DatabasePost;
+  users: DatabaseUser;
+}
+
+// Supabase 응답 타입
+type SupabasePurchaseResponse = {
+  id: number;
+  status: string;
+  total_price: number;
+  created_at: string;
+  seller_id: string;
+  post: DatabasePost;
+}
 
 export interface StatusCount {
   '취켓팅진행중': number;
@@ -8,6 +62,42 @@ export interface StatusCount {
   '거래완료': number;
   '거래취소': number;
 }
+
+// Supabase 세션 토큰 가져오기
+const getSupabaseSession = () => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    // Supabase 세션 키 찾기
+    const supabaseKey = Object.keys(localStorage).find(key => 
+      key.startsWith('sb-') && key.endsWith('-auth-token')
+    );
+    
+    if (supabaseKey) {
+      const sessionStr = localStorage.getItem(supabaseKey);
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        return session?.access_token || null;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('세션 파싱 오류:', error);
+    return null;
+  }
+};
+
+// 인증 토큰 가져오기 함수
+const getAuthToken = () => {
+  const supabaseToken = getSupabaseSession();
+  if (supabaseToken) return supabaseToken;
+  
+  // 기존 토큰 체크 (fallback)
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+  }
+  return '';
+};
 
 // 판매 중인 상품 목록 가져오기
 export const fetchOngoingSales = async (
@@ -21,15 +111,6 @@ export const fetchOngoingSales = async (
   console.log("📊 사용자 정보:", user);
   console.log("📊 사용자 ID:", user?.id);
   
-  // ✅ API_BASE_URL 디버깅 추가
-  console.log("🔍 API_BASE_URL 디버깅:", API_BASE_URL);
-  console.log("🔍 API_BASE_URL 타입:", typeof API_BASE_URL);
-  console.log("🔍 window.location.origin:", typeof window !== 'undefined' ? window.location.origin : 'window 없음');
-  
-  // ✅ API_BASE_URL 임시 fallback 설정
-  const baseUrl = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
-  console.log("🔍 최종 사용할 baseUrl:", baseUrl);
-  
   if (!user) {
     console.log("❌ 사용자 정보가 없어서 함수 종료");
     return;
@@ -37,140 +118,95 @@ export const fetchOngoingSales = async (
   
   console.log("✅ 사용자 정보 확인 완료, 로딩 상태 설정 중...");
   setIsLoadingSales(true);
+  
   try {
-    console.log("🔑 인증 토큰 가져오기 시작...");
-    const authToken = getAuthToken();
-    console.log("🔑 토큰 결과:", authToken ? `토큰 있음 (${authToken.substring(0, 20)}...)` : "토큰 없음");
+    const supabaseClient = await getSupabaseClient();
     
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': authToken ? `Bearer ${authToken}` : '',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    };
-    console.log("📡 API 헤더 준비 완료:", headers);
+    // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기
+    const { data: purchaseData, error: purchaseError } = await supabaseClient
+      .from('purchases')
+      .select(`
+        id,
+        status,
+        total_price,
+        created_at,
+        seller_id,
+        order_number,
+        post:posts (
+          id,
+          title,
+          content,
+          status,
+          ticket_price,
+          created_at,
+          category
+        )
+      `)
+      .eq('seller_id', user.id);
 
-    // 1. 판매자의 판매 상품에 대한 구매 정보 먼저 가져오기 (구매 현황 우선)
-    const timestamp = Date.now();
-    const userId = user?.id || '';
-    const purchaseUrl = `${baseUrl}/api/seller-purchases?t=${timestamp}&userId=${userId}`;
-    console.log("🔗 seller-purchases API 호출 준비:");
-    console.log("   URL:", purchaseUrl);
-    console.log("   사용자 ID:", userId);
-    console.log("   타임스탬프:", timestamp);
+    if (purchaseError) {
+      throw purchaseError;
+    }
+
+    let purchasesByPostId: Record<number, DatabasePurchase> = {};
+    let salesWithPurchaseInfo: Sale[] = [];
     
-    console.log("🚀 seller-purchases API 호출 시작...");
-    const purchaseResponse = await fetch(purchaseUrl, {
-      method: 'GET',
-      headers,
-      credentials: 'include' // 쿠키 포함
-    });
-    
-    console.log("판매자 구매 내역 API 응답 상태:", purchaseResponse.status, purchaseResponse.statusText);
-    
-    let purchasesByPostId: Record<number, any> = {};
-    let salesWithPurchaseInfo: any[] = [];
-    
-    if (purchaseResponse.ok) {
-      const purchaseData = await purchaseResponse.json();
-      console.log("판매자 구매 내역 데이터:", purchaseData);
+    if (purchaseData) {
+      // 게시글 ID별로 구매 정보를 인덱싱
+      purchasesByPostId = (purchaseData as unknown as DatabasePurchase[]).reduce((acc, purchase) => {
+        if (purchase.post?.id) {
+          acc[purchase.post.id] = purchase;
+        }
+        return acc;
+      }, {} as Record<number, DatabasePurchase>);
       
-      if (purchaseData.purchases && Array.isArray(purchaseData.purchases)) {
-        // 게시글 ID별로 구매 정보를 인덱싱
-        purchasesByPostId = purchaseData.purchases.reduce((acc: Record<number, any>, purchase: any) => {
-          if (purchase.postId || purchase.post_id) {
-            // post_id 또는 postId 필드 처리
-            const postId = purchase.postId || purchase.post_id;
-            acc[postId] = purchase;
-          }
-          return acc;
-        }, {});
-        
-        // 구매 정보가 있는 판매 상품 목록 생성 - 구매 현황 방식과 유사
-        salesWithPurchaseInfo = purchaseData.purchases.map((purchase: any) => {
-          const postId = purchase.postId || purchase.post_id;
-          const post = purchase.post || {};
-          
-          // 판매 데이터 기본 형식 생성
+      // 구매 정보가 있는 판매 상품 목록 생성
+      salesWithPurchaseInfo = (purchaseData as unknown as DatabasePurchase[])
+        .filter(purchase => purchase.post)
+        .map(purchase => {
+          const post = purchase.post;
           const status = purchase.status || 'ACTIVE';
           const statusText = getStatusText(status);
           
-          // 날짜 처리
-          const dateStr = purchase.created_at || post.created_at || new Date().toISOString();
-          const date = new Date(dateStr);
+          const date = new Date(purchase.created_at);
           const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
           
-          // 가격 처리
-          const priceValue = post.ticket_price || post.ticketPrice || post.price || 0;
+          const priceValue = post.ticket_price || 0;
           const formattedPrice = priceValue 
-            ? `${Number(priceValue).toLocaleString()}원` 
+            ? `${Number(priceValue).toLocaleString()}원`
             : '가격 정보 없음';
             
           return {
-            id: postId,
-            title: post.title || post.eventName || purchase.ticket_title || '제목 없음',
+            id: post.id,
+            title: post.title || '제목 없음',
             date: formattedDate,
             price: formattedPrice,
             ticket_price: priceValue,
             status: statusText,
             isActive: status === 'ACTIVE',
             sortPriority: getStatusPriority(status),
-            transaction_type: purchase.transaction_type || 'direct_purchase',
             purchaseInfo: {
               id: purchase.id,
               status: purchase.status,
-              originalStatus: status
+              originalStatus: status,
+              orderNumber: purchase.order_number
             }
           };
         });
-      }
-    } else {
-      console.error("판매자 구매 내역 가져오기 실패:", purchaseResponse.status);
-      const errorText = await purchaseResponse.text().catch(() => "");
-      console.error("오류 응답:", errorText);
-      
-      try {
-        // JSON 응답인 경우 구조적으로 파싱하여 표시
-        const errorJson = JSON.parse(errorText);
-        console.error("오류 응답:", errorJson);
-      } catch (e) {
-        // JSON이 아닌 경우 그냥 텍스트 로깅
-      }
     }
     
-    // 2. 판매 목록 API 호출 - 구매 정보가 없는 경우만 추가
-    const salesTimestamp = Date.now();
-    console.log("판매 목록 불러오기 시도... 사용자 ID:", user.id);
-    
-    // ✅ 모든 게시물을 가져와서 카테고리 값 확인
-    const salesApiUrl = `${baseUrl}/api/posts?userId=${user.id}&t=${salesTimestamp}`;
-    console.log("📡 판매 목록 API URL:", salesApiUrl);
-    
-    const response = await fetch(salesApiUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : '',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      },
-      credentials: 'include', // 쿠키를 포함시킵니다
-    });
-    
-    console.log("API 응답 상태:", response.status, response.statusText);
-      
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("API 오류 응답:", errorData);
-      throw new Error('판매 목록을 불러오는데 실패했습니다.');
+    // 2. 판매 목록 가져오기
+    const { data: postsData, error: postsError } = await supabaseClient
+      .from('posts')
+      .select('*')
+      .eq('author_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (postsError) {
+      throw postsError;
     }
-      
-    const data = await response.json();
-    console.log("받은 데이터:", data);
-    
-    if (!data.posts || !Array.isArray(data.posts)) {
-      console.error("API 응답에 posts 배열이 없거나 유효하지 않습니다:", data);
+
+    if (!postsData) {
       // 구매 정보가 있는 판매 상품 처리
       if (salesWithPurchaseInfo.length > 0) {
         processAndSetSalesData(salesWithPurchaseInfo, setSaleStatus, setOriginalSales, setOngoingSales);
@@ -181,203 +217,87 @@ export const fetchOngoingSales = async (
       return;
     }
     
-    // ✅ 모든 게시물의 카테고리 확인 및 로깅
-    console.log("🔍 모든 게시물의 카테고리 분석:");
-    data.posts.forEach((post: any, index: number) => {
-      console.log(`게시물 ${index + 1}: ID=${post.id}, title="${post.title}", category="${post.category}", status="${post.status}"`);
-    });
-    
-    // 🔥 NEW: 제안 기반 거래 추가를 위한 새로운 필터링 로직
-    console.log("🔍 제안 기반 거래 확인을 위해 현재 사용자의 수락된 제안 조회 시작...");
-    
-    // 현재 사용자가 제안했고 수락된 TICKET_REQUEST 게시물들을 찾기
-    let acceptedProposalPosts: any[] = [];
-    try {
-      const proposalTimestamp = Date.now();
-      const proposalApiUrl = `${baseUrl}/api/seller-purchases?userId=${user.id}&t=${proposalTimestamp}`;
-      console.log("🔗 제안 기반 거래 API URL:", proposalApiUrl);
-      
-      const proposalResponse = await fetch(proposalApiUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : '',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        },
-        credentials: 'include',
-      });
-      
-      console.log("🔄 제안 기반 거래 API 응답 상태:", proposalResponse.status, proposalResponse.statusText);
-      
-      if (proposalResponse.ok) {
-        const proposalData = await proposalResponse.json();
-        console.log("🎯 제안 기반 거래 조회 성공:", proposalData);
-        
-        if (proposalData.purchases && Array.isArray(proposalData.purchases)) {
-          // proposal_transaction과 user_proposal 타입인 것들 중 TICKET_REQUEST 게시물 찾기
-          acceptedProposalPosts = proposalData.purchases
-            .filter((purchase: any) => 
-              (purchase.transaction_type === 'proposal_transaction' || purchase.transaction_type === 'user_proposal') && 
-              purchase.post?.category === 'TICKET_REQUEST'
-            )
-            .map((purchase: any) => ({
-              ...purchase.post,
-              // 제안 관련 추가 정보
-              proposal_price: purchase.total_price,
-              proposal_status: purchase.status,
-              proposal_transaction_id: purchase.id,
-              proposal_id: purchase.proposal_id, // user_proposal의 경우
-              transaction_type: purchase.transaction_type,
-              // user_proposal 추가 정보
-              ...(purchase.transaction_type === 'user_proposal' && {
-                proposal_message: purchase.proposal_message,
-                section_id: purchase.section_id,
-                section_name: purchase.section_name,
-              })
-            }));
-          
-          console.log(`✅ 제안 기반 TICKET_REQUEST 게시물 ${acceptedProposalPosts.length}개 발견`);
-          acceptedProposalPosts.forEach((post, index) => {
-            console.log(`제안 거래 ${index + 1}: ID=${post.id}, title="${post.title}", type=${post.transaction_type}, status=${post.proposal_status}, price=${post.proposal_price}`);
-          });
-        }
-      } else {
-        console.log("⚠️ 제안 기반 거래 조회 실패 또는 데이터 없음");
-        console.log("🔍 응답 상태 코드:", proposalResponse.status);
-        console.log("🔍 응답 상태 텍스트:", proposalResponse.statusText);
-        
-        // 401 오류인 경우 추가 정보 로깅
-        if (proposalResponse.status === 401) {
-          console.error("🚨 seller-purchases API 401 인증 오류 발생!");
-          console.error("🔗 요청 URL:", proposalApiUrl);
-          console.error("🔑 Authorization 헤더:", authToken ? "존재함" : "없음");
-          console.error("👤 사용자 ID:", user.id);
-          
-          // 응답 본문도 확인
-          try {
-            const errorText = await proposalResponse.text();
-            console.error("📝 오류 응답 본문:", errorText);
-          } catch (textError) {
-            console.error("📝 오류 응답 본문 읽기 실패:", textError);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn("⚠️ 제안 기반 거래 조회 중 오류:", error);
+    // 3. 제안 기반 거래 확인
+    const { data: proposalData, error: proposalError } = await supabaseClient
+      .from('proposals')
+      .select(`
+        id,
+        status,
+        proposed_price,
+        message,
+        created_at,
+        proposer_id,
+        post:posts (
+          id,
+          title,
+          content,
+          status,
+          category
+        )
+      `)
+      .eq('proposer_id', user.id)
+      .eq('status', 'accepted');
+
+    if (proposalError) {
+      console.error('제안 조회 실패:', proposalError);
     }
-    
-    // ✅ 직접 판매 게시물 필터링 (TICKET_REQUEST 제외)
-    const directSalePosts = data.posts.filter((post: any) => {
-      const isTicketRequest = post.category === 'TICKET_REQUEST';
-      if (isTicketRequest) {
-        console.log(`🚫 TICKET_REQUEST 제외: ID=${post.id}, title="${post.title}"`);
-      }
-      return !isTicketRequest;
-    });
-    
-    // ✅ 제안 기반 거래와 직접 판매 합치기
-    const allSalePosts = [...directSalePosts, ...acceptedProposalPosts];
-    
-    console.log(`✅ 필터링 결과: 전체 ${data.posts.length}개 중 직접 판매 ${directSalePosts.length}개 + 제안 거래 ${acceptedProposalPosts.length}개 = 총 ${allSalePosts.length}개`);
-    
-    // 상태 카운트 초기화
-    const newSaleStatus = {
-      취켓팅진행중: 0,
-      판매중인상품: 0,
-      취켓팅완료: 0,
-      거래완료: 0,
-      거래취소: 0,
-    };
-    
-    // 3. 구매 정보가 없는 판매 상품 처리
-    // 이미 구매 정보가 있는 ID 목록 생성
-    const existingPostIds = salesWithPurchaseInfo.map(sale => sale.id);
-    
-    // ✅ 필터링된 직접 판매 게시물에서 구매 정보가 없는 상품만 필터링
-    const remainingPosts = allSalePosts.filter((post: any) => !existingPostIds.includes(post.id));
-    
-    console.log(`📋 최종 처리할 게시물: 기존 구매정보 ${salesWithPurchaseInfo.length}개 + 새로운 판매글 ${remainingPosts.length}개`);
-    
-    // 구매 정보가 없는 상품 처리
-    const additionalSales = remainingPosts.map((post: any, idx: number) => {
-      // 제안 거래인지 확인 (proposal_transaction 또는 user_proposal)
-      const isProposalTransaction = post.transaction_type === 'proposal_transaction' || post.transaction_type === 'user_proposal';
-      
-      // content 필드에서 가격 정보 추출 (JSON 파싱)
-      let parsedContent: any = {};
-      try {
-        if (post.content && typeof post.content === 'string') {
-          parsedContent = JSON.parse(post.content);
-        }
-      } catch (e) {
-        console.warn('❗ content 파싱 오류:', post.id, e);
-      }
-      
-      // 상태 처리 - 제안 거래는 proposal_status 사용
-      const status = isProposalTransaction 
-        ? (post.proposal_status || 'PENDING') // 제안의 기본 상태는 PENDING
-        : (post.status || 'ACTIVE');
-      const isActive = status === 'ACTIVE' || status === 'PENDING'; // PENDING도 활성 상태로 간주
-      const statusText = getStatusText(status);
-      
-      // 날짜 처리
-      const dateStr = post.created_at || post.updatedAt || post.createdAt || new Date().toISOString();
-      const date = new Date(dateStr);
-      const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
-      
-      // 가격 처리 - 제안 거래는 proposal_price 우선 사용
-      const contentPrice = parsedContent?.price;
-      const priceValue = isProposalTransaction 
-        ? (post.proposal_price || contentPrice || post.ticket_price || post.ticketPrice || post.price || 0)
-        : (contentPrice || post.ticket_price || post.ticketPrice || post.price || 0);
-      const formattedPrice = priceValue 
-        ? `${Number(priceValue).toLocaleString()}원` 
-        : '가격 정보 없음';
-      
-      console.log(`💰 가격 처리 결과 - ID: ${post.id}, type: ${post.transaction_type}, isProposal: ${isProposalTransaction}, proposal_price: ${post.proposal_price}, final_price: ${priceValue}`);
-      
-      return {
-        ...post, // 기존 필드 유지
-        id: post.id,
-        title: post.title || post.eventName || '제목 없음',
-        date: formattedDate,
-        price: formattedPrice,
-        ticket_price: priceValue,
-        status: statusText,
-        isActive,
-        sortPriority: getStatusPriority(status),
-        transaction_type: isProposalTransaction ? post.transaction_type : 'direct_purchase',
-        parsedContent: parsedContent,
-        rawPrice: contentPrice,
-        purchaseInfo: null, // 구매 정보 없음
-        // 제안 거래 추가 정보
-        ...(isProposalTransaction && {
-          proposal_price: post.proposal_price,
-          proposal_status: post.proposal_status,
-          proposal_transaction_id: post.proposal_transaction_id,
-          proposal_id: post.proposal_id,
-          // user_proposal 추가 정보
-          ...(post.transaction_type === 'user_proposal' && {
-            proposal_message: post.proposal_message,
-            section_id: post.section_id,
-            section_name: post.section_name,
-          })
-        })
-      };
-    });
-    
-    // 4. 모든 판매 데이터 결합
-    const combinedSales = [...salesWithPurchaseInfo, ...additionalSales];
-    
-    // 5. 데이터 처리 및 상태 업데이트
-    processAndSetSalesData(combinedSales, setSaleStatus, setOriginalSales, setOngoingSales);
+
+    // 제안이 있는 경우 사용자 정보 가져오기
+    let acceptedProposalPosts: any[] = [];
+    if (proposalData) {
+      // 사용자 정보 가져오기
+      const userIds = proposalData.map(proposal => proposal.user_id).filter(Boolean);
+      const { data: usersData } = await supabaseClient
+        .from('users')
+        .select('id, name, email, profile_image, rating, successful_sales, response_rate')
+        .in('id', userIds);
+
+      // 사용자 정보를 Map으로 변환
+      const usersMap = new Map(
+        (usersData || []).map(user => [user.id, user])
+      );
+
+      acceptedProposalPosts = (proposalData as unknown as DatabaseProposal[])
+        .filter(proposal => proposal.post && proposal.post.category === 'TICKET_REQUEST')
+        .map(proposal => ({
+          ...proposal.post,
+          proposed_price: proposal.price,
+          proposal_status: proposal.status,
+          proposal_id: proposal.id,
+          proposal_message: proposal.message,
+          user: usersMap.get(proposal.user_id) || null
+        }));
+    }
+
+    // 모든 데이터 통합 및 처리
+    const allSales = [
+      ...salesWithPurchaseInfo,
+      ...postsData.map((post: any) => {
+        const date = new Date(post.created_at);
+        const formattedDate = `${date.getFullYear()}.${(date.getMonth()+1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
+        
+        return {
+          id: post.id,
+          title: post.title,
+          date: formattedDate,
+          price: post.ticket_price ? `${Number(post.ticket_price).toLocaleString()}원` : '가격 정보 없음',
+          ticket_price: post.ticket_price,
+          status: getStatusText(post.status),
+          isActive: post.status === 'ACTIVE',
+          sortPriority: getStatusPriority(post.status),
+          category: post.category
+        };
+      }),
+      ...acceptedProposalPosts
+    ];
+
+    processAndSetSalesData(allSales, setSaleStatus, setOriginalSales, setOngoingSales);
+
   } catch (error) {
-    console.error('판매 목록 로딩 오류:', error);
+    console.error('판매 목록 조회 실패:', error);
     toast.error('판매 목록을 불러오는데 실패했습니다.');
-    // 더미 데이터로 대체
-    setOngoingSales([
-      { id: 2, title: "웃는 남자 [더미 데이터]", date: "2024-01-09", price: "110,000원", status: "취켓팅진행중", isActive: false, sortPriority: 1 },
-      { id: 1, title: "아이브 팬미팅 [더미 데이터]", date: "2024-04-05", price: "88,000원", status: "판매중", isActive: true, sortPriority: 2 },
-    ]);
+    setOngoingSales([]);
+    setOriginalSales([]);
   } finally {
     setIsLoadingSales(false);
   }
@@ -860,7 +780,6 @@ export const deletePost = async (
     
     // userId를 항상 쿼리 파라미터로 추가 (인증 백업)
     const userId = user.id?.toString() || '';
-    // 현재 호스트 사용 (포트 불일치 문제 해결)
     let url = `${currentHost}/api/posts/${postId}?userId=${userId}&t=${Date.now()}`;
     
     console.log("삭제 요청 URL:", url);
@@ -869,7 +788,7 @@ export const deletePost = async (
     const response = await fetch(url, {
       method: 'DELETE',
       headers,
-      credentials: 'include', // 쿠키 포함
+      credentials: 'include',
     });
     
     // 응답이 JSON이 아닌 경우 처리

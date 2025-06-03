@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { X, Send } from 'lucide-react';
-import { Message } from '@/hooks/useChat';
+import { Message } from '@/types/chat';
+import { getSupabaseClient } from '@/lib/supabase';
 
 interface ChatInterfaceProps {
   isOpen: boolean;
@@ -16,6 +17,49 @@ interface ChatInterfaceProps {
   otherUserRole: string;
   otherUserPhone?: string;
   onMarkAsRead?: () => Promise<boolean>;
+}
+
+// 채팅 인터페이스 싱글톤 관리자
+class ChatInterfaceManager {
+  private static instance: ChatInterfaceManager | null = null;
+  private activeChats: Set<string> = new Set();
+  private messageQueue: Map<string, Message[]> = new Map();
+  private supabase = getSupabaseClient();
+
+  private constructor() {}
+
+  public static getInstance(): ChatInterfaceManager {
+    if (!ChatInterfaceManager.instance) {
+      ChatInterfaceManager.instance = new ChatInterfaceManager();
+    }
+    return ChatInterfaceManager.instance;
+  }
+
+  public registerChat(chatId: string): void {
+    this.activeChats.add(chatId);
+    if (!this.messageQueue.has(chatId)) {
+      this.messageQueue.set(chatId, []);
+    }
+  }
+
+  public unregisterChat(chatId: string): void {
+    this.activeChats.delete(chatId);
+    this.messageQueue.delete(chatId);
+  }
+
+  public queueMessage(chatId: string, message: Message): void {
+    const queue = this.messageQueue.get(chatId) || [];
+    queue.push(message);
+    this.messageQueue.set(chatId, queue);
+  }
+
+  public getQueuedMessages(chatId: string): Message[] {
+    return this.messageQueue.get(chatId) || [];
+  }
+
+  public clearQueue(chatId: string): void {
+    this.messageQueue.set(chatId, []);
+  }
 }
 
 export function ChatInterface({
@@ -34,168 +78,46 @@ export function ChatInterface({
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  // 이전 메시지 수를 기록하기 위한 ref를 최상위 레벨로 이동
-  const prevMessagesLengthRef = useRef<number>(0);
-  // 마지막으로 확인한 읽지 않은 메시지 수를 저장하는 ref (최상위 레벨로 이동)
-  const lastUnreadCountRef = useRef<number>(0);
-  // 초기 로딩 상태를 추적하는 state 추가
-  const [initialLoading, setInitialLoading] = useState(true);
-  // 입력 타이머 추적
+  const chatManager = useRef(ChatInterfaceManager.getInstance());
+  const chatId = useRef(`chat-${Date.now()}`);
+
+  // 입력 관련 상태 및 참조
   const inputTimerRef = useRef<NodeJS.Timeout | null>(null);
-  // 마지막 입력 시간
   const lastInputTimeRef = useRef<number>(0);
-  // 입력 관련 상태 및 참조 추가
-  const minimumInputDelayRef = useRef<number>(300); // 최소 입력 지연 시간 (300ms)
+  const minimumInputDelayRef = useRef<number>(300);
   const inputValueRef = useRef<string>('');
 
-  // 메시지가 로드되면 초기 로딩 상태를 false로 설정
+  // 채팅방 등록 및 해제
   useEffect(() => {
-    if (messages.length > 0 && initialLoading) {
-      setInitialLoading(false);
+    if (isOpen) {
+      chatManager.current.registerChat(chatId.current);
     }
-  }, [messages, initialLoading]);
+    return () => {
+      chatManager.current.unregisterChat(chatId.current);
+    };
+  }, [isOpen]);
 
-  // 메시지 읽음 처리 함수
-  const markMessagesAsRead = useCallback(() => {
-    // 읽지 않은 메시지가 있고, 읽음 처리 함수가 있는 경우에만 호출
-    const hasUnreadMessages = messages.some(msg => !msg.isMine && !msg.isRead);
-    const unreadMessages = messages.filter(msg => !msg.isMine && !msg.isRead);
-    
-    console.log('[ChatInterface] 읽음 처리 검사:', {
-      hasUnreadMessages,
-      messagesCount: messages.length,
-      unreadCount: unreadMessages.length,
-      unreadMessages: unreadMessages.map(m => ({id: m.id, text: m.text.substring(0, 10)})),
-      hasMarkAsReadFunction: !!onMarkAsRead
-    });
-    
-    // 읽을 메시지가 없으면 함수 실행 안함
-    if (!hasUnreadMessages) {
-      console.log('[ChatInterface] 읽을 메시지가 없어서 읽음 처리 건너뜀');
-      return;
-    }
-    
-    // 읽음 처리 함수가 없으면 실행 안함
-    if (!onMarkAsRead) {
-      console.log('[ChatInterface] 읽음 처리 함수가 제공되지 않음');
-      return;
-    }
-    
-    // 메시지가 있고 처리 함수가 있는 경우에만
-    console.log('[ChatInterface] 읽음 처리 함수 호출 시도');
-    
-    // 딜레이를 준 후 실행 (roomId와 userId가 설정될 시간을 줌)
-    setTimeout(() => {
-      onMarkAsRead().then(result => {
-        console.log('[ChatInterface] 읽음 처리 결과:', result);
-        // 읽음 처리 후 메시지 상태를 강제로 확인
-        const currentUnread = messages.filter(msg => !msg.isMine && !msg.isRead);
-        console.log('[ChatInterface] 읽음 처리 후 읽지 않은 메시지:', currentUnread.length);
-      }).catch(err => {
-        console.error('[ChatInterface] 읽음 표시 실패:', err);
-      });
-    }, 500); // 0.5초 딜레이
-  }, [messages, onMarkAsRead]);
-
-  // 입력 상태 변경 처리
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    // 현재 시간 기록
-    const now = Date.now();
-    const value = e.target.value;
-    
-    // 입력 값 참조에 저장
-    inputValueRef.current = value;
-    
-    // 값 즉시 업데이트 (UI 반응성 유지)
-    setNewMessage(value);
-    
-    // 마지막 입력 시간과 현재 시간의 차이가 최소 입력 지연 시간보다 작으면 타이머 리셋만 함
-    // 이렇게 하면 빠르게 타이핑할 때 이벤트가 너무 자주 발생하는 것을 방지
-    const timeSinceLastInput = now - lastInputTimeRef.current;
-    if (timeSinceLastInput < minimumInputDelayRef.current) {
-      // 기존 타이머 취소
-      if (inputTimerRef.current) {
-        clearTimeout(inputTimerRef.current);
-        inputTimerRef.current = null;
-      }
-      
-      // 새 타이머 설정 (지연 발송)
-      inputTimerRef.current = setTimeout(() => {
-        dispatchTypingEvent(true, inputValueRef.current);
-        inputTimerRef.current = null;
-      }, minimumInputDelayRef.current);
-      
-      return;
-    }
-    
-    // 최소 지연 시간 이후의 입력이면 시간 기록 및 타이핑 이벤트 발생
-    lastInputTimeRef.current = now;
-    
-    // 기존 타이머 취소
-    if (inputTimerRef.current) {
-      clearTimeout(inputTimerRef.current);
-      inputTimerRef.current = null;
-    }
-    
-    // 타이핑 중 이벤트 발송
-    dispatchTypingEvent(true, value);
-    
-    // 타이핑 종료 지연 타이머 설정 (5초로 확장)
-    inputTimerRef.current = setTimeout(() => {
-      console.log('[ChatInterface] 타이핑 종료 이벤트 발생');
-      dispatchTypingEvent(false, value);
-      inputTimerRef.current = null;
-    }, 5000); // 5초 동안 입력이 없으면 타이핑 종료로 간주
-  }, []);
-  
-  // 타이핑 이벤트 발송 함수 분리 (재사용성 및 일관성)
-  const dispatchTypingEvent = useCallback((isTyping: boolean, inputValue: string) => {
-    if (typeof window !== 'undefined') {
-      console.log(`[ChatInterface] ${isTyping ? '타이핑 중' : '타이핑 종료'} 이벤트 발생`, { 
-        timestamp: Date.now(),
-        inputLength: inputValue.length
-      });
-      
-      window.dispatchEvent(new CustomEvent('chat:typing', {
-        detail: { 
-          isTyping, 
-          timestamp: Date.now(),
-          inputValue
-        }
-      }));
+  // 메시지 스크롤 처리
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   }, []);
 
   // 메시지 전송 처리
   const handleSendMessage = async () => {
-    if (newMessage.trim() === '' || isSending) return;
+    if (isSending || !newMessage.trim()) return;
 
     setIsSending(true);
-    const messageContent = newMessage;
-    setNewMessage(''); // 즉시 입력창 클리어
-    inputValueRef.current = ''; // 참조 값도 클리어
-    
-    // 타이핑 종료 이벤트 즉시 발송
-    dispatchTypingEvent(false, '');
-    
-    // 기존 타이머 취소
-    if (inputTimerRef.current) {
-      clearTimeout(inputTimerRef.current);
-      inputTimerRef.current = null;
-    }
-    
+    const messageContent = newMessage.trim();
+    setNewMessage('');
     let messageSent = false;
     
     try {
-      // 메시지 전송
       messageSent = await onSendMessage(messageContent);
       
-      // 메시지 전송이 성공하고 상대방 전화번호가 있으면 알림 전송
       if (messageSent && otherUserPhone) {
-        console.log(`📱 카카오 알림톡 전송 시도: ${otherUserName}님(${otherUserPhone})`);
-        
         try {
-          // 카카오 알림 API 호출 - 필수 파라미터 추가
           const notifyResponse = await fetch('/api/kakao/notify', {
             method: 'POST',
             headers: {
@@ -204,7 +126,7 @@ export function ChatInterface({
             body: JSON.stringify({
               to: otherUserPhone,
               name: otherUserName,
-              message: messageContent // 실제 보낸 메시지 내용을 추가
+              message: messageContent
             }),
           });
           
@@ -216,11 +138,8 @@ export function ChatInterface({
             console.error('⚠️ 카카오 알림톡 전송 실패:', notifyResult.error);
           }
         } catch (notifyError) {
-          // 알림 전송 오류가 발생해도 메시지 전송에는 영향을 주지 않음
           console.error('❌ 카카오 알림톡 전송 중 오류:', notifyError);
         }
-      } else if (!otherUserPhone) {
-        console.log('⚠️ 수신자 전화번호 없음: 알림톡 전송 건너뜀');
       }
     } catch (error) {
       console.error('메시지 전송 오류:', error);
@@ -228,6 +147,28 @@ export function ChatInterface({
     } finally {
       setIsSending(false);
     }
+  };
+
+  // 입력 처리
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewMessage(value);
+    inputValueRef.current = value;
+
+    if (inputTimerRef.current) {
+      clearTimeout(inputTimerRef.current);
+    }
+
+    const now = Date.now();
+    const timeSinceLastInput = now - lastInputTimeRef.current;
+
+    if (timeSinceLastInput < minimumInputDelayRef.current) {
+      inputTimerRef.current = setTimeout(() => {
+        setNewMessage(inputValueRef.current);
+      }, minimumInputDelayRef.current - timeSinceLastInput);
+    }
+
+    lastInputTimeRef.current = now;
   };
 
   // 엔터 키 처리
@@ -249,102 +190,18 @@ export function ChatInterface({
     });
   };
 
-  // 스크롤을 맨 아래로 이동하는 함수
-  const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-    }
-  }, []);
-
-  // 채팅창이 처음 열리거나 메시지가 로드된 후 스크롤을 하단으로 이동
+  // 채팅창이 열리거나 메시지가 업데이트될 때 스크롤 처리
   useEffect(() => {
     if (isOpen && !isLoading && messages.length > 0) {
-      console.log('[ChatInterface] 채팅창 열림/메시지 로드 완료, 스크롤 조정');
-      // 메시지가 로드된 직후 항상 스크롤을 맨 아래로 이동
       requestAnimationFrame(() => {
         scrollToBottom();
       });
       
-      // 메시지 읽음 처리
-      markMessagesAsRead();
-    }
-  }, [isOpen, isLoading, messages, scrollToBottom, markMessagesAsRead]);
-
-  // 채팅창이 열려있는 상태에서 주기적으로 메시지 확인 및 읽음 처리
-  useEffect(() => {
-    if (isOpen) {
-      console.log('[ChatInterface] 주기적 메시지 확인 타이머 설정');
-      
-      // 현재 읽지 않은 메시지 수로 ref 업데이트
-      lastUnreadCountRef.current = messages.filter(msg => !msg.isMine && !msg.isRead).length;
-      
-      // 주기적으로 메시지 확인 및 읽음 처리 (15초로 늘림)
-      const checkInterval = setInterval(() => {
-        // 현재 읽지 않은 메시지 수 계산
-        const currentUnreadCount = messages.filter(msg => !msg.isMine && !msg.isRead).length;
-        
-        // 읽지 않은 메시지 수가 변경되었을 때만 로그 출력 및 처리
-        if (currentUnreadCount > 0 && currentUnreadCount !== lastUnreadCountRef.current) {
-          console.log('[ChatInterface] 읽지 않은 메시지 발견, 읽음 처리 실행');
-          markMessagesAsRead();
-          // 마지막으로 확인한 읽지 않은 메시지 수 업데이트
-          lastUnreadCountRef.current = currentUnreadCount;
-        }
-      }, 15000); // 15초마다 확인으로 변경
-      
-      return () => {
-        console.log('[ChatInterface] 주기적 메시지 확인 타이머 정리');
-        clearInterval(checkInterval);
-      };
-    }
-  }, [isOpen, messages, markMessagesAsRead]);
-
-  // 메시지 목록이 변경되면 스크롤 위치를 조정합니다
-  useEffect(() => {
-    // 새 메시지가 추가된 경우에만 스크롤 처리
-    if (messages.length > prevMessagesLengthRef.current) {
-      console.log('[ChatInterface] 새 메시지 감지, 총 메시지 수:', messages.length);
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
-      
-      // 새 메시지가 추가되었을 때 읽음 처리
-      markMessagesAsRead();
-    }
-    
-    // 현재 메시지 수 업데이트
-    prevMessagesLengthRef.current = messages.length;
-  }, [messages, scrollToBottom, markMessagesAsRead]);
-
-  // 글로벌 스크롤 이벤트 리스너 추가
-  useEffect(() => {
-    // 커스텀 이벤트 타입 정의
-    type ScrollEventDetail = {
-      smooth?: boolean;
-    };
-
-    const handleScrollToBottom = (e: Event) => {
-      if (messagesEndRef.current) {
-        // 타입 캐스팅
-        const customEvent = e as CustomEvent<ScrollEventDetail>;
-        const smooth = customEvent.detail?.smooth === true;
-        
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: smooth ? 'smooth' : 'auto',
-          block: 'end'
-        });
+      if (onMarkAsRead) {
+        onMarkAsRead().catch(console.error);
       }
-    };
-
-    window.addEventListener('chat:scrollToBottom', handleScrollToBottom);
-    
-    return () => {
-      window.removeEventListener('chat:scrollToBottom', handleScrollToBottom);
-    };
-  }, []);
-
-  // 채팅창이 닫혀있으면 아무것도 렌더링하지 않음
-  if (!isOpen) return null;
+    }
+  }, [isOpen, isLoading, messages, scrollToBottom, onMarkAsRead]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -378,7 +235,7 @@ export function ChatInterface({
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto p-4 flex flex-col"
         >
-          {isLoading && initialLoading ? (
+          {isLoading ? (
             <div className="flex justify-center items-center h-full">
               <div className="text-gray-500">메시지를 불러오는 중...</div>
             </div>
@@ -425,18 +282,10 @@ export function ChatInterface({
                                     : ''}
                             </span>
                           )}
-                          {/* 읽음 상태 표시 - 로그 추가 */}
-                          {message.isMine && (
-                            console.log('[ChatInterface] 메시지 상태:', {
-                              id: message.id,
-                              isRead: message.isRead,
-                              text: message.text.substring(0, 10)
-                            }),
-                            message.isRead && (
-                              <span className="text-xs text-teal-300 font-medium">
-                                읽음
-                              </span>
-                            )
+                          {message.isMine && message.isRead && (
+                            <span className="text-xs text-teal-300 font-medium">
+                              읽음
+                            </span>
                           )}
                           <span
                             className={`text-xs ${

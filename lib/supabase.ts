@@ -1,435 +1,270 @@
 // lib/supabase.ts
 'use client';
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase.types';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
+import type { Session } from '@supabase/supabase-js';
 
-// 브라우저용 Supabase 클라이언트 싱글톤
-let browserClient: ReturnType<typeof createClientComponentClient> | null = null;
-let currentSubscription: { unsubscribe: () => void } | null = null;
-let isInitialized = false;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// PKCE 관련 스토리지 키
-const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
-const PKCE_STATE_KEY = 'supabase.auth.state';
-const PKCE_VERIFIER_BACKUP_KEY = 'supabase.auth.code_verifier.backup';
-const PKCE_AUTH_CODE_KEY = 'supabase.auth.code';
-const PKCE_TIMESTAMP_KEY = 'supabase.auth.timestamp';
-const PKCE_EXCHANGE_LOCK_KEY = 'supabase.auth.exchange_lock';
-const PKCE_AUTH_COMPLETE_KEY = 'supabase.auth.complete';
-const PKCE_SESSION_KEY = 'supabase.auth.session';
-const PKCE_INIT_KEY = 'supabase.auth.initialized';
-
-// 세션 변경 이벤트를 위한 커스텀 이벤트
-const SESSION_CHANGE_EVENT = 'supabase.session.change';
-
-// getSupabaseClient 함수 추가
-export const getSupabaseClient = () => {
-  if (typeof window === 'undefined') return null;
-  return createBrowserClient();
+// 클라이언트 사이드에서만 실행되는지 확인하는 함수
+const isClient = () => {
+  return typeof window !== 'undefined';
 };
-console.log('SUPABASE URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log('SUPABASE KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-// PKCE 초기화 함수
-const initializePKCE = () => {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    const isInit = sessionStorage.getItem(PKCE_INIT_KEY);
-    if (isInit === 'true') {
-      //console.log('🔄 PKCE already initialized');
+
+// Supabase 클라이언트 타입
+type SupabaseClientType = ReturnType<typeof createClient<Database>>;
+
+class SupabaseClient {
+  private static instance: SupabaseClientType | null = null;
+  private static subscriptions: Map<string, { channel: any; count: number }> = new Map();
+
+  private constructor() {}
+
+  public static getInstance(): SupabaseClientType {
+    if (!SupabaseClient.instance) {
+      SupabaseClient.instance = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        },
+        realtime: {
+          params: {
+            eventsPerSecond: 10
+          }
+        }
+      });
+
+      // 연결 상태 모니터링
+      SupabaseClient.instance.auth.onAuthStateChange((event, session) => {
+        console.log('Supabase auth state changed:', event, session?.user?.id);
+      });
+    }
+
+    return SupabaseClient.instance;
+  }
+
+  // 채널 구독 관리
+  public static subscribeToChannel(channelId: string, callback: (channel: any) => void): void {
+    const existing = this.subscriptions.get(channelId);
+    if (existing) {
+      existing.count++;
+      callback(existing.channel);
       return;
     }
 
-    // 기존 verifier 확인
-    const existingVerifier = sessionStorage.getItem(PKCE_VERIFIER_KEY) || 
-                           localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY);
+    const channel = this.getInstance()
+      .channel(channelId)
+      .on('presence', { event: 'sync' }, () => {
+        console.log('Channel presence sync:', channelId);
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('Channel presence join:', key, newPresences);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('Channel presence leave:', key, leftPresences);
+      })
+      .subscribe((status: string) => {
+        console.log(`Channel ${channelId} status:`, status);
+      });
 
-    if (!existingVerifier) {
-      // 새로운 verifier 생성 (실제 구현에서는 암호학적으로 안전한 방법 사용)
-      const newVerifier = generateCodeVerifier();
-      console.log('🔑 Generated new verifier');
-      
-      savePKCEState(newVerifier, null);
-    }
-
-    sessionStorage.setItem(PKCE_INIT_KEY, 'true');
-    console.log('✅ PKCE initialized');
-  } catch (error) {
-    console.error('❌ PKCE initialization failed:', error);
+    this.subscriptions.set(channelId, { channel, count: 1 });
+    callback(channel);
   }
-};
 
-// 코드 검증기 생성 함수
-const generateCodeVerifier = () => {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return base64URLEncode(array);
-};
+  // 채널 구독 해제
+  public static unsubscribeFromChannel(channelId: string): void {
+    const subscription = this.subscriptions.get(channelId);
+    if (!subscription) return;
 
-// Base64URL 인코딩 함수
-const base64URLEncode = (buffer: Uint8Array) => {
-  return btoa(String.fromCharCode.apply(null, Array.from(buffer)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-};
-
-// PKCE 상태 저장 함수
-const savePKCEState = (verifier: string | null, state: string | null, authCode?: string | null) => {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    const timestamp = Date.now().toString();
-    
-    if (verifier) {
-      // verifier가 유효한 형식인지 검증
-      if (verifier.length < 43 || verifier.length > 128) {
-        console.error('❌ Invalid verifier length:', verifier.length);
-        return;
-      }
-      
-      // base64url 형식 검증
-      if (!/^[A-Za-z0-9_-]+$/.test(verifier)) {
-        console.error('❌ Invalid verifier format');
-        return;
-      }
-
-      // 이미 교환이 완료된 verifier인지 확인
-      const sessionData = sessionStorage.getItem(PKCE_SESSION_KEY);
-      if (sessionData) {
-        try {
-          const { usedVerifier } = JSON.parse(sessionData);
-          if (usedVerifier === verifier) {
-            console.log('⚠️ Verifier already used, skipping save');
-            return;
-          }
-        } catch (e) {
-          console.error('Session data parse error:', e);
-          sessionStorage.removeItem(PKCE_SESSION_KEY);
-        }
-      }
-
-      // 모든 스토리지에 verifier 저장
-      try {
-        sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-        localStorage.setItem(PKCE_VERIFIER_BACKUP_KEY, verifier);
-        localStorage.setItem(PKCE_TIMESTAMP_KEY, timestamp);
-        
-        // 쿠키에도 백업 (HttpOnly 아님)
-        document.cookie = `${PKCE_VERIFIER_KEY}=${verifier}; path=/; max-age=300; SameSite=Strict`; // 5분
-        
-        console.log('✅ Verifier saved to all storages');
-      } catch (e) {
-        console.error('Failed to save verifier to some storages:', e);
-      }
+    subscription.count--;
+    if (subscription.count <= 0) {
+      subscription.channel.unsubscribe();
+      this.subscriptions.delete(channelId);
     }
-    
-    if (state) {
-      sessionStorage.setItem(PKCE_STATE_KEY, state);
-    }
-    
-    if (authCode) {
-      // auth code가 유효한 UUID 형식인지 검증
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(authCode)) {
-        console.error('❌ Invalid auth code format');
-        return;
-      }
-
-      // 이미 사용된 auth code인지 확인
-      const sessionData = sessionStorage.getItem(PKCE_SESSION_KEY);
-      if (sessionData) {
-        const { usedAuthCode } = JSON.parse(sessionData);
-        if (usedAuthCode === authCode) {
-          console.log('⚠️ Auth code already used, skipping save');
-          return;
-        }
-      }
-
-      sessionStorage.setItem(PKCE_AUTH_CODE_KEY, authCode);
-    }
-  } catch (error) {
-    console.error('PKCE 상태 저장 중 오류:', error);
   }
-};
 
-// PKCE 상태 복원 함수
-const restorePKCEState = () => {
-  if (typeof window === 'undefined') return null;
-  
-  try {
-    // 모든 스토리지에서 verifier 찾기
-    let verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
-    
-    // sessionStorage에 없으면 localStorage 확인
-    if (!verifier) {
-      verifier = localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY);
-      if (verifier) {
-        console.log('♻️ Restored verifier from localStorage');
-        sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-      }
-    }
-    
-    // 아직도 없으면 쿠키 확인
-    if (!verifier) {
-      const cookies = document.cookie.split(';');
-      const verifierCookie = cookies.find(c => c.trim().startsWith(`${PKCE_VERIFIER_KEY}=`));
-      if (verifierCookie) {
-        verifier = verifierCookie.split('=')[1].trim();
-        console.log('♻️ Restored verifier from cookie');
-        sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-        localStorage.setItem(PKCE_VERIFIER_BACKUP_KEY, verifier);
-      }
-    }
-
-    const state = sessionStorage.getItem(PKCE_STATE_KEY);
-    const authCode = sessionStorage.getItem(PKCE_AUTH_CODE_KEY);
-    const exchangeLock = sessionStorage.getItem(PKCE_EXCHANGE_LOCK_KEY);
-    
-    // verifier가 없으면 백업에서 복원
-    if (!verifier) {
-      verifier = localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY);
-      const timestamp = localStorage.getItem(PKCE_TIMESTAMP_KEY);
-      
-      if (verifier && timestamp) {
-        const storedTime = parseInt(timestamp, 10);
-        const now = Date.now();
-        if (now - storedTime > 5 * 60 * 1000) { // 5분 초과
-          console.log('⚠️ Backup verifier expired');
-          localStorage.removeItem(PKCE_VERIFIER_BACKUP_KEY);
-          localStorage.removeItem(PKCE_TIMESTAMP_KEY);
-          verifier = null;
-        } else {
-          console.log('♻️ Restored verifier from backup');
-          sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-        }
-      }
-    }
-
-    // 상태 유효성 검증
-    if (verifier && !/^[A-Za-z0-9_-]+$/.test(verifier)) {
-      console.error('❌ Invalid verifier format in storage');
-      verifier = null;
-    }
-    
-    if (authCode && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(authCode)) {
-      console.error('❌ Invalid auth code format in storage');
-      sessionStorage.removeItem(PKCE_AUTH_CODE_KEY);
-      return { verifier, state, authCode: null, exchangeLock };
-    }
-
-    return { verifier, state, authCode, exchangeLock };
-  } catch (error) {
-    console.error('PKCE 상태 복원 중 오류:', error);
-    return { verifier: null, state: null, authCode: null, exchangeLock: null };
+  // 모든 채널 구독 해제
+  public static unsubscribeAll(): void {
+    this.subscriptions.forEach(({ channel }) => {
+      channel.unsubscribe();
+    });
+    this.subscriptions.clear();
   }
-};
 
-// PKCE 상태 검증 함수
-const validatePKCEState = () => {
-  const state = restorePKCEState();
-  if (!state.verifier) {
-    console.error('❌ Missing code_verifier in both storages');
-    return false;
-  }
-  return true;
-};
-
-// PKCE 상태 정리 함수
-const cleanupPKCEState = (preserveVerifier = false, verifier?: string | null, authCode?: string | null) => {
-  try {
-    // 성공적으로 사용된 verifier와 auth code 기록
-    if (verifier && authCode) {
-      sessionStorage.setItem(PKCE_SESSION_KEY, JSON.stringify({
-        usedVerifier: verifier,
-        usedAuthCode: authCode,
-        timestamp: Date.now()
-      }));
-    }
-
-    if (!preserveVerifier) {
-      sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-      localStorage.removeItem(PKCE_VERIFIER_BACKUP_KEY);
-      localStorage.removeItem(PKCE_TIMESTAMP_KEY);
-    }
-    sessionStorage.removeItem(PKCE_STATE_KEY);
-    sessionStorage.removeItem(PKCE_AUTH_CODE_KEY);
-    sessionStorage.removeItem(PKCE_EXCHANGE_LOCK_KEY);
-    sessionStorage.setItem(PKCE_AUTH_COMPLETE_KEY, 'true');
-  } catch (error) {
-    console.error('PKCE 상태 정리 중 오류:', error);
-  }
-};
-
-// PKCE 교환 잠금 설정
-const setExchangeLock = () => {
-  try {
-    sessionStorage.setItem(PKCE_EXCHANGE_LOCK_KEY, Date.now().toString());
-    console.log('🔒 Set exchange lock');
-  } catch (error) {
-    console.error('교환 잠금 설정 중 오류:', error);
-  }
-};
-
-// PKCE 교환 잠금 확인
-const checkExchangeLock = () => {
-  try {
-    const lock = sessionStorage.getItem(PKCE_EXCHANGE_LOCK_KEY);
-    if (!lock) return false;
-    
-    const lockTime = parseInt(lock, 10);
-    const now = Date.now();
-    // 10초 이상 지난 잠금은 해제
-    if (now - lockTime > 10000) {
-      sessionStorage.removeItem(PKCE_EXCHANGE_LOCK_KEY);
+  // 연결 상태 확인
+  public static async checkConnection(): Promise<boolean> {
+    try {
+      const { error } = await this.getInstance().from('health_check').select('count').single();
+      return !error;
+    } catch (error) {
+      console.error('Supabase connection check failed:', error);
       return false;
     }
-    return true;
-  } catch (error) {
-    console.error('교환 잠금 확인 중 오류:', error);
-    return false;
   }
-};
 
-const createBrowserClient = () => {
-  if (typeof window === 'undefined') return null;
-  
-  if (!browserClient) {
-    // PKCE 초기화 확인
-    if (!isInitialized) {
-      initializePKCE();
-      isInitialized = true;
+  // 클라이언트 재설정
+  public static reset(): void {
+    this.unsubscribeAll();
+    this.instance = null;
+  }
+}
+
+class SupabaseService {
+  private static instance: SupabaseService;
+  private client: SupabaseClientType;
+  private authClient: SupabaseClientType | null = null;
+
+  private constructor() {
+    // 기본 클라이언트 생성
+    this.client = SupabaseClient.getInstance();
+  }
+
+  public static getInstance(): SupabaseService {
+    if (!SupabaseService.instance) {
+      SupabaseService.instance = new SupabaseService();
     }
+    return SupabaseService.instance;
+  }
 
-    const { verifier, state, authCode } = restorePKCEState();
+  // 기본 클라이언트 가져오기
+  public getClient(): SupabaseClientType {
+    return this.client;
+  }
+
+  // 세션 정보 가져오기
+  private async getStoredSession() {
+    if (!isClient()) return null;
     
-    // verifier 상태 로깅
-    // console.log('🔍 PKCE State:', {
-    //   hasVerifier: !!verifier,
-    //   hasState: !!state,
-    //   hasAuthCode: !!authCode,
-    //   sessionVerifier: !!sessionStorage.getItem(PKCE_VERIFIER_KEY),
-    //   localVerifier: !!localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY)
-    // });
-    
-    // 이미 사용된 verifier/auth code 조합인지 확인
-    const sessionData = sessionStorage.getItem(PKCE_SESSION_KEY);
-    let isUsedCombination = false;
-    
-    if (sessionData && verifier && authCode) {
-      try {
-        const { usedVerifier, usedAuthCode } = JSON.parse(sessionData);
-        isUsedCombination = usedVerifier === verifier && usedAuthCode === authCode;
-      } catch (e) {
-        console.error('Session data parse error:', e);
-        sessionStorage.removeItem(PKCE_SESSION_KEY);
-      }
-    }
+    try {
+      // 먼저 Supabase의 내장 세션 확인
+      const { data: { session }, error } = await this.client.auth.getSession();
+      if (session) return session;
 
-    // PKCE 상태 검증 (이미 사용된 조합이 아닌 경우에만)
-    if (!isUsedCombination && verifier && authCode) {
-      console.log('🔍 New PKCE state detected, proceeding with validation');
-    }
-    
-    // 클라이언트 생성
-    browserClient = createClientComponentClient({
-      isSingleton: true
-    });
-
-    // 이전 구독 해제
-    if (currentSubscription) {
-      currentSubscription.unsubscribe();
-    }
-
-    // 이벤트 리스너 설정
-    const lastEventTimestamp: { [key: string]: number } = {};
-    const DEBOUNCE_INTERVAL = 100; // 100ms
-
-    const { data: { subscription } } = browserClient.auth.onAuthStateChange(async (event, session) => {
-      const now = Date.now();
-      const lastTime = lastEventTimestamp[event] || 0;
-
-      if (now - lastTime < DEBOUNCE_INTERVAL) {
-        return;
-      }
-
-      lastEventTimestamp[event] = now;
-
-      if (event === 'SIGNED_IN') {
-        console.log('✅ 로그인 성공');
-        if (session) {
-          console.log('세션 정보:', session);
-          
-          // 세션 데이터 저장
-          const sessionData = {
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            expires_at: session.expires_at,
-            provider_token: session.provider_token,
-            provider_refresh_token: session.provider_refresh_token
-          };
-          
-          try {
-            // localStorage에 저장
-            localStorage.setItem('supabase.auth.token', JSON.stringify(sessionData));
-            
-            // 커스텀 이벤트 발생
-            const sessionEvent = new CustomEvent(SESSION_CHANGE_EVENT, {
-              detail: {
-                event: 'SIGNED_IN',
-                session: session
-              }
-            });
-            window.dispatchEvent(sessionEvent);
-            
-            // 성공한 verifier/auth code 조합 기록
-            cleanupPKCEState(true, verifier, authCode);
-          } catch (error) {
-            console.error('세션 저장 중 오류:', error);
-          }
+      // 내장 세션이 없다면 localStorage 확인
+      const localSession = localStorage.getItem('session');
+      if (localSession) {
+        const parsedSession = JSON.parse(localSession);
+        // 세션이 있으면 Supabase 클라이언트에 설정
+        if (parsedSession?.access_token) {
+          await this.client.auth.setSession({
+            access_token: parsedSession.access_token,
+            refresh_token: parsedSession.refresh_token,
+          });
+          // 새로운 세션 반환
+          const { data: { session: newSession } } = await this.client.auth.getSession();
+          return newSession;
         }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('❌ 로그아웃됨');
-        // localStorage에서 세션 제거
-        localStorage.removeItem('supabase.auth.token');
-        
-        // 커스텀 이벤트 발생
-        const sessionEvent = new CustomEvent(SESSION_CHANGE_EVENT, {
-          detail: {
-            event: 'SIGNED_OUT',
-            session: null
-          }
-        });
-        window.dispatchEvent(sessionEvent);
-        
-        cleanupPKCEState();
-        sessionStorage.removeItem(PKCE_SESSION_KEY);
-        sessionStorage.removeItem(PKCE_AUTH_COMPLETE_KEY);
       }
-    });
-
-    currentSubscription = subscription;
+      
+      return null;
+    } catch (error) {
+      console.error('세션 정보를 불러오는 중 오류 발생:', error);
+      return null;
+    }
   }
 
-  return browserClient;
-};
+  // 인증된 클라이언트 가져오기
+  public async getAuthClient(): Promise<SupabaseClientType> {
+    if (!isClient()) {
+      console.warn('getAuthClient는 클라이언트 사이드에서만 사용할 수 있습니다.');
+      return this.client;
+    }
 
-// 세션 이벤트 리스너 등록 함수
-const onSessionChange = (callback: (session: any) => void) => {
-  if (typeof window === 'undefined') return () => {};
-  
-  const handler = (event: Event) => {
-    const customEvent = event as CustomEvent;
-    callback(customEvent.detail);
-  };
-  
-  window.addEventListener(SESSION_CHANGE_EVENT, handler);
-  return () => window.removeEventListener(SESSION_CHANGE_EVENT, handler);
-};
+    try {
+      const session = await this.getStoredSession();
+      
+      // 이미 인증된 클라이언트가 있으면 재사용
+      if (this.authClient) {
+        return this.authClient;
+      }
 
-// 기본 클라이언트 인스턴스 생성
-export const supabase = createBrowserClient();
+      // 세션이 있으면 인증된 클라이언트 생성
+      if (session) {
+        await this.client.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        });
+        this.authClient = this.client;
+        return this.authClient;
+      }
 
-// Exports
-export { createBrowserClient, onSessionChange };
-export default supabase;
+      // 세션이 없으면 기본 클라이언트 반환
+      console.debug('인증되지 않은 상태입니다. 기본 클라이언트를 사용합니다.');
+      return this.client;
+    } catch (error) {
+      console.error('인증된 클라이언트 초기화 중 오류 발생:', error);
+      return this.client;
+    }
+  }
+
+  // 세션 이벤트 리스너 등록
+  public onSessionChange(callback: (event: { event: string; session: Session | null }) => void) {
+    try {
+      const {
+        data: { subscription },
+      } = this.client.auth.onAuthStateChange((event, session) => {
+        //console.log('[세션 변경 감지]', event, session?.user?.id);
+        callback({ event, session });
+      });
+
+      return () => {
+        console.log('[세션 리스너 정리]');
+        subscription?.unsubscribe();
+      };
+    } catch (error) {
+      console.error('[세션 리스너 등록 중 오류]', error);
+      return () => {};
+    }
+  }
+
+  // 세션 갱신
+  public async refreshSession() {
+    try {
+      const { data: { session }, error } = await this.client.auth.getSession();
+      if (error) throw error;
+      
+      if (!session && isClient()) {
+        // 세션이 없으면 로컬스토리지의 사용자 정보로 anonymous 세션 생성
+        const localUser = localStorage.getItem('user');
+        if (localUser) {
+          const user = JSON.parse(localUser);
+          const { data: { session: anonSession }, error: signInError } = 
+            await this.client.auth.signInWithPassword({
+              email: user.email,
+              password: user.id, // 임시 비밀번호로 ID 사용
+            });
+            
+          if (signInError) throw signInError;
+          return anonSession;
+        }
+      }
+      
+      return session;
+    } catch (error) {
+      console.error('[세션 갱신 실패]', error);
+      return null;
+    }
+  }
+}
+
+// 싱글톤 인스턴스 export
+export const supabaseService = SupabaseService.getInstance();
+
+// 편의를 위한 기본 클라이언트 export
+export const supabase = supabaseService.getClient();
+
+// 인증된 클라이언트를 가져오는 함수 export
+export const getSupabaseClient = () => supabaseService.getAuthClient();
+
+// 편의를 위한 함수
+export const subscribeToChannel = (channelId: string, callback: (channel: any) => void) => 
+  SupabaseClient.subscribeToChannel(channelId, callback);
+export const unsubscribeFromChannel = (channelId: string) => 
+  SupabaseClient.unsubscribeFromChannel(channelId);
+export const checkSupabaseConnection = () => 
+  SupabaseClient.checkConnection();
+export const resetSupabaseClient = () => 
+  SupabaseClient.reset();

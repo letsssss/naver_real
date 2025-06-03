@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 // import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase.types';
 
@@ -18,41 +18,24 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
-    // Authorization 헤더 확인
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      logDebug('❌ Authorization 헤더 없음');
-      return NextResponse.json(
-        { error: '인증 토큰이 필요합니다.' },
-        { status: 401 }
-      );
-    }
-
-    // 쿠키 기반 Supabase 클라이언트 생성
+    // 쿠키 인스턴스 가져오기
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+    
+    // 쿠키 기반 Supabase 클라이언트 생성
+    const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
     
     // 세션 확인 (쿠키에서 자동으로 세션 읽음)
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     // 인증 실패 처리
-    if (sessionError) {
-      logDebug('❌ 세션 확인 오류:', sessionError.message);
+    if (authError || !user) {
+      logDebug('❌ 인증 실패:', authError?.message);
       return NextResponse.json(
-        { error: '세션이 만료되었습니다. 다시 로그인해주세요.' },
-        { status: 401 }
-      );
-    }
-
-    if (!session) {
-      logDebug('❌ 세션 없음');
-      return NextResponse.json(
-        { error: '로그인이 필요합니다.' },
+        { error: '인증에 실패했습니다. 다시 로그인해주세요.' },
         { status: 401 }
       );
     }
     
-    const user = session.user;
     logDebug('✅ 인증 성공: 사용자 ID', user.id);
 
     // 요청 본문에서 주문 번호 가져오기
@@ -71,16 +54,6 @@ export async function POST(request: NextRequest) {
     }
 
     logDebug('주문 번호:', finalOrderNumber);
-
-    // 구매 내역 확인 전에 세션 갱신 시도
-    try {
-      const { error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) {
-        logDebug('⚠️ 세션 갱신 실패:', refreshError.message);
-      }
-    } catch (refreshError) {
-      logDebug('⚠️ 세션 갱신 중 오류:', refreshError);
-    }
 
     // 구매 내역 확인
     const { data: purchase, error: purchaseError } = await supabase
@@ -133,15 +106,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 새 채팅방 생성
-    const { data: newRoom, error: createError } = await supabase
+    const roomId = crypto.randomUUID(); // nanoid() 대신 표준 UUID 생성
+    const { error: createError } = await supabase
       .from('rooms')
       .insert({
+        id: roomId,
         order_number: finalOrderNumber,
         buyer_id: purchase.buyer_id,
         seller_id: purchase.seller_id,
-      })
-      .select()
-      .single();
+      });
 
     if (createError) {
       logDebug('❌ 채팅방 생성 오류:', createError.message);
@@ -151,22 +124,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 채팅방 참가자 추가
-    const { error: participantsError } = await supabase
-      .from('room_participants')
-      .insert([
-        { room_id: newRoom.id, user_id: purchase.buyer_id },
-        { room_id: newRoom.id, user_id: purchase.seller_id }
-      ]);
-
-    if (participantsError) {
-      logDebug('⚠️ 참가자 추가 오류:', participantsError.message);
-      // 참가자 추가 실패는 치명적이지 않으므로 계속 진행
-    }
-
-    logDebug('✅ 새 채팅방 생성됨:', newRoom.id);
+    logDebug('✅ 새 채팅방 생성됨:', roomId);
     return NextResponse.json(
-      { roomId: newRoom.id },
+      { roomId },
       { status: 201 }
     );
 

@@ -1,7 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+'use client';
+
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Database } from '@/types/supabase.types';
-import { createBrowserClient } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
+
+type ChannelStatus = 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED' | 'SUBSCRIBE_ERROR' | 'joined' | 'joining' | string;
+
+interface RetryConfig {
+  maxRetries: number;
+  retryInterval: number;
+  currentRetry: number;
+}
 
 export function useRealtimeMessages(
   roomId: string | null,
@@ -10,93 +19,210 @@ export function useRealtimeMessages(
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // 채널 참조를 저장하기 위한 ref
+  // refs for managing subscription state
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const subscribedRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const currentRoomIdRef = useRef<string | null>(null);
+  const isSubscribingRef = useRef(false);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const retryConfigRef = useRef<RetryConfig>({
+    maxRetries: 5,
+    retryInterval: 2000,
+    currentRetry: 0
+  });
 
-  useEffect(() => {
-    if (!roomId) {
-      console.log(`[📡 실시간 구독] roomId가 없어서 구독하지 않음`);
+  // Cleanup function for subscription
+  const cleanupSubscription = useCallback(async () => {
+    try {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = undefined;
+      }
+
+      const channel = channelRef.current;
+      if (!channel) {
+        return;
+      }
+
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        return;
+      }
+
+      console.log(`[Cleanup] Starting cleanup for room: ${currentRoomIdRef.current}`);
+      
+      try {
+        console.log(`[Cleanup] Unsubscribing from room: ${currentRoomIdRef.current}`);
+        await channel.unsubscribe();
+      } catch (unsubError) {
+        console.error('[Error] Failed to unsubscribe:', unsubError);
+      }
+
+      try {
+        console.log(`[Cleanup] Removing channel for room: ${currentRoomIdRef.current}`);
+        await supabase.removeChannel(channel);
+      } catch (removeError) {
+        console.error('[Error] Failed to remove channel:', removeError);
+      }
+    } catch (error) {
+      console.error('[Error] Failed during cleanup:', error);
+    } finally {
+      channelRef.current = null;
+      currentRoomIdRef.current = null;
+      setIsConnected(false);
+      console.log('[Cleanup] Cleanup completed');
+    }
+  }, []);
+
+  const attemptReconnection = useCallback(async () => {
+    if (!isMountedRef.current || !roomId) return;
+
+    const { maxRetries, retryInterval, currentRetry } = retryConfigRef.current;
+
+    if (currentRetry >= maxRetries) {
+      console.log('[Reconnect] Max retries reached');
+      setError('연결을 재시도할 수 없습니다.');
       return;
     }
 
-    console.log(`[📡 실시간 구독 시작] roomId: ${roomId}`);
-    setError(null);
+    console.log(`[Reconnect] Attempting reconnection (${currentRetry + 1}/${maxRetries})`);
+    
+    try {
+      await cleanupSubscription();
+      await initializeSubscription(true);
+      retryConfigRef.current.currentRetry = 0;
+    } catch (error) {
+      console.error('[Reconnect] Failed:', error);
+      retryConfigRef.current.currentRetry++;
+      
+      reconnectTimeoutRef.current = setTimeout(() => {
+        attemptReconnection();
+      }, retryInterval);
+    }
+  }, [roomId, cleanupSubscription]);
 
-    // 기존 채널이 있다면 정리
-    if (channelRef.current) {
-      console.log(`[📡 이전 채널 정리] 새 구독을 위해 정리`);
-      createBrowserClient().removeChannel(channelRef.current);
-      channelRef.current = null;
-      subscribedRef.current = false;
+  // Initialize subscription
+  const initializeSubscription = useCallback(async (isRetry: boolean = false) => {
+    if (!roomId || !isMountedRef.current || isSubscribingRef.current) {
+      console.log('[Info] Skipping subscription initialization:', {
+        roomId: !!roomId,
+        isMounted: isMountedRef.current,
+        isSubscribing: isSubscribingRef.current
+      });
+      return;
     }
 
-    // 새 채널 구독
-    const channel = createBrowserClient()
-      .channel(`room_messages:${roomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
+    if (!isRetry && channelRef.current && currentRoomIdRef.current === roomId && isConnected) {
+      console.log(`[Info] Already subscribed to room: ${roomId}`);
+      return;
+    }
+
+    try {
+      isSubscribingRef.current = true;
+      console.log(`[Info] Initializing subscription for room: ${roomId}`);
+
+      if (channelRef.current || currentRoomIdRef.current) {
+        console.log('[Info] Cleaning up existing subscription before initializing new one');
+        await cleanupSubscription();
+      }
+
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not available');
+      }
+
+      if (!isMountedRef.current) {
+        console.log('[Info] Component unmounted during initialization');
+        return;
+      }
+
+      // Create new channel
+      const channel = supabase.channel(`room:${roomId}`, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: '' },
+        },
+      });
+
+      // Set up event handlers before subscribing
+      channel
+        .on('postgres_changes', {
+          event: '*',
           schema: 'public',
           table: 'messages',
           filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          console.log(`[📡 새 메시지 수신] roomId: ${roomId}`, payload);
-          
-          if (onNewMessage && payload.new) {
-            onNewMessage(payload.new);
+        }, (payload) => {
+          if (!isMountedRef.current) return;
+          console.log(`[Message] New message in room ${roomId}:`, payload);
+          if (payload.eventType === 'INSERT') {
+            onNewMessage?.(payload.new);
           }
-        }
-      )
-      .on('presence', { event: 'sync' }, () => {
-        console.log(`[📡 Presence 동기화] roomId: ${roomId}`);
-      })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log(`[📡 사용자 입장] roomId: ${roomId}, key: ${key}`, newPresences);
-      })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log(`[📡 사용자 퇴장] roomId: ${roomId}, key: ${key}`, leftPresences);
-      })
-      .subscribe((status) => {
-        console.log(`[📡 구독 상태 변경] roomId: ${roomId}, status: ${status}`);
+        })
+        .on('system', { event: 'disconnect' }, () => {
+          console.log('[System] Disconnected');
+          setIsConnected(false);
+          if (isMountedRef.current) {
+            attemptReconnection();
+          }
+        });
+
+      // Store the channel reference
+      channelRef.current = channel;
+      
+      // Subscribe to the channel
+      const status = await channel.subscribe((status: string) => {
+        console.log(`[Status] Subscription status: ${status}`);
         
         if (status === 'SUBSCRIBED') {
+          console.log(`[Success] Subscribed to room: ${roomId}`);
           setIsConnected(true);
-          subscribedRef.current = true;
-          console.log(`[📡 실시간 구독 성공] roomId: ${roomId}`);
-        } else if (status === 'CHANNEL_ERROR') {
-          setError('실시간 연결에 실패했습니다');
-          setIsConnected(false);
-          subscribedRef.current = false;
-          console.error(`[📡 실시간 구독 실패] roomId: ${roomId}`);
+          currentRoomIdRef.current = roomId;
+          setError(null);
+        } else if (status === 'CHANNEL_ERROR' || status === 'SUBSCRIBE_ERROR') {
+          console.error(`[Error] Channel error for room: ${roomId}`);
+          setError('Connection error occurred');
+          attemptReconnection();
         } else if (status === 'TIMED_OUT') {
-          setError('실시간 연결이 시간 초과되었습니다');
-          setIsConnected(false);
-          subscribedRef.current = false;
-          console.error(`[📡 실시간 구독 시간 초과] roomId: ${roomId}`);
+          console.error(`[Error] Connection timed out for room: ${roomId}`);
+          setError('Connection timed out');
+          attemptReconnection();
         } else if (status === 'CLOSED') {
+          console.log(`[Info] Channel closed for room: ${roomId}`);
           setIsConnected(false);
-          subscribedRef.current = false;
-          console.log(`[📡 실시간 구독 종료] roomId: ${roomId}`);
+          if (isMountedRef.current) {
+            attemptReconnection();
+          }
         }
       });
 
-    // 채널 참조 저장
-    channelRef.current = channel;
-
-    // 정리 함수
-    return () => {
-      if (channelRef.current) {
-        console.log(`[📡 실시간 구독 정리] roomId: ${roomId}`);
-        createBrowserClient().removeChannel(channelRef.current);
-        channelRef.current = null;
-        subscribedRef.current = false;
+      if (!status) {
+        throw new Error('Failed to subscribe to channel');
       }
-      setIsConnected(false);
+
+    } catch (error) {
+      console.error('[Error] Subscription initialization failed:', error);
+      setError(error instanceof Error ? error.message : 'Subscription failed');
+      await cleanupSubscription();
+      attemptReconnection();
+    } finally {
+      isSubscribingRef.current = false;
+    }
+  }, [roomId, onNewMessage, isConnected, cleanupSubscription, attemptReconnection]);
+
+  // Handle component mount/unmount and roomId changes
+  useEffect(() => {
+    isMountedRef.current = true;
+    retryConfigRef.current.currentRetry = 0;
+
+    if (roomId !== currentRoomIdRef.current) {
+      initializeSubscription();
+    }
+
+    return () => {
+      isMountedRef.current = false;
+      cleanupSubscription();
     };
-  }, [roomId, onNewMessage]);
+  }, [roomId, initializeSubscription, cleanupSubscription]);
 
   return { isConnected, error };
 } 

@@ -83,73 +83,11 @@ export const getAuthToken = (): string => {
   if (typeof window === 'undefined') return '';
 
   let authToken = '';
-
-  console.log('🔍 토큰 검색 시작...');
-
-  // 1. Supabase localStorage 토큰 확인 (sb-xxx-auth-token 형태)
-  const supabaseKey = Object.keys(localStorage).find(key =>
-    key.startsWith('sb-') && key.endsWith('-auth-token')
-  );
-
-  if (supabaseKey) {
-    try {
-      const supabaseData = localStorage.getItem(supabaseKey);
-      console.log(`🔍 ${supabaseKey} 내용:`, supabaseData?.substring(0, 100) + '...');
-      
-      if (supabaseData) {
-        // JSON 객체인지 확인
-        if (supabaseData.startsWith('{')) {
-          const parsed = JSON.parse(supabaseData);
-          if (parsed.access_token && parsed.access_token.startsWith('eyJ')) {
-            authToken = parsed.access_token;
-            // 토큰을 별도로 저장
-            localStorage.setItem('supabase.auth.token', authToken);
-            console.log(`✅ ${supabaseKey}에서 access_token 발견`);
-            return authToken;
-          }
-        } else if (supabaseData.startsWith('eyJ')) {
-          // 직접 토큰이 저장된 경우
-          authToken = supabaseData;
-          // 토큰을 별도로 저장
-          localStorage.setItem('supabase.auth.token', authToken);
-          console.log(`✅ ${supabaseKey}에서 직접 토큰 발견`);
-          return authToken;
-        }
-      }
-    } catch (e) {
-      console.error(`❌ ${supabaseKey} 파싱 실패:`, e);
-    }
-  }
-
-  // 2. 이미 저장된 토큰 확인
   const savedToken = localStorage.getItem('supabase.auth.token');
-  if (savedToken && savedToken.startsWith('eyJ')) {
+  if (savedToken) {
     console.log('✅ 저장된 토큰 발견');
     return savedToken;
   }
-
-  // 3. 쿠키에서 토큰 확인
-  if (typeof document !== 'undefined') {
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name && (name.includes('token') || name.includes('auth')) && value) {
-        try {
-          const decodedValue = decodeURIComponent(value);
-          if (decodedValue.startsWith('eyJ')) {
-            authToken = decodedValue;
-            // 토큰을 localStorage에도 저장
-            localStorage.setItem('supabase.auth.token', authToken);
-            console.log(`🍪 쿠키 ${name}에서 토큰 발견`);
-            return authToken;
-          }
-        } catch (e) {
-          console.error(`❌ 쿠키 ${name} 디코딩 실패:`, e);
-        }
-      }
-    }
-  }
-
   console.warn('❌ 유효한 토큰을 찾을 수 없습니다.');
   return '';
 }; 

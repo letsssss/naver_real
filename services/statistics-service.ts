@@ -1,14 +1,14 @@
-import { createBrowserClient } from "@/lib/supabase";
+import { getSupabaseClient, supabase } from "@/lib/supabase";
 
 // 취켓팅 성공률 통계를 가져오는 함수
 export async function fetchTicketingSuccessRate(sellerId?: string): Promise<number | string> {
   try {
-    const supabase = createBrowserClient();
-    
+    const supabaseClient = await getSupabaseClient() || supabase;
+
     // 특정 판매자의 성공률을 요청한 경우
     if (sellerId) {
       // 판매자 페이지와 동일한 방식으로 성공률 조회
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("cancellation_ticketing_stats_view")
         .select("confirmed_count, cancelled_count, cancellation_ticketing_rate")
         .eq("seller_id", sellerId)
@@ -19,7 +19,7 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
         
         // seller_stats 테이블에서 직접 계산 시도
         try {
-          const { data: statsData, error: statsError } = await supabase
+          const { data: statsData, error: statsError } = await supabaseClient
             .from("seller_stats")
             .select("cancellation_ticketing_success, cancellation_ticketing_total")
             .eq("seller_id", sellerId)
@@ -67,8 +67,8 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
     }
     
     // 전체 시스템 성공률 (기존 로직)
-    const { data, error } = await supabase
-      .from("cancellation_ticketing_stats_view") // 실제 거래 통계 뷰
+    const { data, error } = await supabaseClient
+      .from("cancellation_ticketing_stats_all_view") // 실제 거래 통계 뷰
       .select("confirmed_count, cancelled_count, cancellation_ticketing_rate")
       .single();
     
@@ -77,7 +77,7 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
       
       // stats 테이블에서 직접 계산 시도
       try {
-        const { data: statsData, error: statsError } = await supabase
+        const { data: statsData, error: statsError } = await supabaseClient
           .from("seller_stats")
           .select("cancellation_ticketing_success, cancellation_ticketing_total")
           .single();
@@ -102,7 +102,7 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
         
         // 마지막 시도: 시스템 설정 테이블에서 기본값 조회
         try {
-          const { data: configData } = await supabase
+          const { data: configData } = await supabaseClient
             .from("system_config")
             .select("value")
             .eq("key", "default_success_rate")
@@ -127,7 +127,7 @@ export async function fetchTicketingSuccessRate(sellerId?: string): Promise<numb
     // 거래 통계 뷰에서 성공률 계산
     const confirmed = data.confirmed_count || 0;
     const cancelled = data.cancelled_count || 0;
-    const total = data.total_count || (confirmed + cancelled);
+    const total = confirmed + cancelled;
     
     // 거래가 없는 경우
     if (total === 0) {

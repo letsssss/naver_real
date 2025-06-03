@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createBrowserClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -16,8 +16,6 @@ export default function SessionAuthButton() {
     setMessage('');
 
     try {
-      const supabase = createBrowserClient();
-      
       // 현재 세션 확인
       const { data: sessionData } = await supabase.auth.getSession();
       

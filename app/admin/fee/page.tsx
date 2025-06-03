@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@/lib/supabase'
+//import { createBrowserClient } from '@/lib/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 import AdminLayout from '@/components/admin/AdminLayout'
 import AdminOnly from '@/components/admin/AdminOnly'
 
@@ -15,7 +16,7 @@ export default function AdminFeePage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const supabase = createBrowserClient()
+      const supabase = getSupabaseClient()//createBrowserClient()//
 
       // 인증 유저 가져오기
       const {

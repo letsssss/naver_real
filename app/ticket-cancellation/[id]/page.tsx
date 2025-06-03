@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import KakaoPay from "@/components/payment/KakaoPay"
 import KGInicis from "@/components/payment/KGInicis"
-import { createBrowserClient } from "@/lib/supabase"
+import { getSupabaseClient } from '@/lib/supabase'
 import SuccessRateBadge from "@/components/SuccessRateBadge"
 import ReportHistory from "@/components/ReportHistory"
 import SellerReportButton from "@/components/SellerReportButton"
@@ -179,40 +179,12 @@ export default function TicketCancellationDetail() {
         }
         
         const postData = data.post;
-        // 게시물 데이터 전체 구조 확인
-        console.log("게시물 상세 데이터:", JSON.stringify(postData, null, 2));
-        
-        // author 객체 디버깅 출력 추가
-        console.log("작성자(author) 객체 확인:", JSON.stringify(postData.author, null, 2));
-        if (postData.author) {
-          console.log("author.id:", postData.author.id);
-          console.log("author.name:", postData.author.name);
-          console.log("author.profileImage:", postData.author.profileImage);
-        } else {
-          console.log("작성자(author) 객체가 없습니다.");
-        }
         
         // 작성자 식별 로직 개선
-        // 1. 게시물 ID를 작성자 ID로 사용 (기존 방식)
-        const postId = postData.id.toString();
-        setManualAuthorId(postId);
-        console.log("게시물 ID를 작성자 ID로 사용:", postId);
-        
-        // 2. 작성자 판별을 위한 다양한 필드 확인
-        console.log("사용자 ID 확인:", currentUserId || user?.id?.toString());
-        console.log("게시글 작성자 ID 확인:", postData.author?.id?.toString());
-        
-        // 추가 확인을 위한 데이터 로깅
-        console.log("게시글 user_id 확인:", postData.user_id);
-        console.log("게시글 userId 확인:", postData.userId);
-        console.log("게시글 authorId 확인:", postData.authorId);
-        
-        // 직접 작성자 ID와 현재 로그인한 사용자 ID 비교
         const authorId = postData.author?.id || postData.authorId || postData.user_id || postData.userId;
         const userId = currentUserId || user?.id;
         
         if (authorId && userId) {
-          // 문자열로 변환하여 비교 (타입 통일)
           const isPostCreator = String(authorId) === String(userId);
           console.log("작성자 ID와 사용자 ID 직접 비교:", { authorId, userId, isPostCreator });
           
@@ -229,200 +201,98 @@ export default function TicketCancellationDetail() {
         let contentObj = null;
         
         try {
-          // 게시글 내용에서 정보 파싱 (JSON 구조)
-          
           if (typeof postData.content === 'string') {
             try {
               contentObj = JSON.parse(postData.content);
               console.log("JSON 파싱 완료:", contentObj);
             } catch (e) {
               console.error('JSON 파싱 실패, 텍스트로 처리합니다:', e);
-              // 텍스트 모드 폴백 처리
-              const textContent = postData.content;
-              contentObj = { description: textContent };
+              contentObj = { description: postData.content };
             }
           } else {
             contentObj = postData.content;
           }
           
-          // 구조화된 데이터 추출
           eventDate = contentObj.date || '';
           eventTime = contentObj.time || '';
           eventVenue = contentObj.venue || '';
-          eventPrice = contentObj.price || eventPrice;
           
-          // 중요: 구역 정보 처리 (개선된 버전)
           if (contentObj.sections && Array.isArray(contentObj.sections)) {
-            console.log("구역 정보 발견:", contentObj.sections);
-            
-            // ✅ 구조화된 sections 데이터를 SeatOption 형식으로 변환
-            seatOptions = contentObj.sections.map((section, index) => ({
-              id: section.id || index.toString(),
-              label: section.label || section.name || `구역 ${index + 1}`,
-              price: parseInt(section.price) || 0,
-              available: section.available !== false // 기본값은 true
-            })).filter(section => section.price > 0); // 가격이 0보다 큰 것만
-            
-            console.log("변환된 좌석 정보:", seatOptions);
-          } else {
-            console.log("구역 정보가 없거나 유효하지 않습니다. 대체 방법 시도...");
-            // 텍스트 기반 섹션 추출 시도 (이전 형식 지원)
-            const sectionPattern = /([^:]+): (\d+)원/g;
-            let match;
-            const extractedSections = [];
-            
-            while ((match = sectionPattern.exec(postData.content)) !== null) {
-              extractedSections.push({
-                id: extractedSections.length.toString(),
-                label: match[1].trim(),
-                price: parseInt(match[2].replace(/,/g, '')),
-                available: true
-              });
-            }
-            
-            if (extractedSections.length > 0) {
-              seatOptions = extractedSections;
-            }
+            seatOptions = contentObj.sections.map((section: any) => ({
+              id: section.id || String(Math.random()),
+              label: section.name || '알 수 없는 구역',
+              price: section.price || eventPrice,
+              available: true
+            }));
           }
-        } catch (e) {
-          console.error('게시글 내용 파싱 오류:', e);
-          // 파싱 실패시 원본 데이터 사용
+        } catch (error) {
+          console.error('콘텐츠 파싱 중 오류:', error);
         }
-        
-        console.log("최종 좌석 정보:", seatOptions);
-        
-        // 좌석 정보가 없을 경우 기본값 설정
-        if (!seatOptions || seatOptions.length === 0) {
-          seatOptions = [
-            { id: 'A', label: 'A구역', price: eventPrice, available: true },
-            { id: 'B', label: 'B구역', price: eventPrice, available: true },
-            { id: 'C', label: 'C구역', price: eventPrice, available: true }
-          ];
-        }
-        
-        // 판매자 ID 정보 확인 및 로깅
-        console.log("판매자 정보 상세:", {
-          originalAuthorId: postData.author?.id,
-          authorIdType: typeof postData.author?.id,
-          fallbackId: postData.authorId || postData.userId
-        });
 
-        // 판매자 ID 처리 개선 - 다양한 소스에서 ID 확보
-        // sellerId가 undefined 또는 null인 경우, 하드코딩된 기본값 사용
-        const sellerId = (postData.author?.id && String(postData.author.id).trim() !== '') 
-          ? postData.author.id 
-          : (postData.authorId || postData.userId || '1d187f43-ac94-47c0-b40b-df1dabda820d'); // 기본 판매자 ID 사용
+        // 판매자 평점 조회
+        let sellerRating = 0;
+        let reviewCount = 0;
         
-        console.log("최종 선택된 판매자 ID:", sellerId);
-        
-        // 🚀 성능 최적화: 모든 API 호출을 fetch로 통일 (Supabase 직접 호출 제거)
-        const [
-          sellerStatsResult,
-          avgRatingResult,
-          cancelStatsResult,
-          reportResult
-        ] = await Promise.allSettled([
-          // 1. 판매자 통계 API
-          sellerId ? fetch(`/api/seller-stats?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null),
-          
-          // 2. 평균 별점 조회 API로 변경
-          sellerId ? fetch(`/api/seller-rating?sellerId=${sellerId}`).then(res => res.ok ? res.json() : { data: null }) : Promise.resolve({ data: null }),
-          
-          // 3. 취켓팅 통계 조회 API로 변경
-          sellerId ? fetch(`/api/stats/cancellation/${sellerId}`).then(res => res.ok ? res.json() : { data: null }) : Promise.resolve({ data: null }),
-          
-          // 4. 신고 이력 조회
-          sellerId ? fetch(`/api/seller-reports?sellerId=${sellerId}`).then(res => res.ok ? res.json() : null) : Promise.resolve(null)
-        ]);
-        
-        // 결과 처리 - 실패한 요청도 안전하게 처리
-        const sellerDetail = {
-          successfulSales: 0,
-          responseRate: 0
-        };
-        
-        // 판매자 통계 결과 처리
-        if (sellerStatsResult.status === 'fulfilled' && sellerStatsResult.value?.seller) {
-          sellerDetail.successfulSales = sellerStatsResult.value.seller.successfulSales || 0;
-          sellerDetail.responseRate = sellerStatsResult.value.seller.responseRate || 0;
-          console.log("판매자 통계 정보:", sellerStatsResult.value);
-        } else {
-          console.error("판매자 통계 정보를 불러오는데 실패했습니다:", sellerId);
-        }
-        
-        // 평균 별점 결과 처리
-        const avgRating = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.avg_rating) || 0;
-        const reviewCount = (avgRatingResult.status === 'fulfilled' && avgRatingResult.value?.review_count) || 0;
-        
-        // 취켓팅 통계 결과 처리
-        let totalCancellationTicketings = 0;
-        let cancellationSuccessRate = 90; // 기본값
-        if (cancelStatsResult.status === 'fulfilled' && cancelStatsResult.value) {
-          const confirmed = cancelStatsResult.value.confirmed_count || 0;
-          const cancelled = cancelStatsResult.value.cancelled_count || 0;
-          totalCancellationTicketings = confirmed + cancelled;
-          
-          // 성공률 계산 (SuccessRateBadge에서 사용할 값)
-          if (totalCancellationTicketings > 0) {
-            cancellationSuccessRate = Math.round((confirmed / totalCancellationTicketings) * 100);
+        if (authorId) {
+          try {
+            const supabaseClient = await getSupabaseClient();
+            const { data: ratingData, error: ratingError } = await supabaseClient
+              .from('seller_avg_rating')
+              .select('avg_rating, review_count')
+              .eq('seller_id', authorId)
+              .single();
+
+            if (ratingError) {
+              console.error('판매자 평점 조회 실패:', ratingError);
+            } else if (ratingData) {
+              sellerRating = ratingData.avg_rating || 0;
+              reviewCount = ratingData.review_count || 0;
+            }
+          } catch (error) {
+            console.error('판매자 평점 조회 중 오류:', error);
           }
-          
-          console.log("취켓팅 통계:", { confirmed, cancelled, total: totalCancellationTicketings, successRate: cancellationSuccessRate });
         }
-        
-        // 신고 정보 결과 처리
-        let reportData = null;
-        if (reportResult.status === 'fulfilled' && reportResult.value?.hasReports) {
-          reportData = {
-            hasReports: reportResult.value.hasReports,
-            count: reportResult.value.count,
-            severity: reportResult.value.severity,
-            lastReportDate: reportResult.value.lastReportDate,
-            reasons: reportResult.value.reasons,
-            status: reportResult.value.status
-          };
-          console.log("판매자 신고 이력:", reportResult.value);
-        }
-        
-        // ✅ 2. 기존 setTicketData에 값 반영
-        setTicketData({
+
+        // 티켓 데이터 구성
+        const formattedTicketData: TicketData = {
           id: postData.id,
-          title: postData.title || '티켓 제목',
-          artist: postData.artist || '아티스트 정보',
-          date: eventDate || '날짜 정보 없음',
-          time: eventTime || '시간 정보 없음',
-          venue: eventVenue || '장소 정보 없음',
+          title: postData.title || '제목 없음',
+          artist: postData.event_name || contentObj?.artist || '',
+          date: eventDate,
+          time: eventTime,
+          venue: eventVenue || postData.event_venue || '',
           price: eventPrice,
           originalPrice: eventPrice,
-          image: postData.image || '/placeholder-image.png',
-          status: 'FOR_SALE',
-          successRate: cancellationSuccessRate,
-          description: contentObj?.description || postData.content || '상세 설명이 없습니다.',
+          image: postData.image_url || '/placeholder.svg',
+          status: postData.status || '판매중',
+          successRate: 0,
+          description: contentObj?.description || '',
           seller: {
-            id: sellerId,
-            name: postData.author?.name || '판매자 정보 없음',
-            rating: avgRating,
+            id: authorId,
+            name: postData.author?.name || '판매자',
+            rating: sellerRating,
             reviewCount: reviewCount,
-            profileImage: postData.author?.profileImage || '',
-            successfulSales: sellerDetail.successfulSales,
-            responseRate: sellerDetail.responseRate,
-            totalCancellationTicketings: totalCancellationTicketings || 0
+            profileImage: postData.author?.profileImage || '/placeholder.svg',
+            successfulSales: 0,
+            responseRate: 0,
+            totalCancellationTicketings: 0
           },
-          seatOptions: seatOptions,
-          reports: reportData
-        });
-        
-        setError(null);
+          seatOptions: seatOptions
+        };
+
+        setTicketData(formattedTicketData);
       } catch (error) {
-        console.error('게시글 조회 에러:', error);
+        console.error('게시글 데이터 불러오기 실패:', error);
         setError(error instanceof Error ? error.message : '게시글을 불러오는데 실패했습니다');
       } finally {
         setLoading(false);
       }
     }
-    
-    fetchPostData();
-  }, [id]);
+
+    if (mounted) {
+      fetchPostData();
+    }
+  }, [id, mounted, currentUserId, user]);
 
   // Trigger confetti effect when success page is shown
   useEffect(() => {
