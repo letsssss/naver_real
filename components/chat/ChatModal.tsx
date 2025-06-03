@@ -163,37 +163,56 @@ class ChatModalManager {
       throw new Error('ChatModalManager가 초기화되지 않았습니다.');
     }
 
-    const { data, error } = await this.supabase
-      .from('messages')
-      .insert([
-        {
-          room_id: roomId,
+    try {
+      const { data, error } = await this.supabase
+        .from('messages')
+        .insert([
+          {
+            room_id: roomId,
+            content,
+            sender_id: this.currentUser!.id,
+            created_at: new Date().toISOString(),
+            is_read: false
+          }
+        ])
+        .select(`
+          id,
           content,
-          sender_id: this.currentUser!.id,
-          created_at: new Date().toISOString()
-        }
-      ])
-      .select()
-      .single();
+          created_at,
+          sender_id,
+          is_read,
+          room_id
+        `)
+        .single();
 
-    if (error) {
-      throw new Error('메시지 전송에 실패했습니다.');
+      if (error) {
+        console.error('[메시지 전송 오류]:', error);
+        throw new Error('메시지 전송에 실패했습니다.');
+      }
+
+      if (!data) {
+        throw new Error('메시지 전송 응답이 없습니다.');
+      }
+
+      const message: Message = {
+        id: data.id,
+        text: data.content,
+        timestamp: data.created_at,
+        sender_id: data.sender_id,
+        isMine: true,
+        isRead: false,
+        status: 'sent'
+      };
+
+      // Update cache
+      const cachedMessages = this.messageCache.get(roomId) || [];
+      this.messageCache.set(roomId, [...cachedMessages, message]);
+
+      return message;
+    } catch (error) {
+      console.error('[메시지 전송 상세 오류]:', error);
+      throw error;
     }
-
-    const message: Message = {
-      id: data.id,
-      text: data.content,
-      timestamp: data.created_at,
-      sender_id: data.sender_id,
-      isMine: true,
-      status: 'sent'
-    };
-
-    // Update cache
-    const cachedMessages = this.messageCache.get(roomId) || [];
-    this.messageCache.set(roomId, [...cachedMessages, message]);
-
-    return message;
   }
 
   public async markAsRead(roomId: string, messageId: string): Promise<void> {
@@ -345,9 +364,11 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !currentUser) return;
 
+    const messageContent = newMessage.trim();
+    const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
-      id: `temp-${Date.now()}`,
-      text: newMessage,
+      id: tempId,
+      text: messageContent,
       timestamp: new Date().toISOString(),
       sender_id: currentUser.id,
       isMine: true,
@@ -358,19 +379,39 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
     setNewMessage('');
     scrollToBottom();
 
-    try {
-      const sentMessage = await chatManager.current.sendMessage(roomId, newMessage.trim());
-      setMessages(prev => 
-        prev.map(msg => msg.id === tempMessage.id ? sentMessage : msg)
-      );
-    } catch (error) {
-      console.error('[채팅] 메시지 전송 오류:', error);
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === tempMessage.id ? { ...msg, status: 'failed' } : msg
-        )
-      );
-    }
+    const maxRetries = 3;
+    let currentRetry = 0;
+
+    const attemptSend = async (): Promise<void> => {
+      try {
+        const sentMessage = await chatManager.current.sendMessage(roomId, messageContent);
+        setMessages(prev => 
+          prev.map(msg => msg.id === tempId ? { ...sentMessage, status: 'sent' } : msg)
+        );
+      } catch (error) {
+        console.error(`[채팅] 메시지 전송 오류 (시도 ${currentRetry + 1}/${maxRetries}):`, error);
+        
+        if (currentRetry < maxRetries - 1) {
+          currentRetry++;
+          // Exponential backoff: 1초, 2초, 4초...
+          const delay = Math.pow(2, currentRetry) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return attemptSend();
+        }
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === tempId ? { ...msg, status: 'failed' } : msg
+          )
+        );
+        
+        // Show error message to user
+        setError('메시지 전송에 실패했습니다. 다시 시도해주세요.');
+        setTimeout(() => setError(null), 3000); // 3초 후 에러 메시지 제거
+      }
+    };
+
+    await attemptSend();
   };
 
   // 연결 상태 UI 표시
