@@ -467,22 +467,43 @@ export default function TicketCancellationDetail() {
         ? `/api/ticket-purchase?userId=${userId}`
         : '/api/ticket-purchase';
 
-      // 인증 토큰을 가져오기 (로컬 스토리지에서)
+      // Supabase 클라이언트에서 직접 토큰 가져오기 (더 안전한 방법)
       let token = null;
-      if (typeof window !== 'undefined') {
-        token = localStorage.getItem('token') || 
-                localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+      try {
+        const supabase = await getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token;
+      } catch (e) {
+        console.error('Supabase 세션 가져오기 실패:', e);
+        // 폴백: 로컬 스토리지에서 토큰 가져오기
+        if (typeof window !== 'undefined') {
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('sb-jdubrjczdyqqtsppojgu-auth-token');
+        }
       }
 
-      // 헤더 설정 (인증 토큰 포함)
+      // 헤더 설정 (인증 토큰 포함) - 안전한 ASCII 문자 확인
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
       
-      // 토큰이 있으면 Authorization 헤더 추가
+      // 토큰이 있으면 Authorization 헤더 추가 (ASCII 안전성 확인)
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log("인증 토큰 헤더 추가됨");
+        // 토큰이 ASCII 문자만 포함하는지 확인
+        if (/^[a-zA-Z0-9._-]+$/.test(token)) {
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log("인증 토큰 헤더 추가됨");
+        } else {
+          // 토큰에 non-ASCII 문자가 포함된 경우 base64 인코딩 시도
+          try {
+            headers['Authorization'] = `Bearer ${btoa(token)}`;
+            console.log("인증 토큰 인코딩 후 헤더 추가됨");
+          } catch (e) {
+            console.error('토큰 인코딩 실패:', e);
+            // 토큰 인코딩에 실패하면 토큰 없이 진행
+            console.log("토큰 없이 API 호출 진행");
+          }
+        }
       } else {
         console.log("인증 토큰을 찾을 수 없음");
       }
