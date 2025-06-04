@@ -51,22 +51,30 @@ export async function POST(request: NextRequest) {
     const roomIdInt = parseInt(roomId);
     
     // 방 존재 여부 확인 및 사용자가 해당 방의 참여자인지 확인
-    const { data: participant, error: participantError } = await createAdminClient()
-      .from('room_participants')
-      .select('id')
-      .eq('room_id', roomIdInt)
-      .eq('user_id', requestUserId)
+    const { data: room, error: roomError } = await createAdminClient()
+      .from('rooms')
+      .select('id, buyer_id, seller_id')
+      .eq('id', roomIdInt)
       .maybeSingle();
     
-    if (participantError) {
-      console.error('참여자 확인 오류:', participantError);
+    if (roomError) {
+      console.error('채팅방 확인 오류:', roomError);
       return NextResponse.json(
-        { error: '채팅방 참여자 확인 중 오류가 발생했습니다.' },
+        { error: '채팅방 확인 중 오류가 발생했습니다.' },
         { status: 500 }
       );
     }
     
-    if (!participant) {
+    if (!room) {
+      return NextResponse.json(
+        { error: '채팅방을 찾을 수 없습니다.' },
+        { status: 404 }
+      );
+    }
+    
+    const isParticipant = room.buyer_id === requestUserId || room.seller_id === requestUserId;
+    
+    if (!isParticipant) {
       return NextResponse.json(
         { error: '해당 채팅방에 접근할 권한이 없습니다.' },
         { status: 403 }

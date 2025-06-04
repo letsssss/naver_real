@@ -185,28 +185,59 @@ export function useChatWithRoomInit(roomId: string, userId: string): UseChatRetu
 
       // 3. 참가자 목록 조회
       const { data: participantsData, error: participantsError } = await supabase
-        .from('room_participants')
+        .from('rooms')
         .select(`
-          user_id,
-          user:users (
+          buyer_id,
+          seller_id,
+          buyer:users!rooms_buyer_id_fkey (
+            id,
+            name,
+            profile_image
+          ),
+          seller:users!rooms_seller_id_fkey (
             id,
             name,
             profile_image
           )
         `)
-        .eq('room_id', roomId);
+        .eq('id', roomId)
+        .single();
 
       if (participantsError) {
         console.error('[채팅] 참가자 정보 조회 오류:', participantsError);
-      } else {
-        // 타입 안전성을 위해 타입 가드 추가
-        const typedParticipantsData = participantsData as unknown as ChatParticipant[];
-        if (!Array.isArray(typedParticipantsData)) {
-          console.error('[채팅] 참가자 데이터 형식이 올바르지 않습니다.');
-          setParticipants([]);
-        } else {
-          setParticipants(typedParticipantsData);
+        setParticipants([]);
+      } else if (participantsData) {
+        // buyer와 seller를 participants 배열로 변환
+        const participants: ChatParticipant[] = [];
+        
+        const buyerData = participantsData.buyer as any;
+        const sellerData = participantsData.seller as any;
+        
+        if (buyerData && buyerData.id) {
+          participants.push({
+            user_id: participantsData.buyer_id,
+            user: {
+              id: buyerData.id.toString(),
+              name: buyerData.name,
+              profile_image: buyerData.profile_image
+            }
+          });
         }
+        
+        if (sellerData && sellerData.id && participantsData.seller_id !== participantsData.buyer_id) {
+          participants.push({
+            user_id: participantsData.seller_id,
+            user: {
+              id: sellerData.id.toString(),
+              name: sellerData.name,
+              profile_image: sellerData.profile_image
+            }
+          });
+        }
+        
+        setParticipants(participants);
+      } else {
+        setParticipants([]);
       }
 
       // 4. 읽지 않은 메시지 읽음 표시

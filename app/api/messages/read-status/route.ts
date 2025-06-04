@@ -104,22 +104,9 @@ export async function GET(request: NextRequest) {
       }
       
       // 사용자가 채팅방의 참여자인지 확인
-      const { data: participant, error: participantError } = await createAdminClient()
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', room.id)
-        .eq('user_id', userId)
-        .maybeSingle();
+      const isParticipant = room.buyer_id === userId || room.seller_id === userId;
       
-      if (participantError) {
-        console.error('참여자 확인 오류:', participantError);
-        return NextResponse.json(
-          { error: '채팅방 참여자 확인 중 오류가 발생했습니다.' },
-          { status: 500 }
-        );
-      }
-      
-      if (!participant) {
+      if (!isParticipant) {
         return NextResponse.json(
           { error: '이 채팅방에 접근할 권한이 없습니다.' },
           { status: 403 }

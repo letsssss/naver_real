@@ -4,25 +4,26 @@ import { cors } from '@/lib/cors';
 import { verifyToken, getTokenFromHeaders, getTokenFromCookies } from '@/lib/auth';
 
 // 타입 정의 추가
-interface RoomParticipant {
-  id: number;
-  room_id: number;
-  user_id: number;
-  user?: {
-    id: number;
-    name: string;
-    profile_image?: string;
-  };
-}
-
 interface Room {
   id: number;
   name: string;
   purchase_id?: number;
+  buyer_id: number;
+  seller_id: number;
+  order_number?: string;
   created_at: string;
   time_of_last_chat?: string;
-  participants: RoomParticipant[];
   messages?: any[];
+  buyer?: {
+    id: number;
+    name: string;
+    profile_image?: string;
+  };
+  seller?: {
+    id: number;
+    name: string;
+    profile_image?: string;
+  };
   purchase?: {
     id: number;
     status: string;
@@ -79,7 +80,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { data: room, error } = await createAdminClient()
           .from('rooms')
           .select(`*,
-            room_participants (user:users (id, name, profile_image)),
+            buyer:users!rooms_buyer_id_fkey(id, name, profile_image),
+            seller:users!rooms_seller_id_fkey(id, name, profile_image),
             messages (id, content, created_at, sender:users (id, name, profile_image))
           `)
           .eq('order_number', roomId)
@@ -90,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(500).json({ error: '채팅방 조회 중 오류가 발생했습니다.' });
         }
         
-        const isParticipant = room.room_participants.some((p: any) => p.user.id === userId);
+        const isParticipant = room.buyer_id === userId || room.seller_id === userId;
         if (!isParticipant) {
           return res.status(403).json({ error: '채팅방에 접근할 권한이 없습니다.' });
         }
@@ -108,48 +110,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(400).json({ error: '유효하지 않은 구매 ID입니다.' });
         }
         
-        const { data: roomList, error } = await createAdminClient()
-          .from('room_participants')
-          .select(`room:rooms (id, order_number, purchase_id)`) // 확장 가능
-          .eq('user_id', userId);
+        const { data: room, error } = await createAdminClient()
+          .from('rooms')
+          .select(`*`)
+          .eq('purchase_id', parsedPurchaseId)
+          .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
+          .maybeSingle();
 
-        if (error || !roomList) {
+        if (error) {
           console.error('구매 관련 채팅방 조회 오류:', error);
           return res.status(500).json({ error: '채팅방 조회 중 오류가 발생했습니다.' });
         }
 
-        const matched = roomList.find((r: any) => r.room.purchase_id === parsedPurchaseId);
-        return res.status(200).json({ room: matched?.room || null });
+        return res.status(200).json({ room: room || null });
       }
       
       // 사용자의 모든 채팅방 목록 조회
-      const { data: participantRooms, error } = await createAdminClient()
-        .from('room_participants')
-        .select(`room:rooms (*,
-          participants:room_participants (user:users (id, name, profile_image)),
+      const { data: rooms, error } = await createAdminClient()
+        .from('rooms')
+        .select(`*,
+          buyer:users!rooms_buyer_id_fkey(id, name, profile_image),
+          seller:users!rooms_seller_id_fkey(id, name, profile_image),
           purchase:purchases (id, status, post:posts (id, title))
-        )`)
-        .eq('user_id', userId);
+        `)
+        .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
         
       if (error) {
         console.error('채팅방 목록 조회 오류:', error);
         return res.status(500).json({ error: '채팅방 목록 조회 중 오류가 발생했습니다.' });
       }
       
-      const rooms = participantRooms?.map((r: any) => r.room) || [];
-      return res.status(200).json({ rooms });
+      return res.status(200).json({ rooms: rooms || [] });
     }
     
     // POST 요청 처리 - 새 채팅방 생성
     if (req.method === 'POST') {
-      const { name, purchaseId, participantIds } = req.body;
+      const { name, purchaseId, buyerId, sellerId } = req.body;
       
-      if (!name || !Array.isArray(participantIds) || participantIds.length < 2) {
-        return res.status(400).json({ error: '유효하지 않은 채팅방 생성 요청입니다.' });
+      if (!name || !buyerId || !sellerId) {
+        return res.status(400).json({ error: '유효하지 않은 채팅방 생성 요청입니다. (name, buyerId, sellerId 필수)' });
       }
       
-      if (!participantIds.includes(userId)) {
-        return res.status(400).json({ error: '생성자는 반드시 참여자여야 합니다.' });
+      if (buyerId !== userId && sellerId !== userId) {
+        return res.status(400).json({ error: '생성자는 반드시 구매자 또는 판매자여야 합니다.' });
       }
       
       // 채팅방 이름 중복 확인
@@ -178,7 +181,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .insert({ 
           name, 
           purchase_id: parsedPurchaseId, 
-          order_number: name 
+          order_number: name,
+          buyer_id: buyerId,
+          seller_id: sellerId
         })
         .select()
         .single();
@@ -186,23 +191,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (createError || !createdRoom) {
         console.error('채팅방 생성 오류:', createError);
         return res.status(500).json({ error: '채팅방 생성 실패' });
-      }
-      
-      // 참가자 추가
-      const participants = participantIds.map((id: number) => ({ 
-        room_id: createdRoom.id, 
-        user_id: id 
-      }));
-      
-      const { error: participantError } = await createAdminClient()
-        .from('room_participants')
-        .insert(participants);
-
-      if (participantError) {
-        console.error('참가자 추가 오류:', participantError);
-        // 실패한 경우 생성된 채팅방 삭제
-        await createAdminClient().from('rooms').delete().eq('id', createdRoom.id);
-        return res.status(500).json({ error: '채팅방 참가자 추가 중 오류가 발생했습니다.' });
       }
       
       return res.status(201).json({ room: createdRoom });
@@ -217,54 +205,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // 채팅방 존재 확인
-      const { data: roomData, error: roomError } = await createAdminClient()
+      const { data: room, error: roomError } = await createAdminClient()
         .from('rooms')
-        .select(`
-          *,
-          participants:room_participants(*)
-        `)
-        .eq('name', roomId as string);
+        .select('*')
+        .eq('order_number', roomId as string)
+        .maybeSingle();
         
-      if (roomError || !roomData || roomData.length === 0) {
+      if (roomError || !room) {
         console.error('채팅방 조회 오류:', roomError);
         return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
       }
-
-      const room = roomData[0] as Room;
       
       // 채팅방 참여자 확인
-      const isParticipant = room.participants.some(p => p.user_id === userId);
+      const isParticipant = room.buyer_id === userId || room.seller_id === userId;
       if (!isParticipant) {
         return res.status(403).json({ error: '채팅방에 접근할 권한이 없습니다.' });
       }
       
-      // 채팅방 나가기
+      // 채팅방 나가기 (실제로는 상태만 변경하거나 다른 처리)
       if (action === 'leave') {
-        const { error: leaveError } = await createAdminClient()
-          .from('room_participants')
-          .delete()
-          .eq('room_id', room.id)
-          .eq('user_id', userId);
-          
-        if (leaveError) {
-          console.error('채팅방 나가기 오류:', leaveError);
-          return res.status(500).json({ error: '채팅방을 나가는 중 오류가 발생했습니다.' });
-        }
-        
-        // 참가자가 없으면 채팅방 삭제
-        const { data: remainingParticipants, error: countError } = await createAdminClient()
-          .from('room_participants')
-          .select('id')
-          .eq('room_id', room.id);
-          
-        if (countError) {
-          console.error('참가자 확인 오류:', countError);
-        } else if (remainingParticipants.length === 0) {
-          // 채팅방 삭제
-          await createAdminClient().from('rooms').delete().eq('id', room.id);
-        }
-        
-        return res.status(200).json({ success: true });
+        // rooms 테이블에서는 단순히 나가기보다는 상태를 변경하거나
+        // 다른 방식으로 처리할 수 있습니다.
+        // 여기서는 단순히 성공 응답을 반환합니다.
+        return res.status(200).json({ success: true, message: '채팅방에서 나갔습니다.' });
       }
       
       return res.status(400).json({ error: '지원하지 않는 작업입니다.' });

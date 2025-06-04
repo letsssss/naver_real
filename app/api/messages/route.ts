@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     let finalReceiverId = receiverId ? parseInt(receiverId.toString()) : null;
-    let roomId: number | null = null;
+    let roomId: string | null = null;
 
     // 1️⃣ 구매 ID로 채팅방 조회 or 생성
     if (purchaseId) {
@@ -63,9 +63,15 @@ export async function POST(request: NextRequest) {
 
       // 없으면 생성
       if (!roomRes.data) {
+        const roomUuid = crypto.randomUUID();
         const createRoom = await createAdminClient()
           .from('rooms')
-          .insert({ name: `purchase_${purchase_id}`, purchase_id })
+          .insert({ 
+            id: roomUuid,
+            buyer_id, 
+            seller_id, 
+            purchase_id 
+          })
           .select()
           .maybeSingle();
 
@@ -74,14 +80,6 @@ export async function POST(request: NextRequest) {
         }
 
         roomId = createRoom.data.id;
-
-        // 참여자 등록
-        await createAdminClient()
-          .from('room_participants')
-          .insert([
-            { room_id: roomId, user_id: buyer_id },
-            { room_id: roomId, user_id: seller_id },
-          ]);
       } else {
         roomId = roomRes.data.id;
       }
@@ -113,7 +111,10 @@ export async function POST(request: NextRequest) {
     if (roomId) {
       await createAdminClient()
         .from('rooms')
-        .update({ last_chat: content, time_of_last_chat: new Date().toISOString() })
+        .update({ 
+          last_chat: content, 
+          time_of_last_chat: new Date().toISOString() 
+        })
         .eq('id', roomId);
     }
 
@@ -134,12 +135,16 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const roomId = searchParams.get('roomId');
     const purchaseId = searchParams.get('purchaseId');
+    const orderNumber = searchParams.get('orderNumber');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
+    
+    console.log('[Messages API] 🔍 GET 요청:', { roomId, purchaseId, orderNumber, limit, offset });
     
     // 인증 토큰 검증
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[Messages API] ❌ 인증 헤더 없음');
       return NextResponse.json(
         { error: '인증되지 않은 요청입니다.' },
         { status: 401 }
@@ -150,41 +155,148 @@ export async function GET(request: NextRequest) {
     const decoded = verifyToken(token);
     
     if (!decoded || typeof decoded !== 'object' || !('userId' in decoded)) {
+      console.log('[Messages API] ❌ 토큰 검증 실패');
       return NextResponse.json(
         { error: '유효하지 않은 토큰입니다.' },
         { status: 401 }
       );
     }
     
-    const userId = parseInt(decoded.userId.toString());
+    const userId = decoded.userId.toString();
+    console.log('[Messages API] ✅ 인증 성공:', userId);
     
-    // 방 ID 또는 구매 ID로 메시지 조회
-    if (roomId) {
-      const roomIdInt = parseInt(roomId);
-      if (isNaN(roomIdInt)) {
+    // order_number로 조회하는 경우
+    if (orderNumber) {
+      console.log('[Messages API] 🔍 주문번호로 메시지 조회:', orderNumber);
+      
+      // 주문번호로 채팅방 조회
+      const { data: roomData, error: roomError } = await createAdminClient()
+        .from('rooms')
+        .select('id, buyer_id, seller_id, order_number, purchase_id')
+        .eq('order_number', orderNumber)
+        .single();
+
+      if (roomError || !roomData) {
+        console.log('[Messages API] ❌ 채팅방 조회 실패:', roomError?.message);
         return NextResponse.json(
-          { error: '유효하지 않은 채팅방 ID입니다.' },
-          { status: 400 }
+          { error: '해당 주문번호의 채팅방을 찾을 수 없습니다.' },
+          { status: 404 }
         );
       }
-      
-      // 사용자가 해당 채팅방의 참여자인지 확인
-      const { data: participant, error: participantError } = await createAdminClient()
-        .from('room_participants')
-        .select('id')
-        .eq('room_id', roomIdInt)
-        .eq('user_id', userId)
-        .maybeSingle();
-      
-      if (participantError) {
-        console.error('참여자 확인 오류:', participantError);
+
+      console.log('[Messages API] ✅ 채팅방 조회 성공:', {
+        roomId: roomData.id,
+        buyerId: roomData.buyer_id,
+        sellerId: roomData.seller_id,
+        orderNumber: roomData.order_number
+      });
+
+      // 권한 확인: 현재 사용자가 구매자 또는 판매자인지 확인
+      const isBuyer = roomData.buyer_id === userId;
+      const isSeller = roomData.seller_id === userId;
+      const hasAccess = isBuyer || isSeller;
+
+      console.log('[Messages API] 🔐 권한 확인:', {
+        userId,
+        buyerId: roomData.buyer_id,
+        sellerId: roomData.seller_id,
+        isBuyer,
+        isSeller,
+        hasAccess
+      });
+
+      if (!hasAccess) {
+        console.log('[Messages API] ❌ 접근 권한 없음');
         return NextResponse.json(
-          { error: '채팅방 접근 권한 확인 중 오류가 발생했습니다.' },
+          { error: '이 채팅방에 접근할 권한이 없습니다.' },
+          { status: 403 }
+        );
+      }
+
+      // 메시지 조회 (모든 메시지 조회 - 발신자 구분 없이)
+      console.log('[Messages API] 📨 메시지 조회 시작:', roomData.id);
+      const { data: messages, error: messagesError } = await createAdminClient()
+        .from('messages')
+        .select(`
+          id, 
+          content, 
+          created_at, 
+          is_read,
+          sender_id, 
+          receiver_id,
+          sender:users!messages_sender_id_fkey(id, name, profile_image),
+          receiver:users!messages_receiver_id_fkey(id, name, profile_image)
+        `)
+        .eq('room_id', roomData.id)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + limit - 1);
+
+      if (messagesError) {
+        console.error('[Messages API] ❌ 메시지 조회 오류:', messagesError);
+        return NextResponse.json(
+          { error: '메시지 조회 중 오류가 발생했습니다.' },
           { status: 500 }
         );
       }
+
+      console.log('[Messages API] ✅ 메시지 조회 성공:', {
+        count: messages?.length || 0,
+        roomId: roomData.id
+      });
+
+      // 읽지 않은 메시지 업데이트 (현재 사용자가 받은 메시지만)
+      const unreadMessageIds = messages
+        ?.filter(msg => msg.receiver_id === userId && !msg.is_read)
+        .map(msg => msg.id) || [];
+
+      if (unreadMessageIds.length > 0) {
+        console.log('[Messages API] 📖 미읽음 메시지 읽음 처리:', unreadMessageIds.length);
+        await createAdminClient()
+          .from('messages')
+          .update({ is_read: true })
+          .in('id', unreadMessageIds);
+      }
+
+      return NextResponse.json({
+        success: true,
+        roomId: roomData.id,
+        messages: (messages || []).map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.sender_id,
+          receiverId: msg.receiver_id,
+          createdAt: msg.created_at,
+          isRead: msg.is_read,
+          sender: msg.sender,
+          receiver: msg.receiver,
+          isMine: msg.sender_id === userId
+        }))
+      });
+    }
+    
+    // roomId로 직접 조회하는 경우 (기존 로직 유지하되 room_participants 대신 rooms 테이블 직접 사용)
+    if (roomId) {
+      console.log('[Messages API] 🔍 roomId로 메시지 조회:', roomId);
       
-      if (!participant) {
+      // 채팅방 조회 및 권한 확인
+      const { data: roomData, error: roomError } = await createAdminClient()
+        .from('rooms')
+        .select('id, buyer_id, seller_id, order_number, purchase_id')
+        .eq('id', roomId)
+        .single();
+
+      if (roomError || !roomData) {
+        console.log('[Messages API] ❌ 채팅방 조회 실패:', roomError?.message);
+        return NextResponse.json(
+          { error: '채팅방을 찾을 수 없습니다.' },
+          { status: 404 }
+        );
+      }
+
+      // 권한 확인
+      const hasAccess = roomData.buyer_id === userId || roomData.seller_id === userId;
+      if (!hasAccess) {
+        console.log('[Messages API] ❌ 채팅방 접근 권한 없음');
         return NextResponse.json(
           { error: '채팅방에 접근할 권한이 없습니다.' },
           { status: 403 }
@@ -201,15 +313,15 @@ export async function GET(request: NextRequest) {
           is_read,
           sender_id, 
           receiver_id,
-          sender:users!sender_id (id, name, profile_image),
-          receiver:users!receiver_id (id, name, profile_image)
+          sender:users!messages_sender_id_fkey(id, name, profile_image),
+          receiver:users!messages_receiver_id_fkey(id, name, profile_image)
         `)
-        .eq('room_id', roomIdInt)
-        .order('created_at', { ascending: false })
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1);
       
       if (messagesError) {
-        console.error('메시지 조회 오류:', messagesError);
+        console.error('[Messages API] ❌ 메시지 조회 오류:', messagesError);
         return NextResponse.json(
           { error: '메시지 조회 중 오류가 발생했습니다.' },
           { status: 500 }
@@ -218,7 +330,7 @@ export async function GET(request: NextRequest) {
       
       // 읽지 않은 메시지 업데이트
       const unreadMessageIds = messages
-        ?.filter(msg => msg.sender_id !== userId && !msg.is_read)
+        ?.filter(msg => msg.receiver_id === userId && !msg.is_read)
         .map(msg => msg.id) || [];
       
       if (unreadMessageIds.length > 0) {
@@ -230,6 +342,7 @@ export async function GET(request: NextRequest) {
       
       return NextResponse.json({
         success: true,
+        roomId: roomId,
         messages: (messages || []).map(msg => ({
           id: msg.id,
           content: msg.content,
@@ -238,12 +351,13 @@ export async function GET(request: NextRequest) {
           createdAt: msg.created_at,
           isRead: msg.is_read,
           sender: msg.sender,
-          receiver: msg.receiver
-        })).reverse() // 최신 메시지가 아래로 가도록 역순 정렬
+          receiver: msg.receiver,
+          isMine: msg.sender_id === userId
+        }))
       });
       
     } else if (purchaseId) {
-      // 구매 ID로 메시지 조회
+      // 구매 ID로 메시지 조회 (기존 로직 유지)
       let purchaseData;
       
       // 구매 정보 조회
@@ -308,11 +422,11 @@ export async function GET(request: NextRequest) {
           is_read,
           sender_id, 
           receiver_id,
-          sender:users!sender_id (id, name, profile_image),
-          receiver:users!receiver_id (id, name, profile_image)
+          sender:users!messages_sender_id_fkey(id, name, profile_image),
+          receiver:users!messages_receiver_id_fkey(id, name, profile_image)
         `)
         .eq('purchase_id', purchaseData.id)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1);
       
       if (messagesError) {
@@ -333,17 +447,19 @@ export async function GET(request: NextRequest) {
           createdAt: msg.created_at,
           isRead: msg.is_read,
           sender: msg.sender,
-          receiver: msg.receiver
-        })).reverse() // 최신 메시지가 아래로 가도록 역순 정렬
+          receiver: msg.receiver,
+          isMine: msg.sender_id === userId
+        }))
       });
       
-    } else {
-      // roomId나 purchaseId 중 하나는 필수
-      return NextResponse.json(
-        { error: 'roomId 또는 purchaseId 파라미터가 필요합니다.' },
-        { status: 400 }
-      );
     }
+    
+    // roomId, purchaseId, orderNumber 중 하나는 필수
+    return NextResponse.json(
+      { error: 'roomId, purchaseId, 또는 orderNumber 파라미터가 필요합니다.' },
+      { status: 400 }
+    );
+    
   } catch (error: any) {
     console.error('[API] 메시지 조회 오류:', error);
     return NextResponse.json(
