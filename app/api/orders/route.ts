@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase-admin"
-import { createUniqueOrderNumber } from "@/utils/orderNumber"
+import { generateUniqueOrderNumber } from "@/utils/orderNumber"
 
 // Prisma 클라이언트 인스턴스 생성
 // Prisma 클라이언트 제거됨, Supabase 사용
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const data = await request.json()
     
     // 주문 번호 생성
-    const orderNumber = await createUniqueOrderNumber()
+    const orderNumber = await generateUniqueOrderNumber()
     
     // Supabase를 사용하여 데이터베이스에 주문 생성
     const { data: newOrder, error } = await createAdminClient()
