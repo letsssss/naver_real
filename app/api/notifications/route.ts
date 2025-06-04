@@ -1,8 +1,5 @@
 export const runtime = 'nodejs';
 
-console.log("🛠️ [DEBUG] API Handler /api/notifications loaded");
-console.log("🔧 route.ts 파일 실행됨 - API 서버에 정상적으로 배포됨");
-
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-admin';
@@ -50,31 +47,54 @@ export async function OPTIONS() {
 }
 
 // 알림 조회 (로그인 필요)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    // Authorization 헤더에서 토큰 추출
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
 
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    // Supabase 관리자 클라이언트로 토큰 검증
+    const adminClient = createAdminClient();
+    
+    // 토큰으로 사용자 정보 가져오기
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+    
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized - Invalid token', details: userError?.message }, { status: 402 });
+    }
+
+    // 알림 조회
+    const { data, error } = await adminClient
       .from('notifications')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('🔴 알림 조회 실패:', error.message);
       return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, notifications: data }, { status: 200 });
+    // 데이터 형식 변환
+    const formattedNotifications = (data || []).map(notification => ({
+      id: notification.id,
+      title: notification.message, // title이 없으면 message 사용
+      message: notification.message,
+      link: `/notifications/${notification.id}`, // 기본 링크
+      isRead: notification.is_read,
+      createdAt: notification.created_at,
+      type: notification.type || 'SYSTEM'
+    }));
+
+    return NextResponse.json({ 
+      success: true, 
+      notifications: formattedNotifications 
+    }, { status: 200 });
   } catch (err) {
-    console.error('🔴 알림 조회 전역 에러:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -155,11 +175,22 @@ export async function POST(req: Request) {
 // 알림 읽음 상태 변경
 export async function PATCH(req: Request) {
   try {
-    // 사용자 인증
-    const { userId, authenticated } = await validateRequestToken(req);
+    // Authorization 헤더에서 토큰 추출
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
     
-    if (!authenticated) {
+    if (!token) {
       return createErrorResponse('로그인이 필요합니다.', 'AUTH_ERROR', 401);
+    }
+
+    // Supabase 관리자 클라이언트로 토큰 검증
+    const adminClient = createAdminClient();
+    
+    // 토큰으로 사용자 정보 가져오기
+    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+    
+    if (userError || !user) {
+      return createErrorResponse('유효하지 않은 토큰입니다.', 'AUTH_ERROR', 401);
     }
     
     // 요청 본문 파싱
@@ -171,11 +202,8 @@ export async function PATCH(req: Request) {
     }
     
     try {
-      // Supabase 클라이언트 생성
-      const client = createAdminClient();
-      
       // 알림 소유자 확인
-      const { data: notification, error: fetchError } = await client
+      const { data: notification, error: fetchError } = await adminClient
         .from('notifications')
         .select('user_id')
         .eq('id', notificationId)
@@ -186,13 +214,11 @@ export async function PATCH(req: Request) {
         
         // 개발 환경에서 오류 처리
         if (process.env.NODE_ENV === 'development') {
-          console.log('[알림 업데이트] 개발 환경에서 오류 발생 시 가상 성공 응답');
-          
           return createApiResponse({
             success: true,
             notification: {
               id: notificationId,
-              userId: userId,
+              userId: user.id,
               postId: null,
               message: '모의 알림 메시지',
               type: 'SYSTEM',
@@ -215,7 +241,7 @@ export async function PATCH(req: Request) {
       }
       
       // 권한 확인
-      if (notification.user_id !== userId) {
+      if (notification.user_id !== user.id) {
         return createErrorResponse(
           '이 알림에 대한 권한이 없습니다.',
           'FORBIDDEN',
@@ -224,7 +250,7 @@ export async function PATCH(req: Request) {
       }
       
       // 읽음 상태 업데이트
-      const { data: updatedNotification, error: updateError } = await client
+      const { data: updatedNotification, error: updateError } = await adminClient
         .from('notifications')
         .update({ is_read: true })
         .eq('id', notificationId)
@@ -236,13 +262,11 @@ export async function PATCH(req: Request) {
         
         // 개발 환경에서 오류 처리
         if (process.env.NODE_ENV === 'development') {
-          console.log('[알림 업데이트] 개발 환경에서 업데이트 오류 발생 시 가상 성공 응답');
-          
           return createApiResponse({
             success: true,
             notification: {
               id: notificationId,
-              userId: userId,
+              userId: user.id,
               postId: null,
               message: '모의 알림 메시지 (업데이트 복구)',
               type: 'SYSTEM',
@@ -281,13 +305,11 @@ export async function PATCH(req: Request) {
       
       // 개발 환경에서 오류 처리
       if (process.env.NODE_ENV === 'development') {
-        console.log('[알림 업데이트] 개발 환경에서 내부 오류 발생 시 가상 성공 응답');
-        
         return createApiResponse({
           success: true,
           notification: {
             id: notificationId,
-            userId: userId,
+            userId: user.id,
             postId: null,
             message: '모의 알림 메시지 (내부 오류 복구)',
             type: 'SYSTEM',
@@ -309,15 +331,10 @@ export async function PATCH(req: Request) {
     
     // 개발 환경에서 오류 처리
     if (process.env.NODE_ENV === 'development') {
-      console.log('[알림 업데이트] 개발 환경에서 전역 오류 발생 시 가상 성공 응답');
-      
-      // 요청 바디를 복구할 수 없으므로 기본값 사용
-      const defaultNotificationId = 0;
-      
       return createApiResponse({
         success: true,
         notification: {
-          id: defaultNotificationId,
+          id: 0,
           userId: '3',
           postId: null,
           message: '모의 알림 메시지 (전역 오류 복구)',

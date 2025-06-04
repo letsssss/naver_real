@@ -32,9 +32,6 @@ const setCookie = (name: string, value: string, maxAge: number = 30 * 24 * 60 * 
 const safeLocalStorageSet = (key: string, value: string) => {
   if (isBrowser()) {
     try {
-      // 서버사이드 렌더링 시 오류 방지
-      console.log(`${key} 저장: 길이=${value.length}`);
-      
       // localStorage에 저장
       localStorage.setItem(key, value);
 
@@ -58,7 +55,7 @@ const safeLocalStorageSet = (key: string, value: string) => {
         }
       }
     } catch (e) {
-      console.error("스토리지 저장 오류:", e);
+      // 스토리지 저장 오류 처리
     }
   }
 };
@@ -83,7 +80,7 @@ const safeLocalStorageGet = (key: string) => {
       
       return null;
     } catch (e) {
-      console.error("스토리지 접근 오류:", e);
+      // 스토리지 접근 오류 처리
       return null;
     }
   }
@@ -111,7 +108,7 @@ const safeLocalStorageRemove = (key: string) => {
         }
       }
     } catch (e) {
-      console.error("스토리지 삭제 오류:", e);
+      // 스토리지 삭제 오류 처리
     }
   }
 };
@@ -137,7 +134,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const PROTECTED_ROUTES = ['/chat', '/profile'];
 
 // 전역 Supabase 클라이언트 인스턴스
-let globalSupabaseClient: ReturnType<typeof supabase> | null = null;
+let globalSupabaseClient: any = null;
 
 // 스토리지에서 초기 사용자 정보 가져오기
 const getInitialUser = (): User | null => {
@@ -169,7 +166,7 @@ const getInitialUser = (): User | null => {
       return JSON.parse(cookieValue);
     }
   } catch (e) {
-    console.error("사용자 정보 파싱 오류:", e);
+    // 사용자 정보 파싱 오류 처리
   }
   return null;
 };
@@ -197,18 +194,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const session = await supabaseService.refreshSession();
       
       if (session) {
-        // 사용자 정보 조회
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (userError) throw userError;
-
-        // 사용자 정보 저장
-        setUser(userData);
-        safeLocalStorageSet('user', JSON.stringify(userData));
+        // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
+        const defaultUser: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || 
+                session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.display_name || 
+                '사용자',
+          profile_image: session.user.user_metadata?.avatar_url || 
+                       session.user.user_metadata?.picture || null,
+          created_at: session.user.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        setUser(defaultUser);
+        safeLocalStorageSet('user', JSON.stringify(defaultUser));
+        
+        // 세션 정보도 저장
         safeLocalStorageSet('session', JSON.stringify(session));
       } else {
         setUser(null);
@@ -216,8 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         safeLocalStorageRemove('session');
       }
     } catch (error) {
-      console.error('[인증] 사용자 정보 새로고침 실패:', error);
-      setError(error instanceof Error ? error : new Error('사용자 정보를 새로고침할 수 없습니다.'));
+      // 인증 사용자 정보 새로고침 실패 처리
     } finally {
       setLoading(false);
     }
@@ -237,26 +239,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       if (session) {
-        // 사용자 정보 조회
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (userError) throw userError;
-
-        // 사용자 정보 저장
-        setUser(userData);
-        safeLocalStorageSet('user', JSON.stringify(userData));
+        // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
+        const defaultUser: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || 
+                session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.display_name || 
+                '사용자',
+          profile_image: session.user.user_metadata?.avatar_url || 
+                       session.user.user_metadata?.picture || null,
+          created_at: session.user.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        setUser(defaultUser);
+        safeLocalStorageSet('user', JSON.stringify(defaultUser));
         safeLocalStorageSet('session', JSON.stringify(session));
         
         router.replace('/');
       }
     } catch (error) {
-      console.error('[인증] 로그인 실패:', error);
-      setError(error instanceof Error ? error : new Error('로그인할 수 없습니다.'));
-      toast.error('로그인에 실패했습니다.');
+      // 인증 로그인 실패 처리
     } finally {
       setLoading(false);
     }
@@ -268,19 +272,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
 
+      // 1. Supabase 로그아웃 시도 
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      if (error) {
+        // 에러가 있어도 계속 진행 (로컬 정리는 해야 함)
+      }
 
+      // 2. 로컬 상태 완전 정리
       setUser(null);
+      
+      // 3. 모든 스토리지 정리
       safeLocalStorageRemove('user');
       safeLocalStorageRemove('session');
       
+      // 4. 세션 스토리지도 정리
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem('user');
+          sessionStorage.removeItem('session');
+          
+          // Supabase 관련 모든 데이터 정리
+          for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+              sessionStorage.removeItem(key);
+            }
+          }
+          
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+              localStorage.removeItem(key);
+            }
+          }
+        } catch (storageError) {
+          // 스토리지 정리 중 에러 처리
+        }
+      }
+
+      // 5. Supabase 클라이언트 리셋 (supabase.ts에서 import한 함수 사용)
+      try {
+        const { clearAuth } = await import('@/lib/supabase');
+        await clearAuth();
+      } catch (resetError) {
+        // Supabase 클라이언트 리셋 중 에러 처리
+      }
+
+      // 6. 새로운 Supabase 세션 강제 무효화
+      try {
+        // 새로운 클라이언트 인스턴스로 명시적 로그아웃
+        const { createClient } = await import('@supabase/supabase-js');
+        const freshClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+        await freshClient.auth.signOut();
+      } catch (freshLogoutError) {
+        // 새 클라이언트 로그아웃 중 에러 처리
+      }
+
+      // 7. 페이지 리다이렉트
       router.replace('/');
       toast.success('로그아웃되었습니다.');
+      
+      // 8. 페이지 새로고침으로 모든 상태 완전 초기화
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      }, 100);
+      
     } catch (error) {
-      console.error('[인증] 로그아웃 실패:', error);
-      setError(error instanceof Error ? error : new Error('로그아웃할 수 없습니다.'));
-      toast.error('로그아웃에 실패했습니다.');
+      // 인증 로그아웃 실패 처리
     } finally {
       setLoading(false);
     }
@@ -296,69 +359,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const initialUser = getInitialUser();
         if (initialUser) {
           setUser(initialUser);
-          console.log('✅ 초기 사용자 정보 복원:', initialUser.email);
         }
 
         // 2. 현재 세션 확인
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          console.log('✅ Supabase 세션 발견, 사용자 정보 새로고침');
+          // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
+          const defaultUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name || 
+                  session.user.user_metadata?.full_name || 
+                  session.user.user_metadata?.display_name || 
+                  '사용자',
+            profile_image: session.user.user_metadata?.avatar_url || 
+                         session.user.user_metadata?.picture || null,
+            created_at: session.user.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
           
-          // 세션이 있으면 사용자 정보 새로고침
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (userError) {
-            console.warn('⚠️ users 테이블 조회 실패, 기본 사용자 정보 생성:', userError.message);
-            
-            // users 테이블에 없는 경우 기본 정보로 설정 (카카오 로그인 등)
-            const defaultUser = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name || 
-                    session.user.user_metadata?.full_name || 
-                    session.user.user_metadata?.display_name || '',
-              profileImage: session.user.user_metadata?.avatar_url || 
-                          session.user.user_metadata?.picture || '',
-              provider: session.user.app_metadata?.provider || 'kakao',
-              created_at: session.user.created_at || new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            
-            setUser(defaultUser);
-            safeLocalStorageSet('user', JSON.stringify(defaultUser));
-          } else {
-            // 사용자 정보 업데이트 및 저장
-            setUser(userData);
-            safeLocalStorageSet('user', JSON.stringify(userData));
-          }
+          setUser(defaultUser);
+          safeLocalStorageSet('user', JSON.stringify(defaultUser));
           
           // 세션 정보도 저장
           safeLocalStorageSet('session', JSON.stringify(session));
-          console.log('✅ 인증 초기화 완료');
         } else {
-          console.log('❌ Supabase 세션 없음');
+          // 로그인된 세션이 없습니다 (정상)
         }
 
         // 3. 세션 리스너 등록
         const unsubscribe = supabaseService.onSessionChange(async ({ event, session }) => {
-          console.log('[인증 컨텍스트] 세션 변경:', event);
-          
           if (event === 'SIGNED_OUT') {
             setUser(null);
             safeLocalStorageRemove('user');
             safeLocalStorageRemove('session');
             router.replace('/');
           } else if (session && event === 'SIGNED_IN') {
-            console.log('✅ 새로운 로그인 세션 감지');
             await refreshUser();
           } else if (session && event === 'TOKEN_REFRESHED') {
-            console.log('✅ 토큰 갱신됨');
-            // 토큰 갱신 시에도 세션 정보 업데이트
             safeLocalStorageSet('session', JSON.stringify(session));
+          } else if (event === 'INITIAL_SESSION' && !session) {
+            // 앱 초기화: 로그인이 필요합니다
           }
         });
 
@@ -366,8 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           unsubscribe();
         };
       } catch (error) {
-        console.error('[인증] 초기화 실패:', error);
-        setError(error instanceof Error ? error : new Error('인증을 초기화할 수 없습니다.'));
+        // 인증 초기화 실패 처리
       } finally {
         setLoading(false);
       }

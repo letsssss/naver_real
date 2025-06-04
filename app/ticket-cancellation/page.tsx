@@ -454,17 +454,17 @@ export default function TicketCancellationPage() {
               // 실제 티켓 데이터 표시
               tickets.map((ticket) => {
                 // 디버깅: 작성자 정보 로깅
-                console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
-                console.log('전체 티켓 데이터:', ticket);
-                console.log('작성자 객체 유무:', !!ticket.author);
-                console.log('작성자 정보:', ticket.author);
-                if (ticket.author) {
-                  console.log('작성자 필드:', Object.keys(ticket.author).join(', '));
-                  console.log('작성자 이름:', ticket.author.name);
-                  console.log('작성자 이메일:', ticket.author.email);
-                  console.log('작성자 평점:', ticket.author.rating);
-                  console.log('작성자 이미지:', ticket.author.profileImage);
-                }
+                // console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
+                // console.log('전체 티켓 데이터:', ticket);
+                // console.log('작성자 객체 유무:', !!ticket.author);
+                // console.log('작성자 정보:', ticket.author);
+                // if (ticket.author) {
+                //   console.log('작성자 필드:', Object.keys(ticket.author).join(', '));
+                //   console.log('작성자 이름:', ticket.author.name);
+                //   console.log('작성자 이메일:', ticket.author.email);
+                //   console.log('작성자 평점:', ticket.author.rating);
+                //   console.log('작성자 이미지:', ticket.author.profileImage);
+                // }
                 
                 return (
                   <div
@@ -487,7 +487,7 @@ export default function TicketCancellationPage() {
                       </Link>
                       <div className="absolute top-3 right-3">
                         {(() => {
-                          console.log(`티켓 ${ticket.id} 카테고리:`, ticket.category);
+                          //console.log(`티켓 ${ticket.id} 카테고리:`, ticket.category);
                           return ticket.category === 'TICKET_REQUEST' ? (
                             <RequestBadge />
                           ) : (

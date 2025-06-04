@@ -101,7 +101,6 @@ export function NotificationDropdown() {
         return "방금 전";
       }
     } catch (error) {
-      console.error("날짜 변환 오류:", error);
       return "방금 전";
     }
   };
@@ -110,12 +109,107 @@ export function NotificationDropdown() {
     if (!user) return;
     
     setIsLoadingNotifications(true);
+    
     try {
-      // Supabase 세션에서 access_token 가져오기
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      // 먼저 Supabase 세션에서 시도
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      let accessToken = session?.access_token;
       
-      // 개발 환경에서 사용할 userId 추가
+      // localStorage와 sessionStorage에서 직접 토큰 찾기
+      let storageToken = null;
+      let storageSource = '';
+      
+      if (typeof window !== 'undefined') {
+        // Supabase 프로젝트 토큰 키 패턴들 시도
+        const possibleKeys = [
+          'sb-jdubrjczdyqqtsppojgu-auth-token', // 실제 프로젝트 ID
+          'supabase.auth.token',
+          'sb-auth-token'
+        ];
+        
+        for (const key of possibleKeys) {
+          // localStorage 확인
+          const localStorageItem = localStorage.getItem(key);
+          if (localStorageItem) {
+            try {
+              const parsed = JSON.parse(localStorageItem);
+              if (parsed.access_token) {
+                storageToken = parsed.access_token;
+                storageSource = `localStorage.${key}`;
+                break;
+              }
+            } catch (e) {
+              // JSON 파싱 실패시 무시
+            }
+          }
+          
+          // sessionStorage 확인
+          const sessionStorageItem = sessionStorage.getItem(key);
+          if (sessionStorageItem) {
+            try {
+              const parsed = JSON.parse(sessionStorageItem);
+              if (parsed.access_token) {
+                storageToken = parsed.access_token;
+                storageSource = `sessionStorage.${key}`;
+                break;
+              }
+            } catch (e) {
+              // JSON 파싱 실패시 무시
+            }
+          }
+        }
+        
+        // 모든 localStorage 키 검색
+        if (!storageToken) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.includes('auth') && key.includes('sb')) {
+              try {
+                const item = localStorage.getItem(key);
+                if (item) {
+                  const parsed = JSON.parse(item);
+                  if (parsed.access_token) {
+                    storageToken = parsed.access_token;
+                    storageSource = `localStorage.${key}`;
+                    break;
+                  }
+                }
+              } catch (e) {
+                // 무시
+              }
+            }
+          }
+        }
+      }
+      
+      // 스토리지에서 찾은 토큰이 있으면 사용
+      if (!accessToken && storageToken) {
+        accessToken = storageToken;
+      }
+      
+      // 토큰이 없으면 건너뜀
+      if (!accessToken) {
+        setNotifications([]);
+        return;
+      }
+      
+      // 기본 사용자 검사들...
+      if (user.name === '사용자' && !user.profile_image) {
+        setNotifications([]);
+        return;
+      }
+
+      const isDefaultUser = user.name === '사용자' || 
+                           (!user.profile_image && user.email && !user.email.includes('@')) ||
+                           (user.updated_at && user.created_at && 
+                            new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000);
+      
+      if (isDefaultUser) {
+        setNotifications([]);
+        return;
+      }
+
+      // API 호출
       const isDev = process.env.NODE_ENV === 'development';
       const userId = user?.id;
       const apiUrl = isDev && userId 
@@ -128,32 +222,27 @@ export function NotificationDropdown() {
           'Content-Type': 'application/json',
           'Authorization': accessToken ? `Bearer ${accessToken}` : '',
         },
-        credentials: 'include', // 쿠키 포함
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        if (response.status === 500) {
-          console.warn('서버 내부 오류로 알림을 가져오지 못했습니다.');
+        if (response.status === 401) {
           setNotifications([]);
-          return;  // 500 오류 시 함수 종료
+          return;
+        } else if (response.status === 500) {
+          setNotifications([]);
+          return;
         } else {
-          console.warn(`알림을 가져오는데 실패했습니다. 상태 코드: ${response.status}`);
-          // 에러 대신 토스트 메시지 표시
-          toast.error(`알림을 불러올 수 없습니다 (${response.status})`);
           setNotifications([]);
-          return;  // 다른 오류에서도 함수 종료
+          return;
         }
       }
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('서버 응답이 JSON이 아닙니다:', contentType);
-        
         const responseText = await response.text();
-        console.error('응답 내용 (일부):', responseText.substring(0, 200));
         
         if (responseText.includes('<!DOCTYPE html>')) {
-          console.error('서버 오류 페이지가 반환되었습니다. 서버를 확인하세요.');
           throw new Error('서버 오류가 발생했습니다.');
         }
         
@@ -163,7 +252,6 @@ export function NotificationDropdown() {
       const data = await response.json();
       
       if (!data || !Array.isArray(data.notifications)) {
-        console.error('알림 데이터 형식이 올바르지 않습니다:', data);
         throw new Error('잘못된 알림 데이터 형식');
       }
       
@@ -173,15 +261,15 @@ export function NotificationDropdown() {
       
       setNotifications(sortedNotifications);
     } catch (error) {
-      console.error('알림 가져오기 오류:', error);
-      
+      // 개발 환경에서만 토스트 표시
       if (process.env.NODE_ENV === 'development') {
-        toast.error(`알림 로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
-      } else {
-        toast.error("알림을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
+        // 401 오류는 토스트로 표시하지 않음
+        if (error instanceof Error && !error.message.includes('401')) {
+          toast.error(`알림 로드 실패: ${error.message}`);
+        }
       }
       
-      setNotifications(prev => prev || []);
+      setNotifications([]);
     } finally {
       setIsLoadingNotifications(false);
     }
@@ -192,6 +280,11 @@ export function NotificationDropdown() {
       // Supabase 세션에서 access_token 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      
+      // 세션이 없으면 처리하지 않음
+      if (!session || !accessToken) {
+        return;
+      }
       
       // 개발 환경에서 사용할 userId 추가
       const isDev = process.env.NODE_ENV === 'development';
@@ -210,6 +303,10 @@ export function NotificationDropdown() {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // 401 오류는 조용히 처리
+          return;
+        }
         throw new Error('알림 상태 업데이트에 실패했습니다.')
       }
 
@@ -219,8 +316,9 @@ export function NotificationDropdown() {
         )
       )
     } catch (error) {
-      console.error('알림 읽음 처리 오류:', error);
-      toast.error('알림 상태를 업데이트하는데 실패했습니다.');
+      if (process.env.NODE_ENV === 'development') {
+        toast.error('알림 상태를 업데이트하는데 실패했습니다.');
+      }
     }
   }
 
@@ -229,6 +327,11 @@ export function NotificationDropdown() {
       // Supabase 세션에서 access_token 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      
+      // 세션이 없으면 처리하지 않음
+      if (!session || !accessToken) {
+        return;
+      }
       
       // 개발 환경에서 사용할 userId 추가
       const isDev = process.env.NODE_ENV === 'development';
@@ -246,18 +349,33 @@ export function NotificationDropdown() {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // 401 오류는 조용히 처리
+          return;
+        }
         throw new Error('알림 상태 일괄 업데이트에 실패했습니다.')
       }
 
       setNotifications(notifications.map(notification => ({ ...notification, isRead: true })))
     } catch (error) {
-      console.error('알림 상태 일괄 업데이트 중 오류 발생:', error)
+      if (process.env.NODE_ENV === 'development') {
+        toast.error('모든 알림을 읽음 처리하는데 실패했습니다.');
+      }
     }
   }
 
   // 서버 렌더링과 클라이언트 렌더링 간 불일치 방지
   if (!user) return null
   if (!isMounted) return null
+
+  // 기본 사용자인지 확인
+  const isDefaultUser = user.name === '사용자' || 
+                       (!user.profile_image && user.email && !user.email.includes('@')) ||
+                       (user.updated_at && user.created_at && 
+                        new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000);
+
+  // 기본 사용자는 알림 기능을 사용할 수 없음
+  if (isDefaultUser) return null
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>

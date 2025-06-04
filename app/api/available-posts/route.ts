@@ -81,8 +81,6 @@ interface PostWithAuthor extends FormattedPost {
  */
 export async function GET(req: NextRequest) {
   try {
-    console.log("[사용 가능한 게시물 API] GET 요청 시작");
-    
     // URL 쿼리 파라미터 추출
     const url = new URL(req.url);
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -90,8 +88,6 @@ export async function GET(req: NextRequest) {
     // 카테고리 파라미터 비활성화
     // const category = url.searchParams.get('category');
     const search = url.searchParams.get('search');
-    
-    console.log(`[사용 가능한 게시물 API] 요청 파라미터: page=${page}, limit=${limit}, search=${search}`);
     
     // 페이지네이션 계산
     const offset = (page - 1) * limit;
@@ -107,8 +103,6 @@ export async function GET(req: NextRequest) {
       .select('*');
     
     if (rpcError) {
-      console.error("[사용 가능한 게시물 API] 뷰 조회 오류:", rpcError);
-      
       return addCorsHeaders(NextResponse.json({
         success: false,
         message: '구매 가능한 게시물 목록을 조회하는 중 오류가 발생했습니다.',
@@ -123,14 +117,12 @@ export async function GET(req: NextRequest) {
     /*
     // 카테고리 필터링 추가
     if (category) {
-      console.log(`[사용 가능한 게시물 API] 카테고리 필터링: ${category}`);
       filteredPosts = filteredPosts.filter((post: any) => post.category === category);
     }
     */
     
     // 검색어 필터링 추가
     if (search) {
-      console.log(`[사용 가능한 게시물 API] 검색어 필터링: ${search}`);
       const searchLower = search.toLowerCase();
       filteredPosts = filteredPosts.filter((post: any) => 
         (post.title && post.title.toLowerCase().includes(searchLower)) || 
@@ -148,8 +140,6 @@ export async function GET(req: NextRequest) {
     // 페이지네이션 적용
     const totalCount = filteredPosts.length;
     const posts = filteredPosts.slice(offset, offset + limit);
-    
-    console.log(`[사용 가능한 게시물 API] 조회 성공: ${posts?.length || 0}개 게시물 발견 (총 ${totalCount}개 중)`);
     
     // 응답 데이터 구성 - 결과를 명시적인 타입으로 변환하여 처리
     const formattedPosts: PostWithAuthor[] = posts?.map((post: any) => ({
@@ -175,11 +165,6 @@ export async function GET(req: NextRequest) {
     })) || [];
 
     // 작성자 정보가 포함된 데이터를 클라이언트에 직접 반환
-    console.log('=== 최종 응답 데이터 샘플 ===');
-    if (formattedPosts.length > 0) {
-      console.log('First post with author:', formattedPosts[0]);
-    }
-    
     return addCorsHeaders(NextResponse.json({
       success: true,
       posts: formattedPosts,
@@ -192,8 +177,6 @@ export async function GET(req: NextRequest) {
       source: 'available_posts_with_author'
     }));
   } catch (error) {
-    console.error("[사용 가능한 게시물 API] 오류:", error);
-    
     return addCorsHeaders(NextResponse.json({
       success: false,
       message: '게시물 목록을 조회하는 중 오류가 발생했습니다.',

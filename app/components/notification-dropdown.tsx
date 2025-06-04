@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -17,6 +16,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 
 // API에서 받는 알림 데이터 타입
 interface ApiNotification {
@@ -120,7 +120,6 @@ export function NotificationDropdown() {
         return "방금 전";
       }
     } catch (error) {
-      console.error("날짜 변환 오류:", error);
       return "방금 전";
     }
   };
@@ -129,107 +128,104 @@ export function NotificationDropdown() {
     if (!user) return;
     
     setIsLoadingNotifications(true);
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/notifications', {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        let errorData;
-        let errorMessage = '알림을 불러오는데 실패했습니다.';
-        let errorCode = 'UNKNOWN_ERROR';
-        
-        try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            errorData = await response.json();
-            if (errorData.error) {
-              errorMessage = errorData.error;
-              errorCode = errorData.code;
-            }
-          } else {
-            const textError = await response.text();
-            console.error('서버 응답이 JSON이 아닙니다:', textError);
-          }
-        } catch (parseError) {
-          console.error('응답 파싱 오류:', parseError);
-        }
-        
-        let shouldRedirect = false;
-        let shouldLogout = false;
-        
-        switch (errorCode) {
-          case 'AUTH_ERROR':
-            console.log('인증 오류 발생, 로그인 페이지로 이동');
-            errorMessage = '인증이 만료되었습니다. 다시 로그인해주세요.';
-            shouldRedirect = true;
-            break;
-          case 'USER_NOT_FOUND':
-            console.log('사용자를 찾을 수 없음, 로그아웃 처리');
-            errorMessage = '사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.';
-            shouldLogout = true;
-            break;
-          case 'USER_CREATE_ERROR':
-            console.log('사용자 생성 실패');
-            errorMessage = '사용자 정보 생성에 실패했습니다. 잠시 후 다시 시도해주세요.';
-            shouldLogout = true;
-            break;
-          case 'DB_CONNECTION_ERROR':
-            console.error('데이터베이스 연결 오류');
-            errorMessage = '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
-            break;
-          case 'DB_TIMEOUT_ERROR':
-            console.error('데이터베이스 시간 초과');
-            errorMessage = '서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.';
-            break;
-          case 'DB_SCHEMA_ERROR':
-            console.error('데이터베이스 스키마 오류');
-            errorMessage = '서버에서 오류가 발생했습니다. 관리자에게 문의해주세요.';
-            break;
-          case 'NETWORK_ERROR':
-            errorMessage = '네트워크 연결을 확인해주세요.';
-            break;
-        }
-        
-        toast.error(errorMessage);
-        
-        if (shouldLogout) {
-          await logout();
-          router.push('/login?callbackUrl=/mypage');
-          return;
-        }
-        
-        if (shouldRedirect) {
-          router.push('/login?callbackUrl=/mypage');
-          return;
-        }
-        
+      // Supabase 세션에서 access_token 가져오기
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
         setNotifications([]);
         return;
       }
       
-      const data = await response.json();
-
-      if (!data.notifications || !Array.isArray(data.notifications)) {
-        console.error('유효하지 않은 알림 데이터:', data);
+      const accessToken = session?.access_token;
+      
+      // 세션이 없거나 기본 사용자인 경우 API 호출 건너뛰기
+      if (!session || !accessToken) {
+        setNotifications([]);
+        return;
+      }
+      
+      // 기본 사용자 (users 테이블에 없는 사용자)의 경우 알림 건너뛰기
+      if (user.name === '사용자' && !user.profile_image) {
         setNotifications([]);
         return;
       }
 
-      const processedNotifications = data.notifications.map((item: ApiNotification) => ({
-        ...item,
-        formattedDate: formatDateToRelative(item.createdAt)
-      }));
+      // auth-context에서 생성된 기본 사용자 확인 (created_at이 최근이고 다른 필드가 기본값인 경우)
+      const isDefaultUser = user.name === '사용자' || 
+                           (!user.profile_image && user.email && !user.email.includes('@')) ||
+                           (user.updated_at && user.created_at && 
+                            new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000);
+      
+      if (isDefaultUser) {
+        setNotifications([]);
+        return;
+      }
+      
+      // 개발 환경에서 사용할 userId 추가
+      const isDev = process.env.NODE_ENV === 'development';
+      const userId = user?.id;
+      const apiUrl = isDev && userId 
+        ? `/api/notifications?userId=${userId}` 
+        : '/api/notifications';
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+        },
+        credentials: 'include', // 쿠키 포함
+      });
 
-      setNotifications(processedNotifications);
+      if (!response.ok) {
+        if (response.status === 401) {
+          setNotifications([]);
+          return;
+        } else if (response.status === 402) {
+          setNotifications([]);
+          return;
+        } else if (response.status === 500) {
+          setNotifications([]);
+          return;
+        } else {
+          setNotifications([]);
+          return;
+        }
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        
+        if (responseText.includes('<!DOCTYPE html>')) {
+          throw new Error('서버 오류가 발생했습니다.');
+        }
+        
+        throw new Error('서버 응답이 JSON 형식이 아닙니다.');
+      }
+
+      const data = await response.json();
+      
+      if (!data || !Array.isArray(data.notifications)) {
+        throw new Error('잘못된 알림 데이터 형식');
+      }
+      
+      const sortedNotifications = [...data.notifications].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      setNotifications(sortedNotifications);
     } catch (error) {
-      console.error('알림 목록 로딩 오류:', error);
-      toast.error('알림 목록을 불러오는데 실패했습니다.');
+      // 개발 환경에서만 토스트 표시
+      if (process.env.NODE_ENV === 'development') {
+        // 401 오류는 토스트로 표시하지 않음
+        if (error instanceof Error && !error.message.includes('401')) {
+          toast.error(`알림 로드 실패: ${error.message}`);
+        }
+      }
+      
       setNotifications([]);
     } finally {
       setIsLoadingNotifications(false);
@@ -257,7 +253,7 @@ export function NotificationDropdown() {
         )
       )
     } catch (error) {
-      console.error('알림 상태 업데이트 중 오류 발생:', error)
+      // 오류는 조용히 처리
     }
   }
 
@@ -279,7 +275,7 @@ export function NotificationDropdown() {
 
       setNotifications(notifications.map(notification => ({ ...notification, isRead: true })))
     } catch (error) {
-      console.error('알림 상태 일괄 업데이트 중 오류 발생:', error)
+      // 오류는 조용히 처리
     }
   }
 

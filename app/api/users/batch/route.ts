@@ -21,7 +21,6 @@ function addCorsHeaders(response: NextResponse) {
  */
 export async function POST(req: NextRequest) {
   try {
-    console.log('[사용자 일괄 조회 API] 요청 시작');
     const body = await req.json();
     const { userIds } = body;
     
@@ -32,10 +31,16 @@ export async function POST(req: NextRequest) {
       ));
     }
     
-    console.log(`[사용자 일괄 조회 API] ${userIds.length}명의 사용자 정보 조회 중...`);
-    
     // 중복 제거 및 유효한 ID만 필터링
     const validUserIds = [...new Set(userIds)].filter(id => id && id !== 'undefined' && id !== 'null');
+    
+    // 유효한 ID가 없는 경우 빈 배열 반환
+    if (validUserIds.length === 0) {
+      return addCorsHeaders(NextResponse.json({
+        success: true,
+        users: []
+      }));
+    }
     
     // Supabase Admin 클라이언트 생성
     const adminSupabase = createAdminClient();
@@ -47,8 +52,6 @@ export async function POST(req: NextRequest) {
       .in('id', validUserIds);
     
     if (usersError) {
-      console.error('[사용자 일괄 조회 API] users 테이블 조회 오류:', usersError);
-      
       // users 테이블 조회 실패 시 profiles 테이블에서 시도
       const { data: profilesData, error: profilesError } = await adminSupabase
         .from('profiles')
@@ -56,7 +59,6 @@ export async function POST(req: NextRequest) {
         .in('id', validUserIds);
       
       if (profilesError) {
-        console.error('[사용자 일괄 조회 API] profiles 테이블 조회 오류:', profilesError);
         return addCorsHeaders(NextResponse.json(
           { success: false, message: '사용자 정보 조회 중 오류가 발생했습니다.' },
           { status: 500 }
@@ -72,22 +74,17 @@ export async function POST(req: NextRequest) {
         rating: profile.rating || 4.5
       }));
       
-      console.log(`[사용자 일괄 조회 API] profiles 테이블에서 ${formattedProfiles.length}명의 정보 조회 성공`);
-      
       return addCorsHeaders(NextResponse.json({
         success: true,
         users: formattedProfiles
       }));
     }
     
-    console.log(`[사용자 일괄 조회 API] users 테이블에서 ${usersData.length}명의 정보 조회 성공`);
-    
     return addCorsHeaders(NextResponse.json({
       success: true,
       users: usersData
     }));
   } catch (error) {
-    console.error('[사용자 일괄 조회 API] 처리 오류:', error);
     return addCorsHeaders(NextResponse.json(
       { success: false, message: '요청 처리 중 오류가 발생했습니다.' },
       { status: 500 }

@@ -1,17 +1,12 @@
 "use client"
 
-// !!! 주의: 파일 식별용 고유 코드입니다. 변경하지 마세요 !!!
-console.log("🆔🆔🆔 FILE_ID_5928122_SELL_PAGE_V2");
-// 파일 로드 확인용 로그 - 이 파일이 로드되었는지 확인
-console.log("🚨🚨🚨 SELLPAGE 파일 로드됨 - 이 로그는 파일이 읽혔음을 의미함");
-
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, X } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import supabase from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 import { checkUnpaidFees } from '@/lib/fee-utils'
 import { UnpaidFeesNotice } from './UnpaidFeesNotice'
 
@@ -148,22 +143,12 @@ const concertData: Concert[] = [
 ]
 
 export default function SellPage() {
-  // 컴포넌트 실행 확인
-  console.log("🚨🚨 SellPage 컴포넌트 함수 실행 시작");
-  
   // 변수 선언을 try-catch 블록 밖으로 이동
-  const { user, isLoading } = useAuth();
-  // 인증 상태 즉시 확인
-  console.log("🔑 인증 상태 확인", { user: !!user, id: user?.id, isLoading });
+  const { user, loading } = useAuth();
   
   const router = useRouter();
   const { toast } = useToast();
   
-  // 🎯 SellPage 렌더링 진입점 로그
-  console.log("🎯 SellPage 렌더링 상태", { user, isLoading });
-  // ✅ 컴포넌트 렌더링 확인 로그
-  console.log("✅ SellPage 렌더됨", { user, isLoading, isRedirecting: false });
-
   const [concertTitle, setConcertTitle] = useState("")
   const today = new Date().toISOString().split("T")[0]
   const [concertDates, setConcertDates] = useState<Array<{ date: string }>>([{ date: today }])
@@ -197,63 +182,36 @@ export default function SellPage() {
     oldestDueDate: null
   })
 
-  // 렌더링 상태 로깅
-  console.log("🧪 렌더 상태", { isLoading, user, isRedirecting });
-
   // 통합된 useEffect - 인증 및 수수료 확인 로직
   useEffect(() => {
-    console.log("👣 통합된 useEffect 실행", { user, isLoading });
-    
     const checkUserAndFees = async () => {
       // 로딩 중이면 중단
-      if (isLoading) {
-        console.log("🔄 아직 로딩 중, 검사 중단");
+      if (loading) {
         return;
       }
       
       // 사용자가 없으면 로그인 페이지로 리다이렉트
       if (!user) {
-        console.log("👤 사용자 없음, 로그인 페이지로 리다이렉트");
         router.replace("/login?callbackUrl=/sell");
         return;
       }
       
       // 사용자 ID가 없으면 중단
       if (!user.id) {
-        console.log("🆔 사용자 ID 없음, 로그인 페이지로 리다이렉트");
         router.push('/login?redirect=/sell');
         return;
       }
       
       try {
-        console.log("🔍 수수료 확인 시작");
         setFeesLoading(true);
-        
-        // 디버깅: 사용자 ID 정보 로깅
-        console.log("👤 사용자 ID 정보:", {
-          id: user.id,
-          type: typeof user.id,
-          stringified: user.id.toString()
-        });
         
         // 수수료 확인
         const feesData = await checkUnpaidFees(user.id.toString());
-        
-        // 디버깅: 수수료 데이터 상세 정보 로깅
-        console.log("💰 수수료 데이터:", {
-          hasUnpaidFees: feesData.hasUnpaidFees,
-          count: feesData.unpaidFees.length,
-          unpaidFees: feesData.unpaidFees,
-          totalAmount: feesData.totalAmount
-        });
         
         setUnpaidFeesData(feesData);
         
         // 미납 수수료가 있으면 수수료 납부 페이지로 리다이렉트
         if (feesData.hasUnpaidFees) {
-          console.log("❗ 미납 수수료 있음 → 리디렉션 시작");
-          
-          // 🔴 중요: 상태 먼저 변경하여 렌더링 조건 준비
           setIsRedirecting(true);
           
           // 사용자에게 알림 메시지 표시
@@ -266,14 +224,13 @@ export default function SellPage() {
           
           // 잠시 대기 후 리다이렉트 (토스트 메시지를 볼 수 있도록)
           setTimeout(() => {
-            console.log("🔄 수수료 납부 페이지로 리다이렉트 실행");
             router.replace('/mypage/fee-payment?redirect=/sell');
           }, 1500);
         } else {
-          console.log("✅ 미납 수수료 없음: 판매 페이지 접근 허용");
+          // 미납 수수료 없음: 판매 페이지 접근 허용
         }
       } catch (error) {
-        console.error("❌ 수수료 확인 오류:", error);
+        // 수수료 확인 오류 처리
       } finally {
         setFeesLoading(false);
       }
@@ -281,13 +238,10 @@ export default function SellPage() {
     
     // 함수 즉시 실행
     checkUserAndFees();
-  }, [user, isLoading, router, toast]);
+  }, [user, loading, router, toast]);
 
-  // 렌더링 조건 판단을 위한 상태 로깅
-  console.log("🚫 렌더링 차단 조건 확인", { isLoading, user, isRedirecting });
-  
   // 로딩 UI 렌더링
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
@@ -332,22 +286,17 @@ export default function SellPage() {
 
   // 수동으로 수수료 체크 테스트
   const testFeeCheck = async () => {
-    console.log("수동 테스트: checkUnpaidFees 호출");
     if (!user || !user.id) return;
     
     try {
       const result = await checkUnpaidFees(user.id.toString());
-      console.log("수동 테스트 결과:", result);
       
       if (result.hasUnpaidFees) {
-        console.log("수동 테스트: 미납 수수료 감지됨!");
         alert(`미납 수수료 발견: ${result.unpaidFees.length}건, 총 ${result.totalAmount.toLocaleString()}원`);
       } else {
-        console.log("수동 테스트: 미납 수수료 없음");
         alert("미납 수수료가 없습니다.");
       }
     } catch (error) {
-      console.error("수동 테스트 오류:", error);
       alert("수수료 체크 중 오류가 발생했습니다: " + (error instanceof Error ? error.message : String(error)));
     }
   };
@@ -549,18 +498,14 @@ export default function SellPage() {
         ticketPrice: Number(sectionsData[0].price.replace(/[^0-9]/g, '')),
       }
 
-      console.log("제출할 판매 데이터:", saleData)
-
       // ✅ Supabase 세션에서 직접 토큰 가져오기
-      const { data: sessionData } = await supabase.auth.getSession()
+      const supabaseClient = await getSupabaseClient()
+      const { data: sessionData } = await supabaseClient.auth.getSession()
       const token = sessionData.session?.access_token
 
       if (!token) {
-        console.error('세션에서 토큰을 찾을 수 없습니다.')
         throw new Error('로그인이 필요합니다.')
       }
-
-      console.log('Supabase 세션 토큰 존재 여부:', !!token)
 
       // 서버에 판매 데이터 저장 (API 호출)
       const response = await fetch('/api/posts', {
@@ -573,13 +518,9 @@ export default function SellPage() {
       })
 
       const result = await response.json()
-      console.log("서버 응답:", result)
       
       if (!response.ok) {
         // 서버에서 반환된 구체적인 오류 메시지 확인
-        console.error("서버 응답 상태:", response.status, response.statusText)
-        console.error("서버 응답 전체:", result)
-        
         // 오류 메시지 구성
         let errorMessage = '판매 등록에 실패했습니다.'
         let errorDetails = ''
@@ -597,7 +538,6 @@ export default function SellPage() {
             } else {
               errorDetails = JSON.stringify(result.details, null, 2)
             }
-            console.error("오류 세부 정보:", result.details)
           }
           
           // 코드 정보가 있는 경우
@@ -644,9 +584,6 @@ export default function SellPage() {
       // 마이페이지로 리다이렉트
       router.push("/mypage")
     } catch (error) {
-      console.error("판매 등록 오류:", error)
-      console.error("오류 스택:", error instanceof Error ? error.stack : '스택 정보 없음')
-      
       // 이미 토스트가 표시되지 않은 경우에만 기본 오류 메시지 표시
       if (!(error instanceof Error && error.message !== '판매 등록에 실패했습니다.')) {
         toast({

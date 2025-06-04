@@ -43,7 +43,6 @@ const getSupabaseSession = () => {
     );
     
     if (supabaseKey) {
-      console.log("✅ Supabase 키 발견:", supabaseKey);
       const sessionStr = localStorage.getItem(supabaseKey);
       
       if (sessionStr) {
@@ -52,19 +51,11 @@ const getSupabaseSession = () => {
           
           // 세션 유효성 검사
           if (session && session.access_token && session.user) {
-            console.log("✅ 유효한 세션 발견");
             return session;
-          } else {
-            console.log("⚠️ 세션 형식이 올바르지 않음:", {
-              hasAccessToken: !!session?.access_token,
-              hasUser: !!session?.user
-            });
           }
         } catch (parseError) {
-          console.error("❌ 세션 JSON 파싱 오류:", parseError);
+          // 세션 파싱 오류 무시
         }
-      } else {
-        console.log("⚠️ 세션 문자열이 비어있음");
       }
     } else {
       // 2. 대체 키 확인
@@ -75,21 +66,17 @@ const getSupabaseSession = () => {
           try {
             const parsed = JSON.parse(value);
             if (parsed && parsed.access_token && parsed.user) {
-              console.log(`✅ 대체 키에서 세션 발견: ${key}`);
               return parsed;
             }
           } catch (e) {
-            console.log(`⚠️ 대체 키 ${key} 파싱 실패:`, e);
+            // 대체 키 파싱 실패 무시
           }
         }
       }
-      
-      console.log("⚠️ Supabase 세션 키를 찾을 수 없음");
     }
     
     return null;
   } catch (error) {
-    console.error("❌ 세션 처리 중 오류 발생:", error);
     return null;
   }
 };
@@ -150,7 +137,7 @@ export default function MyPage() {
         try {
           setLastCheckedTimes(JSON.parse(saved));
         } catch (e) {
-          console.error('마지막 확인 시간 파싱 오류:', e);
+          // 마지막 확인 시간 파싱 오류 무시
         }
       }
     }
@@ -200,7 +187,7 @@ export default function MyPage() {
           return true;
         }
       } catch (e) {
-        console.error('제안 수 파싱 오류:', e);
+        // 제안 수 파싱 오류 무시
       }
     }
     
@@ -224,7 +211,6 @@ export default function MyPage() {
     
     try {
       setIsLoadingRequests(true);
-      console.log('요청중인 취켓팅 조회 시작 - 사용자 ID:', user.id);
       
       const supabaseClient = await getSupabaseClient();
       
@@ -278,7 +264,6 @@ export default function MyPage() {
           .eq('post_id', post.id);
 
         if (proposalsError) {
-          console.error('제안 데이터 조회 오류:', proposalsError);
           return {
             ...post,
             proposals: [],
@@ -296,14 +281,12 @@ export default function MyPage() {
 
       const postsWithProposals = await Promise.all(postsWithProposalsPromises);
 
-      console.log('요청중인 취켓팅 조회 성공:', postsWithProposals);
       setRequestedTickets(postsWithProposals);
       
       // 제안 수 저장
       updateProposalCounts(postsWithProposals);
       
     } catch (error) {
-      console.error('요청중인 취켓팅 조회 오류:', error);
       toast.error('요청 목록을 불러오는데 실패했습니다');
     } finally {
       setIsLoadingRequests(false);
@@ -314,7 +297,6 @@ export default function MyPage() {
   const fetchProposals = async (ticketId: number) => {
     try {
       setIsLoadingProposals(true);
-      console.log('제안 목록 조회 시작 - 티켓 ID:', ticketId);
       
       const supabaseClient = await getSupabaseClient();
       const { data, error } = await supabaseClient
@@ -343,11 +325,9 @@ export default function MyPage() {
         throw error;
       }
 
-      console.log('제안 목록 조회 성공:', data);
       setProposals(data || []);
       
     } catch (error) {
-      console.error('제안 목록 조회 오류:', error);
       toast.error('제안 목록을 불러오는데 실패했습니다');
     } finally {
       setIsLoadingProposals(false);
@@ -357,8 +337,6 @@ export default function MyPage() {
   // 제안 수락하기
   const handleAcceptProposal = async (proposalId: number) => {
     try {
-      console.log('제안 수락 시작 - 제안 ID:', proposalId);
-      
       const supabaseClient = await getSupabaseClient();
       const { error } = await supabaseClient
         .from('proposals')
@@ -376,7 +354,6 @@ export default function MyPage() {
       fetchRequestedTickets();
       
     } catch (error) {
-      console.error('제안 수락 오류:', error);
       toast.error('제안 수락에 실패했습니다');
     }
   };
@@ -420,39 +397,21 @@ export default function MyPage() {
     
     const session = getSupabaseSession();
     if (session) {
-      console.log("✅ Supabase 세션 정보:", {
-        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'none',
-        expiresAt: session.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : 'unknown',
-        user: session.user?.id ? {
-          id: session.user.id,
-          email: session.user.email,
-          role: session.user.role
-        } : 'none'
-      });
-
       // JWT 토큰 분해 시도
       if (session.access_token) {
         try {
           const parts = session.access_token.split('.');
           if (parts.length === 3) {
             const payload = JSON.parse(atob(parts[1]));
-            console.log("✅ 토큰 페이로드:", {
-              role: payload.role,
-              expiresAt: new Date(payload.exp * 1000).toLocaleString(),
-              aud: payload.aud,
-              iss: payload.iss
-            });
+            // 토큰 정보 처리 (로그 없이)
           }
         } catch (e) {
-          console.error("❌ 토큰 페이로드 파싱 실패:", e);
+          // 토큰 페이로드 파싱 실패 무시
         }
       }
     } else {
-      console.warn("⚠️ Supabase 세션을 찾을 수 없음");
-      
       // 모든 스토리지 키 검사
       const allStorageKeys = Object.keys(localStorage);
-      console.log("📋 localStorage 키 목록:", allStorageKeys);
       
       // JWT 형식 토큰 검색
       const tokenValues = allStorageKeys
@@ -468,10 +427,6 @@ export default function MyPage() {
           key,
           value: localStorage.getItem(key)?.substring(0, 50) + '...'
         }));
-      
-      if (tokenValues.length > 0) {
-        console.log("🔍 인증 관련 키 발견:", tokenValues);
-      }
     }
   }, []);
 
@@ -484,12 +439,10 @@ export default function MyPage() {
       const filtered = originalSales.filter(item => 
         item.isActive && item.status === "판매중"
       );
-      console.log("필터링된 판매중 상품:", filtered.length);
       setOngoingSales(filtered);
     } else {
       // 필터 해제
       setOngoingSales(originalSales);
-      console.log("전체 상품으로 복원:", originalSales.length);
     }
   };
 
@@ -503,8 +456,6 @@ export default function MyPage() {
   // 요청중인 취켓팅 삭제 핸들러 추가
   const handleDeleteRequest = async (requestId: number) => {
     try {
-      console.log('요청 삭제 시작 - 요청 ID:', requestId);
-      
       const supabaseClient = await getSupabaseClient();
       const { error } = await supabaseClient
         .from('posts')
@@ -521,7 +472,6 @@ export default function MyPage() {
       fetchRequestedTickets();
       
     } catch (error) {
-      console.error('요청 삭제 오류:', error);
       toast.error('요청 삭제에 실패했습니다');
     }
   };
@@ -545,7 +495,6 @@ export default function MyPage() {
       fetchRequestedTickets();
       
     } catch (error) {
-      console.error('게시글 삭제 오류:', error);
       toast.error('게시글 삭제에 실패했습니다');
     }
   };
@@ -556,7 +505,6 @@ export default function MyPage() {
       await signOut();
       router.push('/');
     } catch (error) {
-      console.error('로그아웃 실패:', error);
       toast.error('로그아웃에 실패했습니다.');
     }
   };
@@ -580,11 +528,8 @@ export default function MyPage() {
       // 토큰 가져오기
       const token = localStorage.getItem("supabase.auth.token");
       if (!token) {
-        console.warn("토큰이 없어 판매자 통계 업데이트를 건너뜁니다");
         return;
       }
-      
-      console.log("판매자 통계 업데이트 시도:", { sellerId, completedSales });
       
       // seller-stats API 호출
       // const response = await fetch('/api/seller-stats/update', {
@@ -603,14 +548,11 @@ export default function MyPage() {
       
       // if (response.ok) {
       //   const result = await response.json();
-      //   console.log("판매자 통계 업데이트 성공:", result);
       // } else {
-      //   console.error("판매자 통계 업데이트 실패:", response.status);
       //   const errorText = await response.text();
-      //   console.error("오류 응답:", errorText);
       // }
     } catch (error) {
-      console.error("판매자 통계 업데이트 오류:", error);
+      // 판매자 통계 업데이트 오류 무시
     }
   };
 
@@ -896,7 +838,7 @@ export default function MyPage() {
                                   <MessageButton 
                                     orderNumber={ticket.acceptedProposal.transaction?.orderNumber || `PROPOSAL-${ticket.acceptedProposal.id}`}
                                     onClick={() => {
-                                      console.log('메시지 버튼 클릭:', ticket.acceptedProposal.transaction?.orderNumber || ticket.acceptedProposal.id);
+                                      // 메시지 버튼 클릭 처리
                                     }}
                                   />
                                 </div>

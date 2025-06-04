@@ -41,7 +41,7 @@ interface DatabaseProposal {
   price: number;
   message: string;
   created_at: string;
-  user_id: string;
+  proposer_id: string;
   post: DatabasePost;
   users: DatabaseUser;
 }
@@ -82,7 +82,6 @@ const getSupabaseSession = () => {
     }
     return null;
   } catch (error) {
-    console.error('세션 파싱 오류:', error);
     return null;
   }
 };
@@ -107,16 +106,10 @@ export const fetchOngoingSales = async (
   setOriginalSales: (sales: Sale[]) => void,
   setIsLoadingSales: (isLoading: boolean) => void
 ) => {
-  console.log("🚀🚀🚀 fetchOngoingSales 함수 시작! 🚀🚀🚀");
-  console.log("📊 사용자 정보:", user);
-  console.log("📊 사용자 ID:", user?.id);
-  
   if (!user) {
-    console.log("❌ 사용자 정보가 없어서 함수 종료");
     return;
   }
   
-  console.log("✅ 사용자 정보 확인 완료, 로딩 상태 설정 중...");
   setIsLoadingSales(true);
   
   try {
@@ -239,22 +232,28 @@ export const fetchOngoingSales = async (
       .eq('status', 'accepted');
 
     if (proposalError) {
-      console.error('제안 조회 실패:', proposalError);
+      // 제안 조회 실패는 무시하고 계속 진행
     }
 
     // 제안이 있는 경우 사용자 정보 가져오기
     let acceptedProposalPosts: any[] = [];
     if (proposalData) {
       // 사용자 정보 가져오기
-      const userIds = proposalData.map(proposal => proposal.user_id).filter(Boolean);
-      const { data: usersData } = await supabaseClient
-        .from('users')
-        .select('id, name, email, profile_image, rating, successful_sales, response_rate')
-        .in('id', userIds);
+      const userIds = proposalData.map(proposal => proposal.proposer_id).filter(Boolean);
+      
+      let usersData: any[] = [];
+      if (userIds.length > 0) {
+        const { data: queryUsersData } = await supabaseClient
+          .from('users')
+          .select('id, name, email, profile_image, rating, successful_sales, response_rate')
+          .in('id', userIds);
+        
+        usersData = queryUsersData || [];
+      }
 
       // 사용자 정보를 Map으로 변환
       const usersMap = new Map(
-        (usersData || []).map(user => [user.id, user])
+        usersData.map(user => [user.id, user])
       );
 
       acceptedProposalPosts = (proposalData as unknown as DatabaseProposal[])
@@ -265,7 +264,7 @@ export const fetchOngoingSales = async (
           proposal_status: proposal.status,
           proposal_id: proposal.id,
           proposal_message: proposal.message,
-          user: usersMap.get(proposal.user_id) || null
+          user: usersMap.get(proposal.proposer_id) || null
         }));
     }
 
@@ -294,7 +293,6 @@ export const fetchOngoingSales = async (
     processAndSetSalesData(allSales, setSaleStatus, setOriginalSales, setOngoingSales);
 
   } catch (error) {
-    console.error('판매 목록 조회 실패:', error);
     toast.error('판매 목록을 불러오는데 실패했습니다.');
     setOngoingSales([]);
     setOriginalSales([]);
@@ -321,7 +319,6 @@ export const processAndSetSalesData = (
   
   // 배열이 비어있는 경우
   if (!Array.isArray(sales) || sales.length === 0) {
-    console.log("판매 데이터가 없습니다");
     setOngoingSales([]);
     setOriginalSales([]);
     setSaleStatus(newSaleStatus);
@@ -342,9 +339,6 @@ export const processAndSetSalesData = (
     } else if (statusText === '판매중') {
       newSaleStatus.판매중인상품 += 1;
     }
-    
-    // 상품별 상태 로그
-    console.log(`[LOG][상품] id=${sale.id}, title=${sale.title}, statusText=${statusText}, isActive=${sale.isActive}, 누적카운트:`, { ...newSaleStatus });
   });
   
   // 상태에 따라 정렬
@@ -352,11 +346,6 @@ export const processAndSetSalesData = (
   
   // 거래완료 상품 제외
   const filteredSales = sortedSalesData.filter(item => item.status !== '거래완료');
-  
-  // 최종 카운트 및 상품 개수 로그
-  console.log("[LOG] 최종 판매중인 상품 카운트:", newSaleStatus.판매중인상품);
-  console.log("[LOG] 최종 상태별 카운트:", { ...newSaleStatus });
-  console.log("[LOG] 최종 필터링된 상품 개수:", filteredSales.length);
   
   // 상태 업데이트
   setSaleStatus(newSaleStatus);
@@ -375,8 +364,6 @@ export const fetchOngoingPurchases = async (
   
   setIsLoadingPurchases(true);
   try {
-    console.log("📣 fetchOngoingPurchases 호출됨, 사용자 ID:", user.id);
-    
     // ✅ 토큰 가져오기 (판매 목록과 동일하게 처리)
     const authToken = getAuthToken();
     const headers = {
@@ -394,23 +381,17 @@ export const fetchOngoingPurchases = async (
       credentials: 'include',
     });
 
-    console.log("📥 구매 데이터 API 응답 상태:", response.status, response.statusText);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("구매 API 오류 응답:", errorText);
       throw new Error('구매 목록을 불러오는데 실패했습니다.');
     }
 
     const data = await response.json();
 
     if (!data.purchases || !Array.isArray(data.purchases)) {
-      console.error("응답에 purchases 배열이 없습니다:", data);
       setOngoingPurchases([]);
       return;
     }
-
-    console.log("✅ 구매 데이터:", data.purchases);
 
     // ✅ CONFIRMED 제외하고 표시할 구매 목록 필터링
     const newPurchaseStatus = {
@@ -460,7 +441,6 @@ export const fetchOngoingPurchases = async (
     setOngoingPurchases(filtered);
     setPurchaseStatus(newPurchaseStatus);
   } catch (error) {
-    console.error("구매 목록 로딩 오류:", error);
     toast.error('구매 목록을 불러오는데 실패했습니다.');
     setOngoingPurchases([]);
   } finally {
@@ -485,7 +465,6 @@ export const processPurchaseData = (
   
   // 배열이 아니거나 비어있는 경우 빈 배열로 처리
   if (!Array.isArray(purchases) || purchases.length === 0) {
-    console.log("구매 데이터가 없거나 유효하지 않습니다", purchases);
     setOngoingPurchases([]);
     setPurchaseStatus(newPurchaseStatus);
     return;
@@ -497,26 +476,17 @@ export const processPurchaseData = (
     const purchaseStatus = purchase.status || '';
     const statusText = getStatusText(purchaseStatus);
     
-    console.log(`구매 데이터 처리: ID=${purchase.id}, 상태=${purchaseStatus}, 변환된 상태=${statusText}`);
-    
     // 상태 카운트 로직 - getStatusText 함수 사용
     if (statusText === '취켓팅진행중') {
       newPurchaseStatus.취켓팅진행중 += 1;
-      console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅진행중 (+1)`);
     } else if (statusText === '취켓팅완료') {
       newPurchaseStatus.취켓팅완료 += 1;
-      console.log(`[구매 카운트] ID ${purchase.id}: 취켓팅완료 (+1)`);
     } else if (statusText === '거래완료') {
       newPurchaseStatus.거래완료 += 1;
-      console.log(`[구매 카운트] ID ${purchase.id}: 거래완료 (+1)`);
     } else if (statusText === '거래취소') {
       newPurchaseStatus.거래취소 += 1;
-      console.log(`[구매 카운트] ID ${purchase.id}: 거래취소 (+1)`);
     } else if (statusText === '판매중') {
       newPurchaseStatus.판매중인상품 += 1;
-      console.log(`[구매 카운트] ID ${purchase.id}: 판매중인상품 (+1)`);
-    } else {
-      console.log(`[구매 카운트] 알 수 없는 상태: ${purchase.id}, status=${purchaseStatus}, 변환된 상태=${statusText}`);
     }
     
     // 게시물 데이터 안전하게 접근
@@ -530,10 +500,8 @@ export const processPurchaseData = (
     if (post) {
       if (post.title) {
         title = post.title;
-        console.log(`[제목] post.title에서 찾음: ${title}`);
       } else if (post.eventName || post.event_name) {
         title = post.eventName || post.event_name;
-        console.log(`[제목] post.eventName에서 찾음: ${title}`);
       }
     }
     
@@ -541,23 +509,16 @@ export const processPurchaseData = (
     if (title === '제목 없음') {
       if (purchase.ticket_title) {
         title = purchase.ticket_title;
-        console.log(`[제목] purchase.ticket_title에서 찾음: ${title}`);
       } else if (purchase.ticketTitle) {
         title = purchase.ticketTitle;
-        console.log(`[제목] purchase.ticketTitle에서 찾음: ${title}`);
       } else if (purchase.event_name) {
         title = purchase.event_name;
-        console.log(`[제목] purchase.event_name에서 찾음: ${title}`);
       } else if (purchase.eventName) {
         title = purchase.eventName;
-        console.log(`[제목] purchase.eventName에서 찾음: ${title}`);
       } else if (purchase.title) {
         title = purchase.title;
-        console.log(`[제목] purchase.title에서 찾음: ${title}`);
       }
     }
-    
-    console.log(`구매 항목 최종 제목: "${title}"`);
     
     return {
       id: purchase.id,
@@ -580,22 +541,15 @@ export const processPurchaseData = (
     };
   });
   
-  console.log("최종 구매 상태 카운트:", newPurchaseStatus);
-  
   // 정렬: 취켓팅 진행중 > 취켓팅 완료 > 거래완료 > 거래취소
   const sortedPurchases = [...purchasesData].sort((a, b) => a.sortPriority - b.sortPriority);
   
-  console.log("정렬된 구매 데이터:", sortedPurchases);
-  
   // ✅ CONFIRMED 상태의 구매 항목 필터링 (진행중인 구매만 표시)
   const ongoingPurchasesOnly = sortedPurchases.filter((p) => p.status !== '거래완료');
-  console.log("진행중인 구매 데이터 (CONFIRMED 제외):", ongoingPurchasesOnly);
   
   // 상태 업데이트 - 진행중인 구매만 표시
   setOngoingPurchases(ongoingPurchasesOnly);
   setPurchaseStatus(newPurchaseStatus);
-  
-  console.log("구매 데이터 로딩 완료:", sortedPurchases.length, "개 항목 중", ongoingPurchasesOnly.length, "개 진행중");
 };
 
 // 알림 목록 가져오기
@@ -675,7 +629,6 @@ export const fetchNotifications = async (
     
     setNotifications(notificationsData);
   } catch (error) {
-    console.error('알림 목록 로딩 오류:', error);
     toast.error('알림 목록을 불러오는데 실패했습니다.');
     // 더미 데이터로 대체
     setNotifications([
@@ -733,7 +686,6 @@ export const markNotificationAsRead = async (
       )
     );
   } catch (error) {
-    console.error('알림 상태 업데이트 오류:', error);
     toast.error('알림 상태를 업데이트하는데 실패했습니다.');
   }
 };
@@ -754,15 +706,11 @@ export const deletePost = async (
       return;
     }
     
-    console.log("게시물 삭제 요청:", postId, "사용자 ID:", user.id);
-    
     // 현재 실행 중인 포트 확인 및 사용
     const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-    console.log("현재 접속 URL:", currentUrl);
     
     // 현재 호스트 URL 가져오기 (포트 포함)
     const currentHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
-    console.log("현재 호스트:", currentHost);
     
     // 인증 토큰 가져오기
     const authToken = getAuthToken();
@@ -782,9 +730,6 @@ export const deletePost = async (
     const userId = user.id?.toString() || '';
     let url = `${currentHost}/api/posts/${postId}?userId=${userId}&t=${Date.now()}`;
     
-    console.log("삭제 요청 URL:", url);
-    console.log("인증 헤더 포함:", !!headers['Authorization']);
-    
     const response = await fetch(url, {
       method: 'DELETE',
       headers,
@@ -794,12 +739,10 @@ export const deletePost = async (
     // 응답이 JSON이 아닌 경우 처리
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-      console.error("응답이 JSON이 아닙니다:", await response.text());
       throw new Error("서버에서 유효한 응답을 받지 못했습니다.");
     }
 
     const data = await response.json();
-    console.log("삭제 응답:", data);
     
     if (!response.ok) {
       throw new Error(data.message || '게시물 삭제에 실패했습니다.');
@@ -835,7 +778,6 @@ export const deletePost = async (
       return newStatus;
     });
   } catch (error) {
-    console.error('게시물 삭제 오류:', error);
     toast.error(error instanceof Error ? error.message : "게시물 삭제 중 오류가 발생했습니다.");
   }
 };
@@ -898,8 +840,6 @@ export const cancelPurchase = async (
       return false;
     }
     
-    console.log("구매 거래 취소 요청:", orderNumber, "사용자 ID:", user.id);
-    
     // 현재 호스트 URL 가져오기 (포트 포함)
     const currentHost = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
     
@@ -922,8 +862,6 @@ export const cancelPurchase = async (
     // 현재 호스트 사용 (포트 불일치 문제 해결)
     let url = `${currentHost}/api/purchase/cancel?orderNumber=${orderNumber}&userId=${userId}&t=${Date.now()}`;
     
-    console.log("취소 요청 URL:", url);
-    
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -940,11 +878,8 @@ export const cancelPurchase = async (
     try {
       responseData = await response.json();
     } catch (e) {
-      console.error("응답 파싱 오류:", e);
       responseData = { success: false, message: "서버 응답을 처리할 수 없습니다." };
     }
-    
-    console.log("취소 응답:", responseData);
     
     if (!response.ok) {
       throw new Error(responseData.message || responseData.error || '거래 취소에 실패했습니다.');
@@ -973,7 +908,6 @@ export const cancelPurchase = async (
     
     return true;
   } catch (error) {
-    console.error('거래 취소 오류:', error);
     toast.error(error instanceof Error ? error.message : "거래 취소 중 오류가 발생했습니다.");
     return false;
   }
@@ -1011,7 +945,6 @@ export const confirmPurchase = async (
 
     return data;
   } catch (error) {
-    console.error('구매 확정 오류:', error);
     throw error;
   }
 }; 

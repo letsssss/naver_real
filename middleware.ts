@@ -40,13 +40,72 @@ const PROTECTED_API_ROUTES = [
   '/api/notifications',
 ];
 
-// 로깅 함수
-const logDebug = (message: string, data?: any) => {
-  console.log(`[Middleware] ${message}`, data ? data : '');
-};
-
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
+  
+  // 1. 먼저 Authorization 헤더에서 토큰 확인
+  const authHeader = req.headers.get('authorization');
+  const bearerToken = authHeader?.replace('Bearer ', '');
+  
+  // 2. 쿠키에서도 토큰 확인
+  const authCookieValue = req.cookies.get(authCookie)?.value;
+  let cookieToken = null;
+  
+  if (authCookieValue) {
+    try {
+      const cookieData = JSON.parse(authCookieValue);
+      cookieToken = cookieData.access_token;
+    } catch (e) {
+      // 쿠키 파싱 실패 시 무시
+    }
+  }
+  
+  // 3. 사용할 토큰 결정 (헤더 우선, 쿠키 대안)
+  const token = bearerToken || cookieToken;
+  
+  if (token) {
+    // Admin 클라이언트로 토큰 검증
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return handleAuthFailure(req);
+      }
+      
+      // Admin 클라이언트로 토큰 검증
+      const { createClient } = await import('@supabase/supabase-js');
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      
+      const { data: { user }, error } = await adminClient.auth.getUser(token);
+      
+      if (error || !user) {
+        // 토큰 검증 실패 시 기존 방식으로 폴백
+        const supabase = createMiddlewareClient({ req, res });
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session) {
+          return handleAuthFailure(req);
+        }
+        
+        return handleAuthenticatedRequest(req, res, session, session.user);
+      }
+      
+      // 세션 객체 구성
+      const session = {
+        access_token: token,
+        user: user,
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60)
+      };
+      
+      return handleAuthenticatedRequest(req, res, session, user);
+      
+    } catch (tokenError) {
+      // 오류 발생 시 기존 방식으로 폴백
+    }
+  }
+  
+  // 4. 토큰이 없거나 검증 실패 시 기존 방식 사용
   const supabase = createMiddlewareClient({ req, res });
 
   try {
@@ -54,146 +113,129 @@ export async function middleware(req: NextRequest) {
     const { data: { session }, error } = await supabase.auth.getSession();
 
     if (error) {
-      logDebug('세션 새로고침 오류:', error.message);
       return handleAuthFailure(req);
     }
 
-    // 세션이 있는 경우 인증 관련 쿠키 설정
-    if (session) {
-      // Supabase 세션 쿠키 설정
-      res.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        user: session.user
-      }), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-        path: '/',
-      });
+    return handleAuthenticatedRequest(req, res, session, session?.user);
+  } catch (error) {
+    return handleAuthFailure(req);
+  }
+}
 
-      // 인증 상태 쿠키 설정
-      res.cookies.set('auth-status', 'authenticated', {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-        path: '/',
-      });
+// 인증된 요청 처리 로직을 별도 함수로 분리
+function handleAuthenticatedRequest(req: NextRequest, res: NextResponse, session: any, user: any) {
+  // 세션이 있는 경우 인증 관련 쿠키 설정
+  if (session && user) {
+    // Supabase 세션 쿠키 설정
+    res.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+      user: session.user || user
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
 
-      // 사용자 정보 쿠키 설정
-      res.cookies.set('user', JSON.stringify({
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.user_metadata?.name || '사용자',
-        role: session.user.user_metadata?.role || 'USER'
-      }), {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-        path: '/',
-      });
+    // 인증 상태 쿠키 설정
+    res.cookies.set('auth-status', 'authenticated', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
 
-      // Supabase 토큰 타입 쿠키 설정
-      res.cookies.set(`sb-${projectRef}-auth-token-type`, 'authenticated', {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-        path: '/',
-      });
-    }
+    // 사용자 정보 쿠키 설정
+    res.cookies.set('user', JSON.stringify({
+      id: user.id,
+      email: user.email,
+      name: user.user_metadata?.name || '사용자',
+      role: user.user_metadata?.role || 'USER'
+    }), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
 
-    // API 요청에 대한 인증 처리
-    if (req.nextUrl.pathname.startsWith('/api/')) {
-      if (!session) {
-        logDebug('API 인증 실패: 세션 없음');
-        return new NextResponse(
-          JSON.stringify({ error: '로그인이 필요합니다.' }),
-          { status: 401, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
+    // Supabase 토큰 타입 쿠키 설정
+    res.cookies.set(`sb-${projectRef}-auth-token-type`, 'authenticated', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
+  }
 
-      // 세션이 있으면 요청 허용
-      logDebug('API 인증 성공:', session.user.id);
-      return res;
-    }
-
-    // 보호된 라우트 확인
-    const isProtectedRoute = PROTECTED_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
-    const isAdminRoute = req.nextUrl.pathname.startsWith('/admin');
-    const isProtectedApiRoute = PROTECTED_API_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
-
-    // ✅ 인증이 필요한 경로에서 세션이 없는 경우
-    if (!session && (isProtectedRoute || isProtectedApiRoute)) {
-      logDebug('🚫 보호된 경로 접근 거부:', req.nextUrl.pathname);
-      
-      // API 경로는 401 응답
-      if (isProtectedApiRoute) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
-      }
-      
-      // 페이지 경로는 로그인으로 리다이렉트
-      const redirectUrl = new URL('/login', req.url);
-      redirectUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
-      
-      const response = NextResponse.redirect(redirectUrl);
-      
-      // 모든 인증 관련 쿠키 제거
-      response.cookies.set('auth-status', '', { 
-        expires: new Date(0),
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      });
-      
-      response.cookies.set('user', '', {
-        expires: new Date(0),
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      });
-      
-      response.cookies.set(`sb-${projectRef}-auth-token`, '', {
-        expires: new Date(0),
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      });
-      
-      response.cookies.set(`sb-${projectRef}-auth-token-type`, '', {
-        expires: new Date(0),
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      });
-      
-      return response;
-    }
-
-    // ✅ 관리자 권한 확인 (세션이 있는 경우)
-    if (session && isAdminRoute) {
-      // 관리자 권한은 페이지에서 확인하도록 위임
-      console.log('✅ [MW] 관리자 경로 접근 - 페이지에서 권한 확인');
-    }
-
-    // ✅ 인증된 사용자의 경우 세션 정보 로깅
-    if (session) {
-      console.log('✅ [MW] 인증된 사용자:', {
-        email: session.user.email,
-        id: session.user.id,
-        expires: new Date(session.expires_at! * 1000).toLocaleString()
-      });
+  // API 요청에 대한 인증 처리
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    if (!session || !user) {
+      return new NextResponse(
+        JSON.stringify({ error: '로그인이 필요합니다.' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     return res;
-  } catch (error) {
-    console.error('미들웨어 오류:', error);
-    return handleAuthFailure(req);
   }
+
+  // 보호된 라우트 확인
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
+  const isAdminRoute = req.nextUrl.pathname.startsWith('/admin');
+  const isProtectedApiRoute = PROTECTED_API_ROUTES.some(route => req.nextUrl.pathname.startsWith(route));
+
+  // ✅ 인증이 필요한 경로에서 세션이 없는 경우
+  if (!session && (isProtectedRoute || isProtectedApiRoute)) {
+    // API 경로는 401 응답
+    if (isProtectedApiRoute) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    }
+    
+    // 페이지 경로는 로그인으로 리다이렉트
+    const redirectUrl = new URL('/login', req.url);
+    redirectUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    
+    const response = NextResponse.redirect(redirectUrl);
+    
+    // 모든 인증 관련 쿠키 제거
+    response.cookies.set('auth-status', '', { 
+      expires: new Date(0),
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+    
+    response.cookies.set('user', '', {
+      expires: new Date(0),
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+    
+    response.cookies.set(`sb-${projectRef}-auth-token`, '', {
+      expires: new Date(0),
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+    
+    response.cookies.set(`sb-${projectRef}-auth-token-type`, '', {
+      expires: new Date(0),
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
+    
+    return response;
+  }
+
+  return res;
 }
 
 // 인증 실패 처리 함수

@@ -39,7 +39,7 @@ class SupabaseClient {
 
       // 연결 상태 모니터링
       SupabaseClient.instance.auth.onAuthStateChange((event, session) => {
-        console.log('Supabase auth state changed:', event, session?.user?.id);
+        // Supabase auth state changed
       });
     }
 
@@ -58,16 +58,16 @@ class SupabaseClient {
     const channel = this.getInstance()
       .channel(channelId)
       .on('presence', { event: 'sync' }, () => {
-        console.log('Channel presence sync:', channelId);
+        // Channel presence sync
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('Channel presence join:', key, newPresences);
+        // Channel presence join
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('Channel presence leave:', key, leftPresences);
+        // Channel presence leave
       })
       .subscribe((status: string) => {
-        console.log(`Channel ${channelId} status:`, status);
+        // Channel status
       });
 
     this.subscriptions.set(channelId, { channel, count: 1 });
@@ -100,7 +100,7 @@ class SupabaseClient {
       const { error } = await this.getInstance().from('health_check').select('count').single();
       return !error;
     } catch (error) {
-      console.error('Supabase connection check failed:', error);
+      // Supabase connection check failed
       return false;
     }
   }
@@ -108,7 +108,48 @@ class SupabaseClient {
   // 클라이언트 재설정
   public static reset(): void {
     this.unsubscribeAll();
+    // 기존 인스턴스가 있다면 명시적으로 로그아웃
+    if (this.instance) {
+      try {
+        this.instance.auth.signOut();
+      } catch (error) {
+        // 클라이언트 리셋 중 로그아웃 에러 처리
+      }
+    }
     this.instance = null;
+  }
+
+  // 완전한 정리 메소드 추가
+  public static async clearAll(): Promise<void> {
+    try {
+      // 모든 구독 해제
+      this.unsubscribeAll();
+      
+      // 인스턴스가 있다면 로그아웃
+      if (this.instance) {
+        await this.instance.auth.signOut();
+      }
+      
+      // 브라우저 환경에서만 실행
+      if (typeof window !== 'undefined') {
+        // IndexedDB 정리 (Supabase가 사용하는 저장소)
+        try {
+          const databases = await indexedDB.databases();
+          for (const db of databases) {
+            if (db.name && (db.name.includes('supabase') || db.name.includes('gotrue'))) {
+              indexedDB.deleteDatabase(db.name);
+            }
+          }
+        } catch (idbError) {
+          // IndexedDB 정리 중 에러 처리
+        }
+      }
+      
+      // 인스턴스 초기화
+      this.instance = null;
+    } catch (error) {
+      // 완전한 정리 중 에러 처리
+    }
   }
 }
 
@@ -161,7 +202,7 @@ class SupabaseService {
       
       return null;
     } catch (error) {
-      console.error('세션 정보를 불러오는 중 오류 발생:', error);
+      // 세션 정보를 불러오는 중 오류 발생
       return null;
     }
   }
@@ -169,7 +210,7 @@ class SupabaseService {
   // 인증된 클라이언트 가져오기
   public async getAuthClient(): Promise<SupabaseClientType> {
     if (!isClient()) {
-      console.warn('getAuthClient는 클라이언트 사이드에서만 사용할 수 있습니다.');
+      // getAuthClient는 클라이언트 사이드에서만 사용할 수 있습니다
       return this.client;
     }
 
@@ -192,10 +233,9 @@ class SupabaseService {
       }
 
       // 세션이 없으면 기본 클라이언트 반환
-      console.debug('인증되지 않은 상태입니다. 기본 클라이언트를 사용합니다.');
       return this.client;
     } catch (error) {
-      console.error('인증된 클라이언트 초기화 중 오류 발생:', error);
+      // 인증된 클라이언트 초기화 중 오류 발생
       return this.client;
     }
   }
@@ -206,16 +246,14 @@ class SupabaseService {
       const {
         data: { subscription },
       } = this.client.auth.onAuthStateChange((event, session) => {
-        //console.log('[세션 변경 감지]', event, session?.user?.id);
         callback({ event, session });
       });
 
       return () => {
-        console.log('[세션 리스너 정리]');
         subscription?.unsubscribe();
       };
     } catch (error) {
-      console.error('[세션 리스너 등록 중 오류]', error);
+      // 세션 리스너 등록 중 오류
       return () => {};
     }
   }
@@ -244,8 +282,24 @@ class SupabaseService {
       
       return session;
     } catch (error) {
-      console.error('[세션 갱신 실패]', error);
+      // 세션 갱신 실패
       return null;
+    }
+  }
+
+  // 완전한 로그아웃 처리
+  public async clearAuth(): Promise<void> {
+    try {
+      // 인증된 클라이언트 정리
+      this.authClient = null;
+      
+      // Supabase 클라이언트 완전 정리
+      await SupabaseClient.clearAll();
+      
+      // 새로운 기본 클라이언트 재생성
+      this.client = SupabaseClient.getInstance();
+    } catch (error) {
+      // 인증 정리 중 에러
     }
   }
 }
@@ -268,3 +322,9 @@ export const checkSupabaseConnection = () =>
   SupabaseClient.checkConnection();
 export const resetSupabaseClient = () => 
   SupabaseClient.reset();
+
+// 완전한 정리 함수들 추가
+export const clearSupabaseAll = () => 
+  SupabaseClient.clearAll();
+export const clearAuth = () => 
+  supabaseService.clearAuth();
