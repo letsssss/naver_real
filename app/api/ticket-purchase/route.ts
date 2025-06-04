@@ -3,7 +3,6 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
 import { adminSupabase, createAdminClient } from "@/lib/supabase-admin";
-import { getSupabaseClient } from '@/lib/supabase';
 import { verifyToken } from "@/lib/auth";
 import { sendPurchaseCompletedNotification } from '@/services/kakao-notification-service';
 import { headers } from 'next/headers';
@@ -46,8 +45,6 @@ async function createSimpleOrderNumber() {
 // POST 요청 핸들러 - 티켓 구매 신청
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await getSupabaseClient();
-    
     console.log("티켓 구매 API 호출됨");
     
     // 현재 인증된 사용자 정보 가져오기
@@ -77,7 +74,7 @@ export async function POST(request: NextRequest) {
     if (!authUser) {
       // 직접 세션 확인
       try {
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const { data: sessionData, error: sessionError } = await adminSupabase.auth.getSession();
         if (!sessionError && sessionData.session?.user) {
           console.log("세션은 존재하지만 getAuthenticatedUser에서 인식하지 못함:", 
             sessionData.session.user.id);
@@ -115,7 +112,7 @@ export async function POST(request: NextRequest) {
         if (!authUser && authHeader.startsWith('Bearer ')) {
           const token = authHeader.substring(7);
           try {
-            const { data, error } = await supabase.auth.getUser(token);
+            const { data, error } = await adminSupabase.auth.getUser(token);
             if (!error && data.user) {
               console.log("Authorization 헤더에서 사용자 인증 성공:", data.user.id);
               authUser = data.user;
