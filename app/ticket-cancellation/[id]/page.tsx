@@ -197,7 +197,7 @@ export default function TicketCancellationDetail() {
         
         // 날짜 및 가격 정보 파싱
         let eventDate = '', eventTime = '', eventVenue = '', seatOptions = [];
-        let eventPrice = postData.price || 0;
+        let eventPrice = postData.ticketPrice || postData.price || 0;  // ticketPrice 필드를 우선적으로 사용
         let contentObj = null;
         
         try {
