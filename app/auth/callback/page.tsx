@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/lib/supabase';
 
 // PKCE 관련 스토리지 키
 const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
@@ -139,7 +139,6 @@ const saveSessionToStorage = (session: any) => {
 export default function AuthCallbackPage() {
   const router = useRouter();
   const exchangeAttempted = useRef(false);
-  const supabase = createClientComponentClient();
 
   // localStorage/sessionStorage 접근 권한 테스트
   useEffect(() => {
@@ -216,8 +215,12 @@ export default function AuthCallbackPage() {
         }
         exchangeAttempted.current = true;
 
-        // 현재 세션 확인
+        // 현재 세션 확인 (약간의 지연을 두고)
         console.log('📋 1단계: 현재 세션 확인 중...');
+        
+        // Supabase 인증 상태가 안정화될 때까지 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -243,18 +246,26 @@ export default function AuthCallbackPage() {
         
         console.log('📋 기존 세션 없음, 새로운 인증 진행');
 
-        // URL에서 code 파라미터 추출
+        // URL에서 code 파라미터 추출 (더 안전한 방법 사용)
         console.log('📋 2단계: URL에서 인증 코드 추출 중...');
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
+        const urlParams = new URLSearchParams(window.location.search);
         
-        console.log('🔍 URL 파라미터:', {
+        // 대안 방법으로 직접 URL에서 파싱
+        const urlString = window.location.href;
+        const codeMatch = urlString.match(/[?&]code=([^&]+)/);
+        const errorMatch = urlString.match(/[?&]error=([^&]+)/);
+        const errorDescriptionMatch = urlString.match(/[?&]error_description=([^&]+)/);
+        
+        const code = codeMatch ? decodeURIComponent(codeMatch[1]) : urlParams.get('code');
+        const error = errorMatch ? decodeURIComponent(errorMatch[1]) : urlParams.get('error');
+        const errorDescription = errorDescriptionMatch ? decodeURIComponent(errorDescriptionMatch[1]) : urlParams.get('error_description');
+        
+        console.log('🔍 URL 파라미터 (개선된 파싱):', {
           code: code ? `${code.substring(0, 10)}...` : null,
           error: error,
           errorDescription: errorDescription,
-          allParams: Object.fromEntries(params.entries())
+          urlParams: Object.fromEntries(urlParams.entries()),
+          rawUrl: window.location.href
         });
         
         if (error) {
@@ -278,6 +289,28 @@ export default function AuthCallbackPage() {
           }
         }
 
+        // 코드가 없거나 이미 처리된 경우 체크
+        if (!code) {
+          console.log('❌ URL에서 인증 코드를 찾을 수 없음. 다시 세션 확인...');
+          
+          // 코드가 없어도 세션이 있을 수 있으므로 한 번 더 확인
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          
+          if (retrySession) {
+            console.log('✅ 재시도에서 세션 발견! 저장 후 리다이렉트');
+            const saved = saveSessionToStorage(retrySession);
+            if (saved) {
+              router.push('/');
+              return;
+            }
+          }
+          
+          console.log('❌ 세션도 없고 코드도 없음, 로그인 페이지로 이동');
+          router.push('/login');
+          return;
+        }
+
         // 이전 교환 시도 기록 확인
         const previousAttempt = sessionStorage.getItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
         if (previousAttempt === code) {
@@ -286,13 +319,27 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        if (!code || !verifier) {
-          console.error('❌ 필수 인증 파라미터 누락:', { 
+        if (!verifier) {
+          console.error('❌ PKCE verifier가 누락됨:', { 
             hasCode: !!code, 
             hasVerifier: !!verifier,
             sessionVerifier: !!sessionStorage.getItem(PKCE_VERIFIER_KEY),
             localVerifier: !!localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY)
           });
+          
+          // verifier 없어도 세션이 있을 수 있으므로 확인
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          
+          if (retrySession) {
+            console.log('✅ verifier 없지만 세션 발견! 저장 후 리다이렉트');
+            const saved = saveSessionToStorage(retrySession);
+            if (saved) {
+              router.push('/');
+              return;
+            }
+          }
+          
           router.push('/login');
           return;
         }
@@ -315,6 +362,19 @@ export default function AuthCallbackPage() {
             status: exchangeError.status,
             details: exchangeError
           });
+          
+          // 교환 실패해도 세션이 있을 수 있으므로 확인
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const { data: { session: retrySession } } = await supabase.auth.getSession();
+          
+          if (retrySession) {
+            console.log('✅ 교환 실패했지만 세션 발견! 저장 후 리다이렉트');
+            const saved = saveSessionToStorage(retrySession);
+            if (saved) {
+              router.push('/');
+              return;
+            }
+          }
           
           // 실패한 경우에만 교환 시도 기록 제거
           sessionStorage.removeItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
@@ -379,7 +439,7 @@ export default function AuthCallbackPage() {
     };
 
     handleCallback();
-  }, [router, supabase.auth]);
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
