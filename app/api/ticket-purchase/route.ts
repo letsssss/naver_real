@@ -210,12 +210,11 @@ export async function POST(request: NextRequest) {
       ));
     }
 
-    // 이미 구매 진행 중인지 확인
+    // 이미 구매 진행 중인지 확인 (unique_post_purchase 제약조건 고려)
     const { data: existingPurchases, error: purchaseError } = await adminSupabase
       .from('purchases')
       .select('*')
-      .eq('post_id', postId)
-      .in('status', ['PENDING', 'PROCESSING', 'COMPLETED']);
+      .eq('post_id', postId);
 
     if (purchaseError) {
       console.error("구매 정보 조회 오류:", purchaseError);
@@ -227,6 +226,7 @@ export async function POST(request: NextRequest) {
 
     if (existingPurchases && existingPurchases.length > 0) {
       console.log(`게시글 ID ${postId}는 이미 구매가 진행 중입니다.`);
+      console.log("기존 구매 레코드:", existingPurchases);
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "이미 다른 사용자가 구매 중인 게시글입니다." },
         { status: 400 }
@@ -242,8 +242,7 @@ export async function POST(request: NextRequest) {
       post_id: postId,
       seller_id: authorId,
       status: "PROCESSING",
-      quantity,
-      created_at: new Date().toISOString()
+      quantity
     };
     
     // 추가 필드 (데이터베이스에 존재하는 경우에만)
@@ -274,8 +273,46 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // 3. 최소한의 기본값 설정 (0원은 안전하지 않을 수 있으나 필드는 채워야 함)
+    // 3. 최소한의 기본값 설정 (total_price는 NOT NULL 필드)
     purchaseData.total_price = totalPrice;
+    
+    // total_price 유효성 검증
+    if (typeof purchaseData.total_price !== 'number' || purchaseData.total_price < 0) {
+      console.error("유효하지 않은 total_price:", purchaseData.total_price);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "가격 정보가 올바르지 않습니다." },
+        { status: 400 }
+      ));
+    }
+    
+    // 사용자 존재 여부 확인
+    const { data: buyerExists, error: buyerError } = await adminSupabase
+      .from('users')
+      .select('id')
+      .eq('id', authUser.id)
+      .single();
+      
+    if (buyerError || !buyerExists) {
+      console.error("구매자 정보를 찾을 수 없음:", buyerError);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "구매자 정보를 찾을 수 없습니다." },
+        { status: 400 }
+      ));
+    }
+    
+    const { data: sellerExists, error: sellerError } = await adminSupabase
+      .from('users')
+      .select('id')
+      .eq('id', authorId)
+      .single();
+      
+    if (sellerError || !sellerExists) {
+      console.error("판매자 정보를 찾을 수 없음:", sellerError);
+      return addCorsHeaders(NextResponse.json(
+        { success: false, message: "판매자 정보를 찾을 수 없습니다." },
+        { status: 400 }
+      ));
+    }
     
     console.log("구매 데이터:", purchaseData);
 
@@ -288,8 +325,37 @@ export async function POST(request: NextRequest) {
 
     if (createError) {
       console.error("구매 정보 생성 오류:", createError);
+      console.error("삽입하려던 데이터:", purchaseData);
+      
+      // unique constraint 위반 감지
+      let errorMessage = "구매 정보 생성 중 오류가 발생했습니다.";
+      
+      if (createError.code === '23505') { // PostgreSQL unique constraint violation
+        if (createError.message?.includes('unique_post_purchase') || createError.message?.includes('post_id')) {
+          errorMessage = "이미 다른 사용자가 구매 중인 게시글입니다.";
+        } else if (createError.message?.includes('order_number')) {
+          errorMessage = "주문번호가 중복되었습니다. 다시 시도해주세요.";
+        } else {
+          errorMessage = "중복된 데이터가 존재합니다.";
+        }
+      } else if (createError.code === '23503') { // Foreign key constraint violation
+        errorMessage = "참조하는 데이터가 존재하지 않습니다.";
+      } else if (createError.code === '23502') { // Not null constraint violation
+        errorMessage = "필수 정보가 누락되었습니다.";
+      }
+      
+      // 개발 환경에서는 더 자세한 오류 정보 제공
+      if (process.env.NODE_ENV === 'development') {
+        errorMessage += ` (${createError.code}: ${createError.message})`;
+      }
+      
       return addCorsHeaders(NextResponse.json(
-        { success: false, message: "구매 정보 생성 중 오류가 발생했습니다." },
+        { 
+          success: false, 
+          message: errorMessage,
+          // 개발 환경에서만 상세 오류 정보 포함
+          error: process.env.NODE_ENV === 'development' ? createError : undefined
+        },
         { status: 500 }
       ));
     }
