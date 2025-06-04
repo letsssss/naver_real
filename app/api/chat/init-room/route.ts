@@ -2,8 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 // import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { getSupabaseClient } from '@/lib/supabase';
 import type { Database } from '@/types/supabase.types';
 
 // Node.js 런타임 사용 (Edge에서는 환경변수 로딩 문제 발생)
@@ -18,14 +17,43 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
-    // 쿠키 인스턴스 가져오기
-    const cookieStore = cookies();
+    // Supabase 클라이언트 생성
+    const supabase = await getSupabaseClient();
     
-    // 쿠키 기반 Supabase 클라이언트 생성
-    const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
+    // Authorization 헤더에서 토큰 추출
+    const authHeader = request.headers.get('authorization');
+    let accessToken = null;
     
-    // 세션 확인 (쿠키에서 자동으로 세션 읽음)
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7);
+    }
+    
+    // 토큰이 없으면 쿠키에서 찾기
+    if (!accessToken) {
+      const cookies = request.headers.get('cookie');
+      if (cookies) {
+        const cookieMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/);
+        if (cookieMatch) {
+          try {
+            const tokenData = JSON.parse(decodeURIComponent(cookieMatch[1]));
+            accessToken = tokenData.access_token;
+          } catch (e) {
+            logDebug('쿠키에서 토큰 파싱 실패:', e);
+          }
+        }
+      }
+    }
+    
+    if (!accessToken) {
+      logDebug('❌ 토큰 없음');
+      return NextResponse.json(
+        { error: '인증 토큰이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+    
+    // 토큰으로 사용자 정보 가져오기
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     // 인증 실패 처리
     if (authError || !user) {

@@ -250,8 +250,8 @@ export default function MyPage() {
             price,
             message,
             created_at,
-            user_id,
-            users:user_id (
+            proposer_id,
+            users:proposer_id (
               id,
               name,
               email,
@@ -307,8 +307,8 @@ export default function MyPage() {
           price,
           message,
           created_at,
-          user_id,
-          users:user_id (
+          proposer_id,
+          users:proposer_id (
             id,
             name,
             email,
