@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest } from 'next/server';
 import { Database } from '@/types/supabase.types';
@@ -23,34 +23,35 @@ export function useRealtime() {
 
   // 실시간 구독 설정
   useEffect(() => {
-    setLoading(true);
+    const initializeRealtime = async () => {
+      setLoading(true);
 
-    try {
-      // 사용자 정의 이벤트 핸들러
-      const handleNotification = (payload: any) => {
-        if (payload.new) {
-          setNotifications(prev => [payload.new, ...prev]);
-          
-          // 개발 환경에서 확인용 로그
-          if (isDevelopment) {
-            console.log('실시간 알림 수신:', payload.new);
+      try {
+        const supabase = await getSupabaseClient();
+        
+        // 사용자 정의 이벤트 핸들러
+        const handleNotification = (payload: any) => {
+          if (payload.new) {
+            setNotifications(prev => [payload.new, ...prev]);
+            
+            // 개발 환경에서 확인용 로그
+            if (isDevelopment) {
+              console.log('실시간 알림 수신:', payload.new);
+            }
           }
-        }
-      };
+        };
 
-      const handleMessage = (payload: any) => {
-        if (payload.new) {
-          setMessages(prev => [payload.new, ...prev]);
-          
-          // 개발 환경에서 확인용 로그
-          if (isDevelopment) {
-            console.log('실시간 메시지 수신:', payload.new);
+        const handleMessage = (payload: any) => {
+          if (payload.new) {
+            setMessages(prev => [payload.new, ...prev]);
+            
+            // 개발 환경에서 확인용 로그
+            if (isDevelopment) {
+              console.log('실시간 메시지 수신:', payload.new);
+            }
           }
-        }
-      };
+        };
 
-      // Supabase 클라이언트 체크 및 채널 생성
-      if (supabase) {
         try {
           // 커스텀 채널 생성 시도
           const customChannel = supabase.channel('custom-channel')
@@ -76,20 +77,17 @@ export function useRealtime() {
             console.log('Supabase 실시간 채널 생성 실패, 폴백 사용');
           }
         }
-      } else {
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('실시간 설정 중 오류:', err);
+        setError(err instanceof Error ? err : new Error(String(err)));
         setSupabaseAvailable(false);
-        if (isDevelopment) {
-          console.log('Supabase 클라이언트 사용 불가, 폴백 사용');
-        }
+        setLoading(false);
       }
-      
-      setLoading(false);
-    } catch (err) {
-      console.error('실시간 설정 중 오류:', err);
-      setError(err instanceof Error ? err : new Error(String(err)));
-      setSupabaseAvailable(false);
-      setLoading(false);
-    }
+    };
+
+    initializeRealtime();
 
     // 정리 함수
     return () => {
@@ -111,73 +109,26 @@ export function useRealtime() {
     try {
       setLoading(true);
       
-      // Supabase 직접 쿼리 시도
-      if (supabaseAvailable && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('Notification')
-            .select('*')
-            .order('createdAt', { ascending: false });
+      const supabase = await getSupabaseClient();
+      const { data, error } = await supabase
+        .from('Notification')
+        .select('*')
+        .order('createdAt', { ascending: false });
 
-          if (error) {
-            throw error;
-          }
+      if (error) {
+        throw error;
+      }
 
-          setNotifications(data || []);
-          
-          if (isDevelopment) {
-            console.log('Supabase 쿼리로 알림 갱신 성공:', data?.length);
-          }
-          
-          setLoading(false);
-          return;
-        } catch (supabaseError) {
-          console.error('Supabase 쿼리 오류, API 폴백으로 전환:', supabaseError);
-          // API 폴백으로 진행
-        }
+      setNotifications(data || []);
+      
+      if (isDevelopment) {
+        console.log('Supabase 쿼리로 알림 갱신 성공:', data?.length);
       }
       
-      // API 폴백: fetch를 사용하여 알림 API 호출
-      try {
-        if (isDevelopment) {
-          console.log('API 폴백으로 알림 데이터 요청 중...');
-        }
-        
-        const response = await fetch(`${apiBaseUrl}/api/notifications`, {
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API 응답 오류: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.notifications) {
-          setNotifications(result.notifications);
-          
-          if (isDevelopment) {
-            console.log('API 폴백으로 알림 갱신 성공:', result.notifications.length);
-          }
-        } else {
-          // 응답 형식이 다른 경우
-          setNotifications(Array.isArray(result) ? result : []);
-          
-          if (isDevelopment) {
-            console.log('API 폴백 응답:', result);
-          }
-        }
-      } catch (apiError) {
-        console.error('API 폴백 요청 오류:', apiError);
-        setError(apiError instanceof Error ? apiError : new Error(String(apiError)));
-      }
+      setLoading(false);
     } catch (err) {
       console.error('알림 목록 갱신 중 오류:', err);
       setError(err instanceof Error ? err : new Error(String(err)));
-    } finally {
       setLoading(false);
     }
   };
@@ -185,73 +136,30 @@ export function useRealtime() {
   // 알림을 읽음 상태로 표시 - Supabase 직접 쿼리 또는 API 폴백
   const markNotificationAsRead = async (notificationId: number) => {
     try {
-      // Supabase 직접 쿼리 시도
-      if (supabaseAvailable && supabase) {
-        try {
-          const { error } = await supabase
-            .from('Notification')
-            .update({ isRead: true })
-            .eq('id', notificationId);
+      const supabase = await getSupabaseClient();
+      const { error } = await supabase
+        .from('Notification')
+        .update({ isRead: true })
+        .eq('id', notificationId);
 
-          if (error) {
-            throw error;
-          }
-          
-          if (isDevelopment) {
-            console.log('Supabase 쿼리로 알림 읽음 처리 성공:', notificationId);
-          }
-          
-          // 로컬 상태 업데이트
-          setNotifications(prev => 
-            prev.map(notification => 
-              notification.id === notificationId 
-                ? { ...notification, isRead: true } 
-                : notification
-            )
-          );
-          
-          return;
-        } catch (supabaseError) {
-          console.error('Supabase 알림 읽음 처리 오류, API 폴백으로 전환:', supabaseError);
-          // API 폴백으로 진행
-        }
+      if (error) {
+        throw error;
       }
       
-      // API 폴백: fetch를 사용하여 알림 읽음 상태 업데이트
-      try {
-        if (isDevelopment) {
-          console.log('API 폴백으로 알림 읽음 처리 중...');
-        }
-        
-        const response = await fetch(`${apiBaseUrl}/api/notifications/mark-read`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include', // 쿠키를 포함하여 요청 전송
-          body: JSON.stringify({ id: notificationId }),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API 응답 오류: ${response.status}`);
-        }
-        
-        // 로컬 상태 업데이트
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
-              ? { ...notification, isRead: true } 
-              : notification
-          )
-        );
-        
-        if (isDevelopment) {
-          console.log('API 폴백으로 알림 읽음 처리 성공:', notificationId);
-        }
-      } catch (apiError) {
-        console.error('API 폴백 요청 오류:', apiError);
-        setError(apiError instanceof Error ? apiError : new Error(String(apiError)));
+      if (isDevelopment) {
+        console.log('Supabase 쿼리로 알림 읽음 처리 성공:', notificationId);
       }
+      
+      // 로컬 상태 업데이트
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, isRead: true } 
+            : notification
+        )
+      );
+      
+      return;
     } catch (err) {
       console.error('알림 읽음 표시 중 오류:', err);
       setError(err instanceof Error ? err : new Error(String(err)));
@@ -343,10 +251,10 @@ export function useRealtime() {
     messages,
     loading,
     error,
+    supabaseAvailable,
     refreshNotifications,
     markNotificationAsRead,
-    markAllNotificationsAsRead,
-    supabaseAvailable
+    markAllNotificationsAsRead
   };
 }
 

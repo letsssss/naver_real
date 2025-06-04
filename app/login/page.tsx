@@ -1,31 +1,85 @@
 "use client"
 
-import React, { useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Toaster, toast } from "sonner"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { getSupabaseClient } from '@/lib/supabase'
 //import SessionAuthButton from '@/app/components/auth/SessionAuthButton'
 import LoginForm from "@/components/auth/LoginForm"
 import KakaoLoginButton from "@/components/KakaoLoginButton"
-import { supabase } from '@/lib/supabase'
+
+interface LoginFormData {
+  email: string
+  password: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/';
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: "",
+    password: ""
+  })
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
+  // 페이지 로드 시 세션 확인
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        router.push(redirectTo)
+      try {
+        const supabase = await getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          router.push('/')
+        }
+      } catch (error) {
+        // 세션 확인 오류 처리
       }
     }
-    
+
     checkSession()
-  }, [router, redirectTo])
+  }, [router])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const supabase = await getSupabaseClient()
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      if (data.user) {
+        router.push('/')
+      }
+    } catch (error) {
+      setError('로그인 중 오류가 발생했습니다.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // 소셜 로그인 준비중 메시지 표시 함수
   const handleSocialLogin = (provider: string) => {

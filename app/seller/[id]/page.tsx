@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -9,7 +8,7 @@ import { useParams } from "next/navigation"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { createBrowserClient } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 // 임시 기본값 데이터 (데이터 로드 전에 사용)
 const defaultSellerData = {
@@ -41,16 +40,15 @@ export default function SellerProfile() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Supabase 클라이언트 생성
-  const supabase = createBrowserClient()
-
   useEffect(() => {
     const fetchSellerData = async () => {
       if (!sellerId) return
       
       try {
         setIsLoading(true)
-        console.log("판매자 정보 요청 시작:", sellerId)
+        
+        // Supabase 클라이언트 가져오기
+        const supabase = await getSupabaseClient()
         
         // 1. 프로필 정보 조회
         const { data: profileData, error: profileError } = await supabase
@@ -60,7 +58,6 @@ export default function SellerProfile() {
           .maybeSingle()
 
         if (profileError || !profileData) {
-          console.error("프로필 조회 오류:", profileError)
           setError("판매자 정보를 찾을 수 없습니다.")
           setIsLoading(false)
           return
@@ -74,7 +71,7 @@ export default function SellerProfile() {
           .maybeSingle()
 
         if (verificationError) {
-          console.error("인증 정보 조회 오류:", verificationError)
+          // 인증 정보 조회 오류 처리
         }
 
         // 3. 판매자 통계 정보 조회 (있을 경우)
@@ -99,7 +96,7 @@ export default function SellerProfile() {
           .order("created_at", { ascending: false })
 
         if (reviewsError) {
-          console.error("리뷰 조회 오류:", reviewsError)
+          // 리뷰 조회 오류 처리
         }
 
         // 5. 판매 중인 티켓 조회
@@ -110,7 +107,7 @@ export default function SellerProfile() {
           .eq("status", "active")
 
         if (listingsError) {
-          console.error("티켓 조회 오류:", listingsError)
+          // 티켓 조회 오류 처리
         }
 
         // 판매자 정보 변환
@@ -163,7 +160,7 @@ export default function SellerProfile() {
           .maybeSingle()
 
         if (avgError) {
-          console.error("별점 평균 조회 오류:", avgError)
+          // 별점 평균 조회 오류 처리
         }
 
         const avgRating = avgData?.avg_rating || 0
@@ -214,7 +211,7 @@ export default function SellerProfile() {
 
         setIsLoading(false)
       } catch (err) {
-        console.error("데이터 로딩 중 오류:", err)
+        // 데이터 로딩 중 오류 처리
         setError("판매자 정보를 불러오는데 실패했습니다.")
         setIsLoading(false)
       }
@@ -223,7 +220,7 @@ export default function SellerProfile() {
     if (sellerId) {
       fetchSellerData()
     }
-  }, [sellerId, supabase])
+  }, [sellerId])
 
   if (isLoading) {
     return (

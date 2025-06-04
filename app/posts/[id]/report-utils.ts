@@ -1,27 +1,37 @@
-import { createBrowserClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 /**
  * 게시물 신고 처리 함수
  * @param postId 신고할 게시물 ID
  * @param reason 신고 사유
+ * @param reporterId 신고자 ID (optional, if not provided will get from auth)
  * @returns 성공 여부
  */
-export const reportPost = async (postId: number, reason: string): Promise<boolean> => {
-  const supabase = createBrowserClient();
+export const reportPost = async (postId: number, reason: string, reporterId?: string): Promise<boolean> => {
+  const supabase = await getSupabaseClient();
   
-  // 인증된 사용자 확인
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
+  let userId = reporterId;
+  
+  // 신고자 ID가 제공되지 않은 경우 현재 사용자에서 가져오기
+  if (!userId) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const user = userData?.user;
 
-  if (!user || !reason) {
-    throw new Error("로그인이 필요하거나 신고 사유가 입력되지 않았습니다.");
+    if (!user) {
+      throw new Error("로그인이 필요합니다.");
+    }
+    userId = user.id;
+  }
+
+  if (!reason) {
+    throw new Error("신고 사유가 입력되지 않았습니다.");
   }
 
   // 이미 신고한 기록이 있는지 확인
   const { data: existingReport } = await supabase
     .from("reports")
     .select("id")
-    .eq("reporter_id", user.id)
+    .eq("reporter_id", userId)
     .eq("post_id", postId)
     .maybeSingle();
 
@@ -33,14 +43,13 @@ export const reportPost = async (postId: number, reason: string): Promise<boolea
   const { error: insertError } = await supabase
     .from("reports")
     .insert({
-      reporter_id: user.id,
+      reporter_id: userId,
       post_id: postId,
       reason,
-      status: "pending" // 기본 상태: 검토 대기중
+      status: "pending"
     });
 
   if (insertError) {
-    console.error("신고 처리 오류:", insertError);
     throw new Error("신고 접수 중 오류가 발생했습니다: " + insertError.message);
   }
 
@@ -50,20 +59,27 @@ export const reportPost = async (postId: number, reason: string): Promise<boolea
 /**
  * 사용자가 게시물을 이미 신고했는지 확인
  * @param postId 확인할 게시물 ID
+ * @param userId 사용자 ID (optional, if not provided will get from auth)
  * @returns 신고 여부
  */
-export const hasReportedPost = async (postId: number): Promise<boolean> => {
-  const supabase = createBrowserClient();
+export const hasReportedPost = async (postId: number, userId?: string): Promise<boolean> => {
+  const supabase = await getSupabaseClient();
   
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
+  let checkUserId = userId;
+  
+  // 사용자 ID가 제공되지 않은 경우 현재 사용자에서 가져오기
+  if (!checkUserId) {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
 
-  if (!user) return false;
+    if (!user) return false;
+    checkUserId = user.id;
+  }
 
   const { data } = await supabase
     .from("reports")
     .select("id")
-    .eq("reporter_id", user.id)
+    .eq("reporter_id", checkUserId)
     .eq("post_id", postId)
     .maybeSingle();
 

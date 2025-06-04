@@ -34,7 +34,6 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
       .limit(1);
     
     if (error) {
-      console.error('❌ 카카오 발송 로그 조회 오류:', error);
       // 오류 발생 시 안전하게 false 반환 (발송 제한)
       return false;
     }
@@ -42,7 +41,6 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     // 최근 1시간 내 발송 기록이 없으면 true, 있으면 false
     return data.length === 0;
   } catch (error) {
-    console.error('❌ 카카오 발송 제한 검사 중 오류:', error);
     // 오류 발생 시 안전하게 false 반환 (발송 제한)
     return false;
   }
@@ -70,11 +68,9 @@ export async function updateKakaoSendLog(phoneNumber: string, messageType: Kakao
       });
     
     if (error) {
-      console.error('❌ 카카오 발송 로그 저장 오류:', error);
-    } else {
-      console.log(`✅ 카카오 발송 로그 저장 완료: ${cleanPhone} (${messageType})`);
+      // 로그 저장 실패 처리
     }
   } catch (error) {
-    console.error('❌ 카카오 발송 로그 업데이트 중 오류:', error);
+    // 로그 업데이트 실패 처리
   }
 } 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createBrowserClient } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export default function AdminOnly({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -12,7 +12,7 @@ export default function AdminOnly({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAdminRole = async () => {
       try {
-        const supabase = createBrowserClient()
+        const supabase = await getSupabaseClient()
         
         // 인증 유저 가져오기
         const { data: userData } = await supabase.auth.getUser()
@@ -38,7 +38,6 @@ export default function AdminOnly({ children }: { children: React.ReactNode }) {
         setIsAdmin(true)
         setLoading(false)
       } catch (error) {
-        console.error('권한 확인 오류:', error)
         router.push('/')
       }
     }

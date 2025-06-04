@@ -1,71 +1,100 @@
-import { createBrowserClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 /**
- * 게시물 신고 처리 함수
- * @param postId 신고할 게시물 ID
+ * 사용자 신고 함수
+ * @param sellerId 신고할 판매자 ID
  * @param reason 신고 사유
+ * @param reporterId 신고자 ID  
  * @returns 성공 여부
  */
-export const reportPost = async (postId: number, reason: string): Promise<boolean> => {
-  const supabase = createBrowserClient();
-  
-  // 인증된 사용자 확인
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  const user = userData?.user;
-
-  if (!user || !reason) {
-    throw new Error("로그인이 필요하거나 신고 사유가 입력되지 않았습니다.");
+export async function reportUser(sellerId: string, reason: string, reporterId: string): Promise<boolean> {
+  try {
+    const supabase = await getSupabaseClient();
+    
+    const { data, error } = await supabase
+      .from('reports')
+      .insert({
+        type: 'USER',
+        reason: reason,
+        seller_id: sellerId,
+        reporter_id: reporterId,
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return true;
+  } catch (error) {
+    return false;
   }
+}
 
-  // 이미 신고한 기록이 있는지 확인
-  const { data: existingReport } = await supabase
-    .from("reports")
-    .select("id")
-    .eq("reporter_id", user.id)
-    .eq("post_id", postId)
-    .maybeSingle();
+/**
+ * 게시글 신고 함수
+ * @param postId 신고할 게시글 ID
+ * @param reason 신고 사유
+ * @param reporterId 신고자 ID
+ * @returns 성공 여부
+ */
+export async function reportPost(postId: number, reason: string, reporterId: string): Promise<boolean> {
+  try {
+    const supabase = await getSupabaseClient();
+    
+    // 이미 신고한 기록이 있는지 확인
+    const { data: existingReport } = await supabase
+      .from("reports")
+      .select("id")
+      .eq("reporter_id", reporterId)
+      .eq("post_id", postId)
+      .maybeSingle();
 
-  if (existingReport) {
-    throw new Error("이미 신고한 게시물입니다.");
+    if (existingReport) {
+      throw new Error("이미 신고한 게시물입니다.");
+    }
+    
+    const { data, error } = await supabase
+      .from('reports')
+      .insert({
+        type: 'POST',
+        reason: reason,
+        post_id: postId,
+        reporter_id: reporterId,
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return true;
+  } catch (error) {
+    return false;
   }
-
-  // 신고 저장
-  const { error: insertError } = await supabase
-    .from("reports")
-    .insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-      status: "pending" // 기본 상태: 검토 대기중
-    });
-
-  if (insertError) {
-    console.error("신고 처리 오류:", insertError);
-    throw new Error("신고 접수 중 오류가 발생했습니다: " + insertError.message);
-  }
-
-  return true;
-};
+}
 
 /**
  * 사용자가 게시물을 이미 신고했는지 확인
  * @param postId 확인할 게시물 ID
+ * @param userId 사용자 ID
  * @returns 신고 여부
  */
-export const hasReportedPost = async (postId: number): Promise<boolean> => {
-  const supabase = createBrowserClient();
-  
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
+export async function hasReportedPost(postId: number, userId: string): Promise<boolean> {
+  try {
+    const supabase = await getSupabaseClient();
+    
+    const { data } = await supabase
+      .from("reports")
+      .select("id")
+      .eq("reporter_id", userId)
+      .eq("post_id", postId)
+      .maybeSingle();
 
-  if (!user) return false;
-
-  const { data } = await supabase
-    .from("reports")
-    .select("id")
-    .eq("reporter_id", user.id)
-    .eq("post_id", postId)
-    .maybeSingle();
-
-  return !!data;
-}; 
+    return !!data;
+  } catch (error) {
+    return false;
+  }
+} 

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,11 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function LoginForm() {
+interface LoginFormProps {
+  redirectTo?: string;
+}
+
+export default function LoginForm({ redirectTo = '/' }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +27,8 @@ export default function LoginForm() {
     setErrorMessage('');
 
     try {
-      // Supabase를 통한 직접 로그인
+      const supabase = await getSupabaseClient();
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -55,10 +60,10 @@ export default function LoginForm() {
         return;
       }
       
-      if (data.session) {
-        console.log('✅ 로그인 성공:', data.session.user.email);
+      if (data.user) {
+        console.log('✅ 로그인 성공:', data.user.email);
         toast.success('로그인 성공!');
-        router.push('/');
+        router.push(redirectTo);
       } else {
         const message = '세션 생성에 실패했습니다. 다시 시도해주세요.';
         setErrorMessage(message);

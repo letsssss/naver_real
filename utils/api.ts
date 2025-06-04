@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { getSupabaseClient } from '@/lib/supabase';
 
 /**
  * 인증 토큰을 포함한 API 호출을 처리하는 유틸리티 함수
@@ -11,6 +11,7 @@ import { supabase } from './supabaseClient';
 export async function callAPI(url: string, options: RequestInit = {}) {
   try {
     // 1. 세션에서 토큰 가져오기
+    const supabase = await getSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     
@@ -104,4 +105,16 @@ export async function deleteData(url: string, options: RequestInit = {}) {
     method: 'DELETE',
     ...options
   });
-} 
+}
+
+export const api = {
+  async get(url: string) {
+    const supabase = await getSupabaseClient();
+    // API 구현
+  },
+  
+  async post(url: string, data: any) {
+    const supabase = await getSupabaseClient();
+    // API 구현
+  }
+}; 

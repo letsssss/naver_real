@@ -5,12 +5,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { createBrowserClient } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export default function TicketDetail({ params }: { params: { id: string } }) {
-  // Supabase 클라이언트
-  const supabase = createBrowserClient()
-  
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -34,6 +31,9 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
     const fetchTicketData = async () => {
       setLoading(true)
       try {
+        // Supabase 클라이언트 가져오기
+        const supabase = await getSupabaseClient()
+        
         // 티켓 기본 정보 가져오기
         const { data: post, error: postError } = await supabase
           .from("posts")
@@ -68,7 +68,7 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
           .order('price', { ascending: true });
         
         if (seatError) {
-          console.error("좌석 정보 로딩 오류:", seatError);
+          // 좌석 정보 로딩 오류 처리
         }
         
         // 데이터 설정
@@ -90,7 +90,6 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
           await fetchSellerSummary(post.author_id);
         }
       } catch (err) {
-        console.error("티켓 데이터 로딩 오류:", err);
         setError(err instanceof Error ? err.message : '티켓 정보를 불러오는 중 오류가 발생했습니다.');
       } finally {
         setLoading(false);
@@ -98,10 +97,12 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
     };
     
     fetchTicketData();
-  }, [params.id, supabase]);
+  }, [params.id]);
 
   const fetchSellerSummary = async (sellerId: string) => {
     try {
+      const supabase = await getSupabaseClient()
+      
       const { data: profileData } = await supabase
         .from("profiles")
         .select("id, name, profile_image, response_rate")
@@ -131,7 +132,7 @@ export default function TicketDetail({ params }: { params: { id: string } }) {
         reviewCount: ratingStats?.review_count || 0,
       })
     } catch (error) {
-      console.error("판매자 정보 조회 오류:", error);
+      // 판매자 정보 조회 오류 처리
     }
   }
 

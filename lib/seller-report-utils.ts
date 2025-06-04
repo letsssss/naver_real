@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 /**
  * 판매자 신고 처리 함수
@@ -7,7 +7,7 @@ import { createBrowserClient } from "@/lib/supabase";
  * @returns 성공 여부
  */
 export const reportSeller = async (sellerId: string, reason: string): Promise<boolean> => {
-  const supabase = createBrowserClient();
+  const supabase = await getSupabaseClient();
   
   // 인증된 사용자 확인
   const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -41,7 +41,6 @@ export const reportSeller = async (sellerId: string, reason: string): Promise<bo
     });
 
   if (insertError) {
-    console.error("판매자 신고 처리 오류:", insertError);
     throw new Error("신고 접수 중 오류가 발생했습니다: " + insertError.message);
   }
 
@@ -54,7 +53,7 @@ export const reportSeller = async (sellerId: string, reason: string): Promise<bo
  * @returns 신고 여부
  */
 export const hasReportedSeller = async (sellerId: string): Promise<boolean> => {
-  const supabase = createBrowserClient();
+  const supabase = await getSupabaseClient();
   
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;

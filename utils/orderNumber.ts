@@ -1,30 +1,29 @@
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 
-export async function createUniqueOrderNumber(): Promise<string> {
-  const generateCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    let result = ''
-    for (let i = 0; i < 12; i++) {
-      result += chars[Math.floor(Math.random() * chars.length)]
-    }
-    return result
-  }
-
-  while (true) {
-    const newCode = generateCode()
+export async function generateUniqueOrderNumber(): Promise<string> {
+  const supabase = await getSupabaseClient();
+  
+  let orderNumber: string;
+  let isUnique = false;
+  
+  while (!isUnique) {
+    // 현재 날짜와 시간을 기반으로 주문번호 생성
+    const now = new Date();
+    const timestamp = now.getTime().toString();
+    const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    orderNumber = `ORD${timestamp}${randomSuffix}`;
     
-    const { data: existing, error } = await supabase
-      .from('purchases')
-      .select('id')
-      .eq('order_number', newCode)
-      .maybeSingle()
-      
-    if (error) {
-      console.error('주문 번호 조회 오류:', error)
-    }
+    // 중복 체크
+    const { data } = await supabase
+      .from('orders')
+      .select('order_number')
+      .eq('order_number', orderNumber)
+      .single();
     
-    if (!existing) {
-      return newCode
+    if (!data) {
+      isUnique = true;
     }
   }
+  
+  return orderNumber!;
 } 

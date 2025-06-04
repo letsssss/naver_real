@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabaseClient } from './supabase';
 
 /**
  * 인증 관련 이벤트를 로그로 기록하는 유틸리티 함수
@@ -18,6 +18,7 @@ export async function logAuthEvent(
   userAgent?: string
 ) {
   try {
+    const supabase = await getSupabaseClient();
     const { error } = await supabase.from("auth_logs").insert({
       type,
       email,

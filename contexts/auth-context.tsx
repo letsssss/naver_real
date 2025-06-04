@@ -3,9 +3,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation'
-import { supabase, supabaseService } from '@/lib/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 import { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { User } from '@supabase/supabase-js'
 
 // 브라우저 환경인지 확인하는 헬퍼 함수
 const isBrowser = () => typeof window !== 'undefined';
@@ -114,17 +115,25 @@ const safeLocalStorageRemove = (key: string) => {
 };
 
 // 사용자 타입 정의
-export type User = Database['public']['Tables']['users']['Row'];
+export interface UserInfo {
+  id: string;
+  email: string | null;
+  name: string;
+  profile_image: string | null;
+  created_at: string;
+  updated_at: string;
+  role?: string;
+}
 
 // 컨텍스트 타입 정의
 interface AuthContextType {
-  user: User | null;
+  user: UserInfo | null;
   loading: boolean;
   error: Error | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<boolean>;
+  signUp: (email: string, password: string, name: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 // 컨텍스트 생성
@@ -137,7 +146,7 @@ const PROTECTED_ROUTES = ['/chat', '/profile'];
 let globalSupabaseClient: any = null;
 
 // 스토리지에서 초기 사용자 정보 가져오기
-const getInitialUser = (): User | null => {
+const getInitialUser = (): UserInfo | null => {
   if (!isBrowser()) return null;
   
   try {
@@ -171,10 +180,22 @@ const getInitialUser = (): User | null => {
   return null;
 };
 
+// 기본 사용자 정보 생성 함수
+function createDefaultUserInfo(authUser: User): UserInfo {
+  return {
+    id: authUser.id,
+    email: authUser.email || null,
+    name: authUser.user_metadata?.name || authUser.user_metadata?.full_name || '사용자',
+    profile_image: authUser.user_metadata?.profile_image || authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+    created_at: authUser.created_at,
+    updated_at: authUser.updated_at || authUser.created_at,
+    role: 'USER'
+  }
+}
+
 // 컨텍스트 프로바이더 컴포넌트
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // 초기 상태를 getInitialUser()로 설정
-  const [user, setUser] = useState<User | null>(() => getInitialUser());
+  const [user, setUser] = useState<UserInfo | null>(() => getInitialUser());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const router = useRouter();
@@ -187,167 +208,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // 사용자 정보 새로고침
   const refreshUser = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // 세션 새로고침
-      const session = await supabaseService.refreshSession();
+      const supabase = await getSupabaseClient();
+      const { data: { session }, error } = await supabase.auth.getSession();
       
-      if (session) {
-        // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
-        const defaultUser: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name || 
-                session.user.user_metadata?.full_name || 
-                session.user.user_metadata?.display_name || 
-                '사용자',
-          profile_image: session.user.user_metadata?.avatar_url || 
-                       session.user.user_metadata?.picture || null,
-          created_at: session.user.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        setUser(defaultUser);
-        safeLocalStorageSet('user', JSON.stringify(defaultUser));
-        
-        // 세션 정보도 저장
-        safeLocalStorageSet('session', JSON.stringify(session));
-      } else {
+      if (error || !session?.user) {
         setUser(null);
-        safeLocalStorageRemove('user');
-        safeLocalStorageRemove('session');
+        return;
       }
+
+      // 기본 사용자 정보로 설정
+      const userInfo = createDefaultUserInfo(session.user);
+      setUser(userInfo);
     } catch (error) {
-      // 인증 사용자 정보 새로고침 실패 처리
-    } finally {
-      setLoading(false);
+      setUser(null);
     }
   }, []);
 
   // 로그인
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const { data: { session }, error } = await supabase.auth.signInWithPassword({
+      const supabase = await getSupabaseClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
-
-      if (session) {
-        // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
-        const defaultUser: User = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name || 
-                session.user.user_metadata?.full_name || 
-                session.user.user_metadata?.display_name || 
-                '사용자',
-          profile_image: session.user.user_metadata?.avatar_url || 
-                       session.user.user_metadata?.picture || null,
-          created_at: session.user.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        setUser(defaultUser);
-        safeLocalStorageSet('user', JSON.stringify(defaultUser));
-        safeLocalStorageSet('session', JSON.stringify(session));
-        
-        router.replace('/');
+      if (error || !data.user) {
+        return false;
       }
-    } catch (error) {
-      // 인증 로그인 실패 처리
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // 로그아웃 (signOut의 별칭)
-  const logout = async () => {
+      const userInfo = createDefaultUserInfo(data.user);
+      setUser(userInfo);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  // 회원가입
+  const signUp = useCallback(async (email: string, password: string, name: string): Promise<boolean> => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // 1. Supabase 로그아웃 시도 
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        // 에러가 있어도 계속 진행 (로컬 정리는 해야 함)
-      }
-
-      // 2. 로컬 상태 완전 정리
-      setUser(null);
-      
-      // 3. 모든 스토리지 정리
-      safeLocalStorageRemove('user');
-      safeLocalStorageRemove('session');
-      
-      // 4. 세션 스토리지도 정리
-      if (typeof window !== 'undefined') {
-        try {
-          sessionStorage.removeItem('user');
-          sessionStorage.removeItem('session');
-          
-          // Supabase 관련 모든 데이터 정리
-          for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const key = sessionStorage.key(i);
-            if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-              sessionStorage.removeItem(key);
-            }
+      const supabase = await getSupabaseClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+            full_name: name
           }
-          
-          for (let i = localStorage.length - 1; i >= 0; i--) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
-              localStorage.removeItem(key);
-            }
-          }
-        } catch (storageError) {
-          // 스토리지 정리 중 에러 처리
         }
+      });
+
+      if (error || !data.user) {
+        return false;
       }
 
-      // 5. Supabase 클라이언트 리셋 (supabase.ts에서 import한 함수 사용)
-      try {
-        const { clearAuth } = await import('@/lib/supabase');
-        await clearAuth();
-      } catch (resetError) {
-        // Supabase 클라이언트 리셋 중 에러 처리
+      // 회원가입 후 이메일 확인 필요한 경우
+      if (!data.session) {
+        return true; // 이메일 확인 대기 상태
       }
 
-      // 6. 새로운 Supabase 세션 강제 무효화
-      try {
-        // 새로운 클라이언트 인스턴스로 명시적 로그아웃
-        const { createClient } = await import('@supabase/supabase-js');
-        const freshClient = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-        await freshClient.auth.signOut();
-      } catch (freshLogoutError) {
-        // 새 클라이언트 로그아웃 중 에러 처리
-      }
-
-      // 7. 페이지 리다이렉트
-      router.replace('/');
-      toast.success('로그아웃되었습니다.');
-      
-      // 8. 페이지 새로고침으로 모든 상태 완전 초기화
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.reload();
-        }
-      }, 100);
-      
+      const userInfo = createDefaultUserInfo(data.user);
+      setUser(userInfo);
+      return true;
     } catch (error) {
-      // 인증 로그아웃 실패 처리
-    } finally {
-      setLoading(false);
+      return false;
     }
-  };
+  }, []);
+
+  // 로그아웃
+  const signOut = useCallback(async () => {
+    try {
+      const supabase = await getSupabaseClient();
+      await supabase.auth.signOut();
+      setUser(null);
+      router.push('/login');
+    } catch (error) {
+      // 로그아웃 오류 처리
+    }
+  }, [router]);
 
   // 초기 인증 상태 확인
   useEffect(() => {
@@ -362,49 +302,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 2. 현재 세션 확인
-        const { data: { session } } = await supabase.auth.getSession();
+        const supabase = await getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
         if (session) {
           // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
-          const defaultUser: User = {
+          const defaultUser: UserInfo = {
             id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name || 
-                  session.user.user_metadata?.full_name || 
-                  session.user.user_metadata?.display_name || 
-                  '사용자',
-            profile_image: session.user.user_metadata?.avatar_url || 
-                         session.user.user_metadata?.picture || null,
+            email: session.user.email || null,
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || '사용자',
+            profile_image: session.user.user_metadata?.profile_image || session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null,
             created_at: session.user.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: session.user.updated_at || session.user.created_at || new Date().toISOString(),
+            role: 'USER'
           };
           
           setUser(defaultUser);
           safeLocalStorageSet('user', JSON.stringify(defaultUser));
-          
-          // 세션 정보도 저장
-          safeLocalStorageSet('session', JSON.stringify(session));
-        } else {
-          // 로그인된 세션이 없습니다 (정상)
         }
 
         // 3. 세션 리스너 등록
-        const unsubscribe = supabaseService.onSessionChange(async ({ event, session }) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
           if (event === 'SIGNED_OUT') {
             setUser(null);
             safeLocalStorageRemove('user');
-            safeLocalStorageRemove('session');
-            router.replace('/');
-          } else if (session && event === 'SIGNED_IN') {
-            await refreshUser();
-          } else if (session && event === 'TOKEN_REFRESHED') {
-            safeLocalStorageSet('session', JSON.stringify(session));
-          } else if (event === 'INITIAL_SESSION' && !session) {
-            // 앱 초기화: 로그인이 필요합니다
+          } else if (event === 'SIGNED_IN' && session) {
+            const userInfo = createDefaultUserInfo(session.user);
+            setUser(userInfo);
+            safeLocalStorageSet('user', JSON.stringify(userInfo));
           }
         });
 
         return () => {
-          unsubscribe();
+          subscription?.unsubscribe();
         };
       } catch (error) {
         // 인증 초기화 실패 처리
@@ -421,9 +350,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     error,
     signIn,
-    signOut: logout,
-    refreshUser,
-    logout
+    signUp,
+    signOut,
+    refreshUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -433,7 +362,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth는 AuthProvider 내부에서만 사용할 수 있습니다.');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }

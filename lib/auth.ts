@@ -1,4 +1,3 @@
-
 import { compare, hash } from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextAuthOptions } from 'next-auth';
@@ -6,7 +5,6 @@ import { JWT } from 'next-auth/jwt';
 import { getServerSession } from 'next-auth/next';
 import * as jsonwebtoken from 'jsonwebtoken';
 import { JwtPayload } from 'jsonwebtoken';
-import supabase from '@/lib/supabase';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
@@ -17,6 +15,13 @@ import { Database } from '@/types/supabase.types';
 // @ts-ignore - 타입 에러 무시 (런타임에는 정상 작동)
 import { createClient } from '@supabase/supabase-js';
 import jwt from "jsonwebtoken";
+import {
+  loginWithKakao,
+  logoutUser,
+  getCurrentUser,
+  refreshUser,
+  type UserInfo,
+} from '@/contexts/auth-context';
 
 // 세션에 id 필드를 추가하기 위한 타입 확장
 declare module "next-auth" {

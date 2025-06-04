@@ -3,9 +3,10 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { z } from "zod";
 import { convertBigIntToString } from "@/lib/utils";
 import { adminSupabase, createAdminClient } from "@/lib/supabase-admin";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from '@/lib/supabase';
 import { verifyToken } from "@/lib/auth";
 import { sendPurchaseCompletedNotification } from '@/services/kakao-notification-service';
+import { headers } from 'next/headers';
 
 // CORS 헤더 설정을 위한 함수
 function addCorsHeaders(response: NextResponse) {
@@ -45,6 +46,8 @@ async function createSimpleOrderNumber() {
 // POST 요청 핸들러 - 티켓 구매 신청
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await getSupabaseClient();
+    
     console.log("티켓 구매 API 호출됨");
     
     // 현재 인증된 사용자 정보 가져오기

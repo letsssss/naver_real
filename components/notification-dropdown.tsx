@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Bell } from "lucide-react"
+import { Bell, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +16,10 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
-// API에서 받는 알림 데이터 타입 
-interface Notification {
+// 통합된 알림 데이터 타입
+interface NotificationData {
   id: number
   title: string
   message: string
@@ -26,25 +27,26 @@ interface Notification {
   isRead: boolean
   createdAt: string
   type: string
-  formattedDate?: string // 가공된 날짜 (옵셔널)
+  formattedDate?: string
 }
 
+const NOTIFICATION_QUERY_LIMIT = 10
+
 export function NotificationDropdown() {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifications, setNotifications] = useState<NotificationData[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length
-
-  // 컴포넌트 마운트 여부 확인 (하이드레이션 문제 해결)
+  // 컴포넌트 마운트 여부 확인
   useEffect(() => {
     setIsMounted(true)
     
     if (user) {
-      fetchNotifications()
+      loadNotifications()
     }
     
     return () => {
@@ -52,260 +54,163 @@ export function NotificationDropdown() {
     }
   }, [user])
 
-  // 순수 JavaScript로 구현한 날짜 포맷팅 함수
+  // 날짜 포맷팅 함수
   const formatDateToRelative = (dateStr: string): string => {
     try {
-      if (!dateStr) return "방금 전";
+      if (!dateStr) return "방금 전"
 
-      // Date 객체 생성
-      const date = new Date(dateStr);
+      const date = new Date(dateStr)
       
-      // 유효하지 않은 날짜인 경우
       if (isNaN(date.getTime())) {
-        return "방금 전";
+        return "방금 전"
       }
       
-      const now = new Date();
+      const now = new Date()
       
-      // 미래 시간인 경우 - 서버/클라이언트 시간 차이를 고려해 10분까지는 허용
       if (date > now) {
-        const diffMs = date.getTime() - now.getTime();
-        if (diffMs <= 10 * 60 * 1000) { // 10분 이내
-          return "방금 전";
+        const diffMs = date.getTime() - now.getTime()
+        if (diffMs <= 10 * 60 * 1000) {
+          return "방금 전"
         }
-        // 심각한 미래 시간인 경우 
-        return "최근";
+        return "최근"
       }
       
-      // 시간 차이 계산
-      const diffMs = now.getTime() - date.getTime();
-      const seconds = Math.floor(diffMs / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
+      const diffMs = now.getTime() - date.getTime()
+      const seconds = Math.floor(diffMs / 1000)
+      const minutes = Math.floor(seconds / 60)
+      const hours = Math.floor(minutes / 60)
+      const days = Math.floor(hours / 24)
       
-      // 상대적 시간 표시
       if (days > 30) {
-        // 절대 날짜 형식으로 표시 (1달 이상 지난 경우)
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}.${month}.${day}`;
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}.${month}.${day}`
       } else if (days > 0) {
-        return `${days}일 전`;
+        return `${days}일 전`
       } else if (hours > 0) {
-        return `${hours}시간 전`;
+        return `${hours}시간 전`
       } else if (minutes > 0) {
-        return `${minutes}분 전`;
+        return `${minutes}분 전`
       } else {
-        return "방금 전";
+        return "방금 전"
       }
     } catch (error) {
-      return "방금 전";
+      return "방금 전"
     }
-  };
+  }
 
-  const fetchNotifications = async () => {
-    if (!user) return;
+  const loadNotifications = async () => {
+    if (!user) return
     
-    setIsLoadingNotifications(true);
+    setIsLoadingNotifications(true)
     
     try {
-      // 먼저 Supabase 세션에서 시도
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      let accessToken = session?.access_token;
+      const supabase = await getSupabaseClient()
       
-      // localStorage와 sessionStorage에서 직접 토큰 찾기
-      let storageToken = null;
-      let storageSource = '';
+      const { data: { session } } = await supabase.auth.getSession()
       
-      if (typeof window !== 'undefined') {
-        // Supabase 프로젝트 토큰 키 패턴들 시도
-        const possibleKeys = [
-          'sb-jdubrjczdyqqtsppojgu-auth-token', // 실제 프로젝트 ID
-          'supabase.auth.token',
-          'sb-auth-token'
-        ];
-        
-        for (const key of possibleKeys) {
-          // localStorage 확인
-          const localStorageItem = localStorage.getItem(key);
-          if (localStorageItem) {
-            try {
-              const parsed = JSON.parse(localStorageItem);
-              if (parsed.access_token) {
-                storageToken = parsed.access_token;
-                storageSource = `localStorage.${key}`;
-                break;
-              }
-            } catch (e) {
-              // JSON 파싱 실패시 무시
-            }
-          }
-          
-          // sessionStorage 확인
-          const sessionStorageItem = sessionStorage.getItem(key);
-          if (sessionStorageItem) {
-            try {
-              const parsed = JSON.parse(sessionStorageItem);
-              if (parsed.access_token) {
-                storageToken = parsed.access_token;
-                storageSource = `sessionStorage.${key}`;
-                break;
-              }
-            } catch (e) {
-              // JSON 파싱 실패시 무시
-            }
-          }
-        }
-        
-        // 모든 localStorage 키 검색
-        if (!storageToken) {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.includes('auth') && key.includes('sb')) {
-              try {
-                const item = localStorage.getItem(key);
-                if (item) {
-                  const parsed = JSON.parse(item);
-                  if (parsed.access_token) {
-                    storageToken = parsed.access_token;
-                    storageSource = `localStorage.${key}`;
-                    break;
-                  }
-                }
-              } catch (e) {
-                // 무시
-              }
-            }
-          }
-        }
-      }
-      
-      // 스토리지에서 찾은 토큰이 있으면 사용
-      if (!accessToken && storageToken) {
-        accessToken = storageToken;
-      }
-      
-      // 토큰이 없으면 건너뜀
-      if (!accessToken) {
-        setNotifications([]);
-        return;
-      }
-      
-      // 기본 사용자 검사들...
-      if (user.name === '사용자' && !user.profile_image) {
-        setNotifications([]);
-        return;
+      if (!session?.user) {
+        return
       }
 
-      const isDefaultUser = user.name === '사용자' || 
-                           (!user.profile_image && user.email && !user.email.includes('@')) ||
-                           (user.updated_at && user.created_at && 
-                            new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000);
-      
-      if (isDefaultUser) {
-        setNotifications([]);
-        return;
+      // 토큰 가져오기
+      const projectRef = "jdubrjczdyqqtsppojgu"
+      let accessToken = null
+
+      const possibleKeys = [
+        `sb-${projectRef}-auth-token`,
+        'supabase-auth-token',
+        'auth-token',
+        'access_token'
+      ]
+
+      for (const key of possibleKeys) {
+        const tokenData = localStorage.getItem(key) || sessionStorage.getItem(key)
+        if (tokenData) {
+          try {
+            const parsed = JSON.parse(tokenData)
+            if (parsed.access_token) {
+              accessToken = parsed.access_token
+              break
+            }
+          } catch {
+            if (tokenData.includes('.')) {
+              accessToken = tokenData
+              break
+            }
+          }
+        }
+      }
+
+      if (!accessToken) {
+        return
       }
 
       // API 호출
-      const isDev = process.env.NODE_ENV === 'development';
-      const userId = user?.id;
-      const apiUrl = isDev && userId 
-        ? `/api/notifications?userId=${userId}` 
-        : '/api/notifications';
-      
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/notifications', {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
-        },
-        credentials: 'include',
-      });
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
 
       if (!response.ok) {
-        if (response.status === 401) {
-          setNotifications([]);
-          return;
-        } else if (response.status === 500) {
-          setNotifications([]);
-          return;
-        } else {
-          setNotifications([]);
-          return;
-        }
+        return
       }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        
-        if (responseText.includes('<!DOCTYPE html>')) {
-          throw new Error('서버 오류가 발생했습니다.');
-        }
-        
-        throw new Error('서버 응답이 JSON 형식이 아닙니다.');
-      }
-
-      const data = await response.json();
+      const data = await response.json()
       
-      if (!data || !Array.isArray(data.notifications)) {
-        throw new Error('잘못된 알림 데이터 형식');
-      }
+      // 데이터 정규화 - API 응답에 따라 조정
+      const normalizedData = (data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        message: item.message,
+        link: item.link || '#',
+        isRead: item.isRead || item.is_read || false,
+        createdAt: item.createdAt || item.created_at,
+        type: item.type,
+        formattedDate: formatDateToRelative(item.createdAt || item.created_at)
+      }))
       
-      const sortedNotifications = [...data.notifications].sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      
-      setNotifications(sortedNotifications);
+      setNotifications(normalizedData)
+      setUnreadCount(normalizedData.filter((n: NotificationData) => !n.isRead).length)
     } catch (error) {
-      // 개발 환경에서만 토스트 표시
-      if (process.env.NODE_ENV === 'development') {
-        // 401 오류는 토스트로 표시하지 않음
-        if (error instanceof Error && !error.message.includes('401')) {
-          toast.error(`알림 로드 실패: ${error.message}`);
-        }
-      }
-      
-      setNotifications([]);
+      // 알림 로딩 오류 처리
     } finally {
-      setIsLoadingNotifications(false);
+      setIsLoadingNotifications(false)
     }
-  };
+  }
 
   const handleNotificationClick = async (id: number) => {
     try {
-      // Supabase 세션에서 access_token 가져오기
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      const supabase = await getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
       
-      // 세션이 없으면 처리하지 않음
       if (!session || !accessToken) {
-        return;
+        return
       }
       
-      // 개발 환경에서 사용할 userId 추가
-      const isDev = process.env.NODE_ENV === 'development';
-      const userId = user?.id;
+      const isDev = process.env.NODE_ENV === 'development'
+      const userId = user?.id
       const apiUrl = isDev && userId 
         ? `/api/notifications?userId=${userId}` 
-        : '/api/notifications';
+        : '/api/notifications'
       
       const response = await fetch(apiUrl, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ notificationId: id }),
       })
 
       if (!response.ok) {
         if (response.status === 401) {
-          // 401 오류는 조용히 처리
-          return;
+          return
         }
         throw new Error('알림 상태 업데이트에 실패했습니다.')
       }
@@ -315,66 +220,65 @@ export function NotificationDropdown() {
           notification.id === id ? { ...notification, isRead: true } : notification
         )
       )
+      
+      // 읽지 않은 알림 수 업데이트
+      setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        toast.error('알림 상태를 업데이트하는데 실패했습니다.');
+        toast.error('알림 상태를 업데이트하는데 실패했습니다.')
       }
     }
   }
 
   const markAllAsRead = async () => {
     try {
-      // Supabase 세션에서 access_token 가져오기
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      const supabase = await getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
       
-      // 세션이 없으면 처리하지 않음
       if (!session || !accessToken) {
-        return;
+        return
       }
       
-      // 개발 환경에서 사용할 userId 추가
-      const isDev = process.env.NODE_ENV === 'development';
-      const userId = user?.id;
+      const isDev = process.env.NODE_ENV === 'development'
+      const userId = user?.id
       const apiUrl = isDev && userId 
         ? `/api/notifications/mark-all-read?userId=${userId}` 
-        : '/api/notifications/mark-all-read';
+        : '/api/notifications/mark-all-read'
       
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+          'Authorization': `Bearer ${accessToken}`,
         },
       })
 
       if (!response.ok) {
         if (response.status === 401) {
-          // 401 오류는 조용히 처리
-          return;
+          return
         }
         throw new Error('알림 상태 일괄 업데이트에 실패했습니다.')
       }
 
       setNotifications(notifications.map(notification => ({ ...notification, isRead: true })))
+      setUnreadCount(0)
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        toast.error('모든 알림을 읽음 처리하는데 실패했습니다.');
+        toast.error('모든 알림을 읽음 처리하는데 실패했습니다.')
       }
     }
   }
 
-  // 서버 렌더링과 클라이언트 렌더링 간 불일치 방지
-  if (!user) return null
-  if (!isMounted) return null
+  // 기본 조건 확인
+  if (!user || !isMounted) return null
 
-  // 기본 사용자인지 확인
+  // 기본 사용자 확인
   const isDefaultUser = user.name === '사용자' || 
                        (!user.profile_image && user.email && !user.email.includes('@')) ||
                        (user.updated_at && user.created_at && 
-                        new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000);
+                        new Date(user.updated_at).getTime() - new Date(user.created_at).getTime() < 1000)
 
-  // 기본 사용자는 알림 기능을 사용할 수 없음
   if (isDefaultUser) return null
 
   return (
@@ -418,7 +322,7 @@ export function NotificationDropdown() {
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2">{notification.message}</p>
-                    <div className="ml-2 flex-shrink-0">
+                    <div className="ml-2 flex-shrink-0 mt-2">
                       <span className={`inline-block px-2 py-1 text-xs rounded-full ${
                         notification.type === 'TICKET_REQUEST' 
                           ? 'bg-blue-100 text-blue-800'
@@ -455,4 +359,6 @@ export function NotificationDropdown() {
     </DropdownMenu>
   )
 }
+
+export default NotificationDropdown
 

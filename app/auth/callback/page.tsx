@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 
 // PKCE 관련 스토리지 키
 const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
@@ -87,7 +87,7 @@ const saveSessionToStorage = (session: any) => {
   }
 };
 
-export default function AuthCallbackPage() {
+export default function AuthCallback() {
   const router = useRouter();
   const exchangeAttempted = useRef(false);
 
@@ -128,134 +128,31 @@ export default function AuthCallbackPage() {
   }, []);
 
   useEffect(() => {
-    const handleCallback = async () => {
+    const handleAuthCallback = async () => {
       try {
-        // 이미 처리 중이면 중단
-        if (exchangeAttempted.current) {
-          return;
-        }
-        exchangeAttempted.current = true;
-
-        // 현재 세션 확인 (약간의 지연을 두고)
+        const supabase = await getSupabaseClient();
         
-        // Supabase 인증 상태가 안정화될 때까지 잠시 대기
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          // 현재 세션 확인 오류 처리
-        }
-        
-        if (currentSession) {
-          const saved = saveSessionToStorage(currentSession);
-          if (saved) {
-            router.push('/');
-          } else {
-            // 기존 세션 저장 실패 처리
-          }
-          return;
-        }
-        
-        // URL에서 code 파라미터 추출
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlString = window.location.href;
-        const codeMatch = urlString.match(/[?&]code=([^&]+)/);
-        const errorMatch = urlString.match(/[?&]error=([^&]+)/);
-        
-        const code = codeMatch ? decodeURIComponent(codeMatch[1]) : urlParams.get('code');
-        const error = errorMatch ? decodeURIComponent(errorMatch[1]) : urlParams.get('error');
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
-          // OAuth 오류 발생 시 처리
-          router.push('/login');
-          return;
-        }
-        
-        // code verifier 가져오기
-        let verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
-        
-        if (!verifier) {
-          verifier = localStorage.getItem(PKCE_VERIFIER_BACKUP_KEY);
-          if (verifier) {
-            sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-          }
-        }
-        
-        if (!code) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const { data: { session: retrySession } } = await supabase.auth.getSession();
-          
-          if (retrySession) {
-            const saved = saveSessionToStorage(retrySession);
-            if (saved) {
-              router.push('/');
-              return;
-            }
-          }
-          
-          router.push('/login');
-          return;
-        }
-        
-        if (!verifier) {
-          // verifier 누락 시 처리
-          router.push('/login');
-          return;
-        }
-
-        // 현재 교환 시도 기록
-        sessionStorage.setItem(PKCE_EXCHANGE_ATTEMPTED_KEY, code);
-        
-        // PKCE 토큰 교환
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (exchangeError) {
-          // 세션 교환 실패 시 처리
-          router.push('/login');
+          router.push('/login?error=auth_failed');
           return;
         }
 
         if (data.session) {
-          // 세션을 localStorage와 sessionStorage에 저장
-          const saved = saveSessionToStorage(data.session);
-          
-          if (!saved) {
-            // 세션 저장 실패 시 처리
-            router.push('/login');
-            return;
-          }
-          
-          // 성공 후 스토리지 정리
-          sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-          localStorage.removeItem(PKCE_VERIFIER_BACKUP_KEY);
-          sessionStorage.removeItem(PKCE_AUTH_CODE_KEY);
-          
-          // 성공한 교환 기록
-          const sessionRecord = {
-            code,
-            verifier,
-            timestamp: Date.now(),
-            success: true
-          };
-          sessionStorage.setItem(PKCE_SESSION_KEY, JSON.stringify(sessionRecord));
-          
-          // 리다이렉트 전에 잠시 대기 (저장 완료 확인)
-          setTimeout(() => {
-            router.push('/');
-          }, 500);
+          // 인증 성공 - 홈으로 리다이렉트
+          router.push('/');
         } else {
-          // 세션 데이터가 비어있을 시 처리
+          // 세션이 없는 경우 로그인 페이지로
           router.push('/login');
         }
       } catch (error) {
-        // 콜백 처리 중 치명적 오류 처리
-        sessionStorage.removeItem(PKCE_EXCHANGE_ATTEMPTED_KEY);
-        router.push('/login');
+        // 인증 콜백 처리 오류
+        router.push('/login?error=callback_failed');
       }
     };
 
-    handleCallback();
+    handleAuthCallback();
   }, [router]);
 
   return (

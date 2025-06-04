@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,25 +20,23 @@ export default function LoginForm() {
     setIsLoading(true);
 
     try {
-      // 이메일/비밀번호로 로그인
+      const supabase = await getSupabaseClient();
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
       if (error) {
-        console.error('로그인 실패:', error.message);
-        toast.error('로그인 실패: ' + error.message);
-        return;
+        throw error;
       }
       
-      if (data.session) {
+      if (data.user) {
         toast.success('로그인 성공!');
         router.push('/');
       }
     } catch (error: any) {
-      console.error('로그인 중 오류 발생:', error);
-      toast.error('로그인 중 오류 발생: ' + (error?.message || '알 수 없는 오류'));
+      toast.error(error.message || '로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }

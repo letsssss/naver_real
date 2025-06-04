@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase-admin';
 import jwt from "jsonwebtoken";
 import { supabase } from "@/lib/supabase";
 import { logAuthEventWithRequest } from '@/lib/auth-logger';
+import { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
+import { getSupabaseClient } from '@/lib/supabase';
 
 // JWT 시크릿 키 (환경변수 없으면 기본값 사용)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -93,17 +96,15 @@ export async function OPTIONS() {
 }
 
 // POST 요청 - 로그인 처리
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const supabase = await getSupabaseClient();
     const { email, password } = await request.json();
     
     if (!email || !password) {
       return NextResponse.json({ error: "이메일과 비밀번호를 입력해주세요." }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
-    
-    // Supabase Auth로 로그인 시도
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password

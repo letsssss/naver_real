@@ -1,58 +1,53 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 export default function SessionAuthButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
+  const [sessionInfo, setSessionInfo] = useState<any>(null);
+
+  const checkSession = async () => {
+    setIsLoading(true);
+    try {
+      const supabase = await getSupabaseClient();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        setSessionInfo({ error: error.message });
+      } else {
+        setSessionInfo({
+          hasSession: !!session,
+          user: session?.user || null,
+          expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : null
+        });
+      }
+    } catch (error) {
+      setSessionInfo({ error: 'Session check failed' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const refreshSession = async () => {
     setIsLoading(true);
-    setStatus('idle');
-    setMessage('');
-
     try {
-      // 현재 세션 확인
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      if (!sessionData.session) {
-        setStatus('error');
-        setMessage('로그인된 세션이 없습니다. 먼저 로그인해주세요.');
-        setIsLoading(false);
-        return;
-      }
-      
-      // 세션 갱신 시도
+      const supabase = await getSupabaseClient();
       const { data, error } = await supabase.auth.refreshSession();
       
       if (error) {
-        console.error('세션 갱신 실패:', error.message);
-        setStatus('error');
-        setMessage(`세션 갱신 실패: ${error.message}`);
-        setIsLoading(false);
-        return;
-      }
-      
-      if (data.session) {
-        const expiresAt = data.session.expires_at || 0;
-        const expiryDate = new Date(expiresAt * 1000);
-        console.log('세션 갱신 성공!', data.session.user.id);
-        console.log('새 토큰 만료 시간:', expiryDate.toLocaleString());
-        
-        setStatus('success');
-        setMessage(`세션 갱신 성공! 만료 시간: ${expiryDate.toLocaleString()}`);
+        setSessionInfo({ error: error.message });
       } else {
-        setStatus('error');
-        setMessage('세션 갱신에 실패했습니다.');
+        setSessionInfo({
+          hasSession: !!data.session,
+          user: data.session?.user || null,
+          refreshed: true
+        });
       }
-    } catch (error: any) {
-      console.error('세션 갱신 중 오류 발생:', error);
-      setStatus('error');
-      setMessage(`세션 갱신 중 오류 발생: ${error?.message || '알 수 없는 오류'}`);
+    } catch (error) {
+      setSessionInfo({ error: 'Session refresh failed' });
     } finally {
       setIsLoading(false);
     }
@@ -74,16 +69,16 @@ export default function SessionAuthButton() {
         JWT 토큰 갱신하기
       </Button>
       
-      {status === 'success' && (
+      {sessionInfo?.hasSession && (
         <div className="p-3 bg-green-50 text-green-700 rounded-md text-sm">
-          {message}
+          {sessionInfo.user ? `세션 갱신 성공! 만료 시간: ${sessionInfo.expiresAt}` : '세션이 갱신되었습니다.'}
         </div>
       )}
       
-      {status === 'error' && (
+      {sessionInfo?.error && (
         <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
-          {message}
-          {message.includes('로그인') && (
+          {sessionInfo.error}
+          {sessionInfo.error.includes('로그인') && (
             <Button 
               variant="ghost"
               className="mt-2 p-0 h-auto text-red-700 underline" 

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-//import { createBrowserClient } from '@/lib/supabase'
 import { getSupabaseClient } from '@/lib/supabase'
 import AdminLayout from '@/components/admin/AdminLayout'
 import AdminOnly from '@/components/admin/AdminOnly'
@@ -16,7 +15,7 @@ export default function AdminFeePage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const supabase = getSupabaseClient()//createBrowserClient()//
+      const supabase = await getSupabaseClient()
 
       // 인증 유저 가져오기
       const {
@@ -50,13 +49,11 @@ export default function AdminFeePage() {
         .eq('is_fee_paid', false)
 
       if (error) {
-        console.error('미납 수수료 조회 오류:', error)
         alert('데이터 조회 중 오류가 발생했습니다.')
         setLoading(false)
         return
       }
 
-      console.log('미납 수수료 데이터:', data)
       setUnpaid(data || [])
       setFilteredUnpaid(data || [])
       setLoading(false)
@@ -110,7 +107,6 @@ export default function AdminFeePage() {
         alert('처리 실패: ' + result.message)
       }
     } catch (error) {
-      console.error('수수료 납부 처리 중 오류:', error)
       alert('처리 중 오류가 발생했습니다.')
     }
   }

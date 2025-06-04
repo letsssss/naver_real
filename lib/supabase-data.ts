@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabaseClient } from './supabase';
 
 // 게시글 목록 가져오기
 export async function getPosts(options: {
@@ -12,6 +12,7 @@ export async function getPosts(options: {
     const { page = 1, limit = 10, category, userId, searchQuery } = options;
     const offset = (page - 1) * limit;
 
+    const supabase = await getSupabaseClient();
     let query = supabase
       .from('Post')
       .select('*, author:User(id, name, email)', { count: 'exact' })
@@ -50,6 +51,7 @@ export async function getPosts(options: {
 // 게시글 상세 조회
 export async function getPostById(postId: string) {
   try {
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .from('Post')
       .select('*, author:User(id, name, email)')
@@ -78,6 +80,7 @@ export async function createPost(postData: {
   contactInfo?: string;
 }) {
   try {
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .from('Post')
       .insert([postData])
@@ -105,6 +108,7 @@ export async function updatePost(postId: string, postData: {
   status?: string;
 }) {
   try {
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .from('Post')
       .update(postData)
@@ -123,6 +127,7 @@ export async function updatePost(postId: string, postData: {
 // 게시글 삭제 (소프트 딜리트)
 export async function deletePost(postId: string) {
   try {
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .from('Post')
       .update({ isDeleted: true })
@@ -144,6 +149,7 @@ export async function getPurchases(userId: string, options: { page?: number; lim
     const { page = 1, limit = 10, status } = options;
     const offset = (page - 1) * limit;
 
+    const supabase = await getSupabaseClient();
     let query = supabase
       .from('Purchase')
       .select('*, post:Post(*), seller:User!Purchase_sellerId_fkey(*), buyer:User!Purchase_buyerId_fkey(*)', { count: 'exact' })
@@ -177,6 +183,7 @@ export async function getNotifications(userId: string, options: { page?: number;
     const { page = 1, limit = 10 } = options;
     const offset = (page - 1) * limit;
 
+    const supabase = await getSupabaseClient();
     const { data, error, count } = await supabase
       .from('Notification')
       .select('*, post:Post(*)', { count: 'exact' })
@@ -196,4 +203,28 @@ export async function getNotifications(userId: string, options: { page?: number;
     console.error('알림 목록 조회 에러:', error);
     throw error;
   }
+}
+
+export async function fetchUserData(userId: string) {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchPostData(postId: number) {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+    
+  if (error) throw error;
+  return data;
 } 

@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@/lib/supabase'
+import { getSupabaseClient } from '@/lib/supabase'
 import AdminLayout from '@/components/admin/AdminLayout'
 import AdminOnly from '@/components/admin/AdminOnly'
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 interface Report {
   id: string
@@ -30,9 +32,13 @@ export default function AdminReportsPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const fetchReports = async () => {
-      const supabase = createBrowserClient()
+    fetchReports()
+  }, [])
 
+  const fetchReports = async () => {
+    try {
+      const supabase = await getSupabaseClient()
+      
       // 인증 유저 가져오기
       const {
         data: { user },
@@ -74,11 +80,12 @@ export default function AdminReportsPage() {
       console.log('신고 목록 데이터:', data)
       setReports(data || [])
       setFilteredReports(data || [])
+    } catch (error) {
+      // 신고 목록 로딩 오류 처리
+    } finally {
       setLoading(false)
     }
-
-    fetchReports()
-  }, [])
+  }
 
   // 필터링 기능 구현 (검색어 + 상태 필터)
   useEffect(() => {
@@ -110,30 +117,23 @@ export default function AdminReportsPage() {
     setFilteredReports(filtered)
   }, [searchQuery, statusFilter, reports])
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateReportStatus = async (reportId: string, newStatus: 'approved' | 'rejected') => {
     try {
-      const supabase = createBrowserClient()
+      const supabase = await getSupabaseClient()
       
       const { error } = await supabase
         .from('reports')
-        .update({ status })
-        .eq('id', id)
-      
+        .update({ status: newStatus })
+        .eq('id', reportId)
+
       if (error) {
         throw error
       }
-      
-      // 로컬 상태 업데이트
-      setReports(prev => 
-        prev.map(report => 
-          report.id === id ? { ...report, status } : report
-        )
-      )
-      
-      alert(`신고를 ${status === 'approved' ? '승인' : '거절'}했습니다.`)
+
+      // 목록 새로고침
+      fetchReports()
     } catch (error) {
-      console.error('상태 업데이트 오류:', error)
-      alert('처리 중 오류가 발생했습니다.')
+      // 신고 상태 업데이트 오류 처리
     }
   }
 
@@ -254,13 +254,13 @@ export default function AdminReportsPage() {
                       {report.status === 'pending' && (
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => updateStatus(report.id, 'approved')}
+                            onClick={() => updateReportStatus(report.id, 'approved')}
                             className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
                           >
                             승인
                           </button>
                           <button
-                            onClick={() => updateStatus(report.id, 'rejected')}
+                            onClick={() => updateReportStatus(report.id, 'rejected')}
                             className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
                           >
                             거절
