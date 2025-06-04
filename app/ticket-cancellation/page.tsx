@@ -56,7 +56,7 @@ interface PopularTicket {
   venue: string;
 }
 export default function TicketCancellationPage() {
-  const { user, logout } = useAuth()
+  const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("all")
@@ -216,7 +216,7 @@ export default function TicketCancellationPage() {
       return (
         <>
           <button
-            onClick={logout}
+            onClick={signOut}
             className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap"
           >
             로그아웃

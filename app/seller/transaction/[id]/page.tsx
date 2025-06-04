@@ -133,12 +133,22 @@ export default function SellerTransactionDetail() {
         const { data: { session } } = await supabase.auth.getSession()
         const accessToken = session?.access_token
         
+        // Ensure headers are properly encoded
         const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         }
         
-        if (accessToken) {
+        // Only add Authorization header if token exists and is valid ASCII
+        if (accessToken && /^[a-zA-Z0-9._-]+$/.test(accessToken)) {
           headers['Authorization'] = `Bearer ${accessToken}`
+        } else if (accessToken) {
+          // If token contains non-ASCII characters, try encoding it
+          try {
+            headers['Authorization'] = `Bearer ${btoa(accessToken)}`
+          } catch (e) {
+            console.error('Token encoding failed:', e)
+            throw new Error("Authentication error. Please refresh the page.")
+          }
         }
         
         // API 경로 수정 - /api/purchase 엔드포인트 사용
@@ -208,12 +218,23 @@ export default function SellerTransactionDetail() {
           const { data: { session } } = await supabase.auth.getSession()
           const accessToken = session?.access_token
           
+          // Ensure headers are properly encoded
           const headers: Record<string, string> = {
             'Content-Type': 'application/json'
           }
           
-          if (accessToken) {
+          // Only add Authorization header if token exists and is valid ASCII
+          if (accessToken && /^[a-zA-Z0-9._-]+$/.test(accessToken)) {
             headers['Authorization'] = `Bearer ${accessToken}`
+          } else if (accessToken) {
+            // If token contains non-ASCII characters, try encoding it
+            try {
+              headers['Authorization'] = `Bearer ${btoa(accessToken)}`
+            } catch (e) {
+              console.error('Token encoding failed:', e)
+              // Don't throw error for chat, just skip it
+              return;
+            }
           }
           
           const chatResponse = await fetch(`/api/chat/init-room`, {
@@ -229,13 +250,13 @@ export default function SellerTransactionDetail() {
             const chatData = await chatResponse.json();
             if (chatData.roomId) {
               setChatRoomId(chatData.roomId);
-              console.log("채팅방 ID:", chatData.roomId);
+              console.log("Chat room ID:", chatData.roomId);
             }
           } else {
-            console.error("채팅방 정보 로딩 에러");
+            console.error("Chat room loading error");
           }
         } catch (chatError) {
-          console.error("채팅방 정보 로딩 에러:", chatError);
+          console.error("Chat room loading error:", chatError);
           // 채팅방 로딩 실패는 전체 페이지 에러로 처리하지 않음
         }
       } catch (error) {
@@ -333,12 +354,26 @@ export default function SellerTransactionDetail() {
         const { data: { session } } = await supabase.auth.getSession()
         const accessToken = session?.access_token
         
+        // Ensure headers are properly encoded
         const headers: Record<string, string> = {
           "Content-Type": "application/json"
         }
         
-        if (accessToken) {
+        // Only add Authorization header if token exists and is valid ASCII
+        if (accessToken && /^[a-zA-Z0-9._-]+$/.test(accessToken)) {
           headers['Authorization'] = `Bearer ${accessToken}`
+        } else if (accessToken) {
+          // If token contains non-ASCII characters, try encoding it
+          try {
+            headers['Authorization'] = `Bearer ${btoa(accessToken)}`
+          } catch (e) {
+            console.error('Token encoding failed:', e)
+            toast.error("Authentication error. Please refresh the page.", {
+              description: "Token encoding issue detected.",
+              duration: 4000,
+            });
+            return;
+          }
         }
 
         // 취켓팅 완료 상태로 변경
@@ -356,16 +391,16 @@ export default function SellerTransactionDetail() {
           window.location.reload()
         } else {
           const errorText = await response.text()
-          console.error("API 오류:", errorText)
-          toast.error("상태 변경에 실패했습니다.", {
-            description: "잠시 후 다시 시도해주세요.",
+          console.error("API Error:", errorText)
+          toast.error("Status update failed.", {
+            description: "Please try again later.",
             duration: 4000,
           });
         }
       } catch (error) {
-        console.error("상태 변경 중 오류:", error)
-        toast.error("상태 변경에 실패했습니다.", {
-          description: "잠시 후 다시 시도해주세요.",
+        console.error("Status update error:", error)
+        toast.error("Status update failed.", {
+          description: "Please try again later.",
           duration: 4000,
         });
       }
