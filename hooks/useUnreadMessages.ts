@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { getSupabaseClient } from '@/lib/supabase';
-import debounce from 'lodash/debounce';
 
 // 캐시 타입 정의
 interface MessageCache {
@@ -32,6 +30,7 @@ export function useUnreadMessages(orderNumber?: string) {
   
   const isMountedRef = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout>();
   const MAX_RETRIES = 3;
 
   // API 호출 함수
@@ -67,38 +66,32 @@ export function useUnreadMessages(orderNumber?: string) {
         return;
       }
 
-      const supabase = await getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not available');
-      }
-
-      // Query unread messages
-      let query = supabase
-        .from('messages')
-        .select('id', { count: 'exact' })
-        .eq('is_read', false)
-        .eq('receiver_id', user.id);
-
-      // Add order number filter if provided
+      // API 엔드포인트 URL 구성
+      const params = new URLSearchParams();
+      params.append('userId', user.id);
       if (orderNumber) {
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('id')
-          .eq('order_number', orderNumber)
-          .single();
-
-        if (room) {
-          query = query.eq('room_id', room.id);
-        }
+        params.append('orderNumber', orderNumber);
       }
 
-      const { count, error: countError } = await query;
+      // API 호출 - 우리가 만든 백엔드 엔드포인트 사용
+      const response = await fetch(`/api/messages/unread-count?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (countError) {
-        throw countError;
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
       }
 
-      const messageCount = count || 0;
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const messageCount = data.count || 0;
       
       // Update cache
       globalMessageCache[cacheKey] = {
@@ -121,9 +114,9 @@ export function useUnreadMessages(orderNumber?: string) {
           
           console.log(`[Debug] Retrying message count (${nextRetry}/${MAX_RETRIES})...`);
           
-          setTimeout(() => {
+          timeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
-              debouncedFetch();
+              fetchUnreadMessages();
             }
           }, Math.pow(2, nextRetry) * 1000);
         } else {
@@ -139,26 +132,38 @@ export function useUnreadMessages(orderNumber?: string) {
   };
 
   // API 호출 디바운스 처리
-  const debouncedFetch = debounce(fetchUnreadMessages, API_DEBOUNCE_DELAY);
+  const debouncedFetch = useRef<NodeJS.Timeout>();
+  
+  const scheduleDebouncedFetch = () => {
+    if (debouncedFetch.current) {
+      clearTimeout(debouncedFetch.current);
+    }
+    debouncedFetch.current = setTimeout(fetchUnreadMessages, API_DEBOUNCE_DELAY);
+  };
 
   // 컴포넌트 마운트/언마운트 및 의존성 변경 처리
   useEffect(() => {
     isMountedRef.current = true;
     
     // 초기 데이터 로딩
-    debouncedFetch();
+    scheduleDebouncedFetch();
 
     // 주기적 업데이트 설정
     intervalRef.current = setInterval(() => {
       if (isMountedRef.current) {
-        debouncedFetch();
+        scheduleDebouncedFetch();
       }
     }, UPDATE_INTERVAL);
 
     // 정리 함수
     return () => {
       isMountedRef.current = false;
-      debouncedFetch.cancel();
+      if (debouncedFetch.current) {
+        clearTimeout(debouncedFetch.current);
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }

@@ -80,9 +80,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logDebug('주문 번호:', finalOrderNumber);
+    logDebug('🔍 주문 번호:', finalOrderNumber);
 
     // 구매 내역 확인
+    logDebug('📊 구매 내역 조회 시작...');
     const { data: purchase, error: purchaseError } = await supabase
       .from('purchases')
       .select('id, buyer_id, seller_id, order_number')
@@ -90,75 +91,163 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (purchaseError || !purchase) {
-      logDebug('❌ 구매 내역 조회 오류:', purchaseError?.message);
+      logDebug('❌ 구매 내역 조회 오류:', {
+        error: purchaseError?.message,
+        code: purchaseError?.code,
+        orderNumber: finalOrderNumber
+      });
       return NextResponse.json(
         { error: '해당 주문 번호의 구매 내역을 찾을 수 없습니다.' },
         { status: 404 }
       );
     }
 
+    logDebug('✅ 구매 내역 조회 성공:', {
+      purchaseId: purchase.id,
+      buyerId: purchase.buyer_id,
+      sellerId: purchase.seller_id,
+      orderNumber: purchase.order_number
+    });
+
     // 채팅방 접근 권한 확인
-    const isAuthorized = user.id === purchase.buyer_id || user.id === purchase.seller_id;
+    const isBuyer = user.id === purchase.buyer_id;
+    const isSeller = user.id === purchase.seller_id;
+    const isAuthorized = isBuyer || isSeller;
+    
+    logDebug('🔐 권한 확인:', {
+      currentUserId: user.id,
+      buyerId: purchase.buyer_id,
+      sellerId: purchase.seller_id,
+      isBuyer,
+      isSeller,
+      isAuthorized
+    });
     
     if (!isAuthorized) {
-      logDebug('❌ 권한 없음:', user.id);
+      logDebug('❌ 권한 없음 - 사용자가 구매자도 판매자도 아님');
       return NextResponse.json(
         { error: '이 주문에 대한 채팅 권한이 없습니다.' },
         { status: 403 }
       );
     }
 
-    // 이미 존재하는 채팅방 확인
-    const { data: existingRoom, error: roomError } = await supabase
-      .from('rooms')
-      .select('id')
-      .eq('order_number', finalOrderNumber)
-      .single();
+    logDebug('✅ 권한 확인 통과 -', isBuyer ? '구매자' : '판매자');
 
-    if (roomError && roomError.code !== 'PGRST116') {
-      logDebug('❌ 채팅방 조회 오류:', roomError.message);
+    // 🔍 먼저 기존 채팅방이 있는지 확인
+    logDebug('🔍 기존 채팅방 확인 중...');
+    const { data: existingRoom, error: findError } = await supabase
+      .from('rooms')
+      .select('id, order_number, buyer_id, seller_id, created_at')
+      .eq('order_number', finalOrderNumber)
+      .maybeSingle(); // single() 대신 maybeSingle() 사용하여 없어도 오류 안 남
+
+    if (findError) {
+      logDebug('❌ 기존 채팅방 조회 오류:', {
+        error: findError.message,
+        code: findError.code
+      });
       return NextResponse.json(
         { error: '채팅방 정보 조회 중 오류가 발생했습니다.' },
         { status: 500 }
       );
     }
 
-    // 기존 채팅방이 있으면 반환
+    // 기존 채팅방이 있으면 바로 반환
     if (existingRoom) {
-      logDebug('✅ 기존 채팅방 발견:', existingRoom.id);
+      logDebug('✅ 기존 채팅방 발견:', {
+        roomId: existingRoom.id,
+        orderNumber: existingRoom.order_number,
+        buyerId: existingRoom.buyer_id,
+        sellerId: existingRoom.seller_id,
+        createdAt: existingRoom.created_at
+      });
       return NextResponse.json(
         { roomId: existingRoom.id },
         { status: 200 }
       );
     }
 
-    // 새 채팅방 생성
-    const roomId = crypto.randomUUID(); // nanoid() 대신 표준 UUID 생성
-    const { error: createError } = await supabase
+    // 🔄 새 채팅방 생성 (unique constraint에 의해 중복 방지됨)
+    logDebug('🏗️ 새 채팅방 생성 시작...');
+    
+    const roomId = crypto.randomUUID();
+    const roomData = {
+      id: roomId,
+      order_number: finalOrderNumber,
+      buyer_id: purchase.buyer_id,
+      seller_id: purchase.seller_id,
+      purchase_id: purchase.id,
+    };
+    
+    logDebug('📝 채팅방 데이터 준비:', roomData);
+
+    const { data: newRoom, error: createError } = await supabase
       .from('rooms')
-      .insert({
-        id: roomId,
-        order_number: finalOrderNumber,
-        buyer_id: purchase.buyer_id,
-        seller_id: purchase.seller_id,
-      });
+      .insert(roomData)
+      .select('id, order_number, buyer_id, seller_id, created_at')
+      .single();
 
     if (createError) {
-      logDebug('❌ 채팅방 생성 오류:', createError.message);
+      // unique constraint 위반인 경우 (동시 요청으로 인한 race condition)
+      if (createError.code === '23505') {
+        logDebug('🔄 동시 생성 감지, 기존 채팅방 조회...');
+        
+        // 다시 기존 채팅방 조회
+        const { data: raceConditionRoom, error: raceError } = await supabase
+          .from('rooms')
+          .select('id, order_number, buyer_id, seller_id, created_at')
+          .eq('order_number', finalOrderNumber)
+          .single();
+
+        if (raceError || !raceConditionRoom) {
+          logDebug('❌ Race condition 후 채팅방 조회 실패:', raceError?.message);
+          return NextResponse.json(
+            { error: '채팅방 생성 중 오류가 발생했습니다.' },
+            { status: 500 }
+          );
+        }
+
+        logDebug('✅ Race condition 해결 - 기존 채팅방 사용:', {
+          roomId: raceConditionRoom.id,
+          orderNumber: raceConditionRoom.order_number
+        });
+
+        return NextResponse.json(
+          { roomId: raceConditionRoom.id },
+          { status: 200 }
+        );
+      }
+
+      // 기타 생성 오류
+      logDebug('❌ 채팅방 생성 오류:', {
+        error: createError.message,
+        code: createError.code,
+        details: createError.details
+      });
       return NextResponse.json(
         { error: '채팅방을 생성하는 중 오류가 발생했습니다.' },
         { status: 500 }
       );
     }
 
-    logDebug('✅ 새 채팅방 생성됨:', roomId);
+    logDebug('✅ 새 채팅방 생성 완료:', {
+      roomId: newRoom.id,
+      orderNumber: newRoom.order_number,
+      buyerId: newRoom.buyer_id,
+      sellerId: newRoom.seller_id,
+      createdAt: newRoom.created_at
+    });
+
     return NextResponse.json(
-      { roomId },
+      { roomId: newRoom.id },
       { status: 201 }
     );
 
   } catch (error: any) {
-    logDebug('❌ 서버 오류:', error.message);
+    logDebug('❌ 서버 오류:', {
+      message: error.message,
+      stack: error.stack
+    });
     return NextResponse.json(
       { error: '서버 오류가 발생했습니다.' },
       { status: 500 }

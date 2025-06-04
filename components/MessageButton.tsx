@@ -12,25 +12,8 @@ import { Database } from '@/types/supabase';
 class ChatManager {
   private static instance: ChatManager | null = null;
   private activeChats: Set<string> = new Set();
-  private supabase: SupabaseClient<Database> | null = null;
-  private isInitialized: boolean = false;
-  private initializationPromise: Promise<void> | null = null;
 
-  private constructor() {
-    this.initializationPromise = this.initialize();
-  }
-
-  private async initialize() {
-    if (this.isInitialized) return;
-    
-    try {
-      this.supabase = await getSupabaseClient();
-      this.isInitialized = true;
-    } catch (error) {
-      console.error('ChatManager 초기화 실패:', error);
-      throw error;
-    }
-  }
+  private constructor() {}
 
   public static getInstance(): ChatManager {
     if (!ChatManager.instance) {
@@ -39,58 +22,81 @@ class ChatManager {
     return ChatManager.instance;
   }
 
-  private async ensureInitialized() {
-    if (!this.isInitialized) {
-      if (this.initializationPromise) {
-        await this.initializationPromise;
-      } else {
-        this.initializationPromise = this.initialize();
-        await this.initializationPromise;
-      }
-    }
-  }
-
   public async activateChat(orderNumber?: string, postId?: number): Promise<boolean> {
-    await this.ensureInitialized();
-    
-    if (!this.supabase) {
-      console.error('Supabase 클라이언트가 초기화되지 않았습니다.');
-      return false;
-    }
-
     const chatId = orderNumber || `post-${postId}`;
     
+    console.log('[ChatManager] 🚀 채팅 활성화 시작:', { orderNumber, postId, chatId });
+    
     if (this.activeChats.has(chatId)) {
+      console.log('[ChatManager] ✅ 이미 활성화된 채팅:', chatId);
       return true;
     }
 
     try {
-      // 채팅방 활성화 로직
-      const { data, error } = await this.supabase
-        .from('rooms')
-        .upsert([
-          {
-            id: chatId,
-            order_number: orderNumber,
-            post_id: postId,
-            status: 'active'
-          }
-        ])
-        .select()
-        .single();
+      console.log('[ChatManager] 📡 API 호출 중...');
+      
+      // 현재 사용자 세션에서 토큰 가져오기
+      const supabase = await getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // 토큰이 있으면 Authorization 헤더 추가
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+        console.log('[ChatManager] 🔑 토큰 추가됨:', session.access_token.substring(0, 20) + '...');
+      } else {
+        console.warn('[ChatManager] ⚠️ 토큰 없음 - 인증 문제 발생 가능');
+      }
+      
+      // API를 통해 채팅방 생성/초기화
+      const response = await fetch('/api/chat/init-room', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          orderNumber: orderNumber,
+          postId: postId
+        }),
+      });
 
-      if (error) throw error;
+      console.log('[ChatManager] 📨 API 응답 상태:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[ChatManager] ❌ API 요청 실패:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[ChatManager] ✅ API 응답 데이터:', data);
+      
+      if (data.error) {
+        console.error('[ChatManager] ❌ API 응답 에러:', data.error);
+        throw new Error(data.error);
+      }
 
       this.activeChats.add(chatId);
+      console.log('[ChatManager] ✅ 채팅 활성화 완료:', { chatId, roomId: data.roomId });
       return true;
     } catch (error) {
-      console.error('채팅방 활성화 실패:', error);
+      console.error('[ChatManager] ❌ 채팅방 활성화 실패:', {
+        chatId,
+        error: error?.message,
+        stack: error?.stack
+      });
       return false;
     }
   }
 
   public deactivateChat(chatId: string): void {
     this.activeChats.delete(chatId);
+    console.log('[ChatManager] 🔄 채팅 비활성화:', chatId);
   }
 
   public isActive(chatId: string): boolean {
@@ -123,32 +129,50 @@ export default function MessageButton({
   const [isActivating, setIsActivating] = useState(false);
 
   const handleClick = useCallback(async () => {
+    console.log('[MessageButton] 🖱️ 클릭 이벤트:', { orderNumber, postId, user: user?.id });
+    
     if (onClick) {
+      console.log('[MessageButton] 🔗 커스텀 onClick 핸들러 실행');
       onClick();
       return;
     }
 
     if (!user) {
+      console.log('[MessageButton] ❌ 사용자 미로그인');
       alert('로그인이 필요합니다.');
       return;
     }
 
+    console.log('[MessageButton] ✅ 사용자 확인 완료:', user.id);
     setIsActivating(true);
+    
     try {
+      console.log('[MessageButton] 🚀 채팅 활성화 시작...');
       const success = await chatManager.activateChat(orderNumber, postId);
+      
       if (!success) {
+        console.error('[MessageButton] ❌ 채팅방 활성화 실패');
         throw new Error('채팅방 활성화에 실패했습니다.');
       }
 
+      console.log('[MessageButton] ✅ 채팅방 활성화 성공');
+      
       // 채팅 UI 활성화 이벤트 발생
+      const eventDetail = { orderNumber, postId };
+      console.log('[MessageButton] 📢 이벤트 발생:', eventDetail);
       window.dispatchEvent(new CustomEvent('chat:activate', {
-        detail: { orderNumber, postId }
+        detail: eventDetail
       }));
     } catch (error) {
-      console.error('채팅 활성화 오류:', error);
+      console.error('[MessageButton] ❌ 채팅 활성화 오류:', {
+        error: error?.message,
+        orderNumber,
+        postId
+      });
       alert('채팅을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setIsActivating(false);
+      console.log('[MessageButton] 🏁 처리 완료');
     }
   }, [onClick, user, orderNumber, postId, chatManager]);
 
@@ -156,7 +180,7 @@ export default function MessageButton({
   const shouldDisplayCount = !isLoading && !isOrderNumberLoading && !authLoading && unreadCount > 0;
 
   if (debug) {
-    console.log('MessageButton Debug:', {
+    console.log('[MessageButton] 🐛 디버그 정보:', {
       orderNumber,
       postId,
       unreadCount,
@@ -165,7 +189,8 @@ export default function MessageButton({
       isActivating,
       authLoading,
       buttonDisabled,
-      shouldDisplayCount
+      shouldDisplayCount,
+      user: user?.id
     });
   }
 
