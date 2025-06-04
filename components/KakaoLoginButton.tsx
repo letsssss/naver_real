@@ -8,25 +8,64 @@ interface KakaoLoginButtonProps {
   text?: string;
 }
 
+// PKCE 관련 스토리지 키
+const PKCE_VERIFIER_KEY = 'supabase.auth.code_verifier';
+const PKCE_VERIFIER_BACKUP_KEY = 'supabase.auth.code_verifier.backup';
+
 export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginButtonProps) {
   const supabase = createClientComponentClient();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/';
 
   async function signInWithKakao() {
-
-    console.log(`${window.location.origin}`);
-    
-    // Supabase 공식 문서 방식: 커스텀 콜백 사용
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "kakao",
-      options: {
-        redirectTo: `https://www.easyticket82.com/auth/callback?redirect=${redirectTo}`,
-        queryParams: {
-          response_type: 'code'
-        }
-      },
-    });  
+    try {
+      console.log('🚀 카카오 로그인 시작');
+      console.log(`현재 URL: ${window.location.origin}`);
+      
+      // localStorage 초기화 (이전 인증 데이터 정리)
+      const keysToRemove = [
+        'token', 'user', 'auth-token', 'auth-status', 
+        'supabase-auth-token', 'supabase_token',
+        'sb-access-token', 'sb-refresh-token'
+      ];
+      
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+      
+      console.log('✅ 이전 인증 데이터 초기화 완료');
+      
+      // Supabase OAuth 요청
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "kakao",
+        options: {
+          redirectTo: `http://localhost:3000/auth/callback?redirect=${redirectTo}`,
+          queryParams: {
+            response_type: 'code'
+          }
+        },
+      });
+      
+      if (error) {
+        console.error('❌ 카카오 OAuth 요청 실패:', error);
+        throw error;
+      }
+      
+      // PKCE verifier를 localStorage에 백업 (콜백에서 사용하기 위해)
+      const verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
+      if (verifier) {
+        localStorage.setItem(PKCE_VERIFIER_BACKUP_KEY, verifier);
+        console.log('✅ PKCE verifier 백업 저장 완료');
+      } else {
+        console.warn('⚠️ PKCE verifier를 찾을 수 없음');
+      }
+      
+      console.log('✅ 카카오 OAuth 요청 성공 - 리다이렉트 중...');
+    } catch (error) {
+      console.error('❌ 카카오 로그인 실패:', error);
+      alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');
+    }
   }
 
   const buttonText = text || (mode === 'login' ? '카카오로 로그인' : '카카오로 회원가입');

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation'
 import { supabase, supabaseService } from '@/lib/supabase'
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // 사용자 정보 새로고침
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // 로그인
   const signIn = async (email: string, password: string) => {
@@ -296,11 +296,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const initialUser = getInitialUser();
         if (initialUser) {
           setUser(initialUser);
+          console.log('✅ 초기 사용자 정보 복원:', initialUser.email);
         }
 
         // 2. 현재 세션 확인
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          console.log('✅ Supabase 세션 발견, 사용자 정보 새로고침');
+          
           // 세션이 있으면 사용자 정보 새로고침
           const { data: userData, error: userError } = await supabase
             .from('users')
@@ -308,25 +311,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq('id', session.user.id)
             .single();
 
-          if (userError) throw userError;
-
-          // 사용자 정보 업데이트 및 저장
-          setUser(userData);
-          safeLocalStorageSet('user', JSON.stringify(userData));
+          if (userError) {
+            console.warn('⚠️ users 테이블 조회 실패, 기본 사용자 정보 생성:', userError.message);
+            
+            // users 테이블에 없는 경우 기본 정보로 설정 (카카오 로그인 등)
+            const defaultUser = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 
+                    session.user.user_metadata?.full_name || 
+                    session.user.user_metadata?.display_name || '',
+              profileImage: session.user.user_metadata?.avatar_url || 
+                          session.user.user_metadata?.picture || '',
+              provider: session.user.app_metadata?.provider || 'kakao',
+              created_at: session.user.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            setUser(defaultUser);
+            safeLocalStorageSet('user', JSON.stringify(defaultUser));
+          } else {
+            // 사용자 정보 업데이트 및 저장
+            setUser(userData);
+            safeLocalStorageSet('user', JSON.stringify(userData));
+          }
+          
+          // 세션 정보도 저장
           safeLocalStorageSet('session', JSON.stringify(session));
+          console.log('✅ 인증 초기화 완료');
+        } else {
+          console.log('❌ Supabase 세션 없음');
         }
 
         // 3. 세션 리스너 등록
         const unsubscribe = supabaseService.onSessionChange(async ({ event, session }) => {
-          console.log('[인증] 세션 변경:', event);
+          console.log('[인증 컨텍스트] 세션 변경:', event);
           
           if (event === 'SIGNED_OUT') {
             setUser(null);
             safeLocalStorageRemove('user');
             safeLocalStorageRemove('session');
             router.replace('/');
-          } else if (session) {
+          } else if (session && event === 'SIGNED_IN') {
+            console.log('✅ 새로운 로그인 세션 감지');
             await refreshUser();
+          } else if (session && event === 'TOKEN_REFRESHED') {
+            console.log('✅ 토큰 갱신됨');
+            // 토큰 갱신 시에도 세션 정보 업데이트
+            safeLocalStorageSet('session', JSON.stringify(session));
           }
         });
 
@@ -342,7 +374,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initAuth();
-  }, []);
+  }, [refreshUser]);
 
   const value = {
     user,
