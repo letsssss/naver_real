@@ -19,7 +19,7 @@ export default function KakaoLoginButton({ mode = 'login', text }: KakaoLoginBut
   async function signInWithKakao() {
     try {
       //console.log('🚀 카카오 로그인 시작');
-      console.log(`현재 URL: ${window.location.origin}`);
+      //console.log(`현재 URL: ${window.location.origin}`);
       
       // === STEP 1: OAuth 요청 전 storage 상태 완전 스캔 ===
       console.log('📋 [BEFORE] OAuth 요청 전 storage 전체 스캔:');
