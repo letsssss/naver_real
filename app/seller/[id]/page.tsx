@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { getSupabaseClient } from "@/lib/supabase"
 
 // 임시 기본값 데이터 (데이터 로드 전에 사용)
+
 const defaultSellerData = {
   id: "",
   username: "로딩 중...",
