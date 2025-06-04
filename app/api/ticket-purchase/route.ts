@@ -45,20 +45,21 @@ async function createSimpleOrderNumber() {
 // POST 요청 핸들러 - 티켓 구매 신청
 export async function POST(request: NextRequest) {
   try {
-    console.log("티켓 구매 API 호출됨");
+    console.log("🚀 티켓 구매 API 호출됨");
     
     // 현재 인증된 사용자 정보 가져오기
     let authUser = await getAuthenticatedUser(request);
+    console.log("🔐 인증 결과:", authUser ? `사용자 ID: ${authUser.id}` : "인증 실패");
     
     // 개발 환경에서 URL 쿼리 파라미터로 인증 지원 (다른 API와 동일한 패턴)
     if (!authUser && process.env.NODE_ENV === 'development') {
       // URL에서 userId 쿼리 파라미터 확인
       const { searchParams } = new URL(request.url);
       const userId = searchParams.get('userId');
-      console.log("개발 환경 - 쿼리 파라미터 userId 확인:", userId);
+      console.log("🔧 개발 환경 - 쿼리 파라미터 userId 확인:", userId);
       
       if (userId) {
-        console.log("개발 환경 - 쿼리 파라미터 userId 사용:", userId);
+        console.log("🔧 개발 환경 - 쿼리 파라미터 userId 사용:", userId);
         
         // 테스트 사용자 객체 생성
         authUser = {
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
           email: 'dev@example.com',
           role: 'USER'
         } as any; // 타입 체크 우회
-        console.log("개발 환경 - 테스트 사용자 생성:", authUser);
+        console.log("🔧 개발 환경 - 테스트 사용자 생성:", authUser);
       }
     }
     
@@ -169,9 +170,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { postId, quantity, selectedSeats, phoneNumber, paymentMethod } = validationResult.data;
-    console.log("유효성 검사 통과 후 데이터:", { postId, quantity, selectedSeats, phoneNumber, paymentMethod });
+    console.log("✅ 유효성 검사 통과:", { postId, quantity, selectedSeats, phoneNumber, paymentMethod });
 
     // 게시글 조회 - 타입 문제를 피하기 위해 any 타입 사용
+    console.log("📰 게시글 조회 시작 - postId:", postId);
     const { data: post, error: postError } = await adminSupabase
       .from('posts')
       .select('*')
@@ -179,14 +181,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (postError || !post) {
-      console.log(`게시글 ID ${postId}를 찾을 수 없음:`, postError);
+      console.log(`❌ 게시글 ID ${postId}를 찾을 수 없음:`, postError);
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "해당하는 게시글을 찾을 수 없습니다." },
         { status: 404 }
       ));
     }
 
-    console.log("게시글 데이터:", post);
+    console.log("📰 게시글 데이터 조회 성공:", { id: post.id, title: post.title, author_id: post.author_id || post.user_id });
 
     // 게시글의 작성자 ID와 현재 사용자 ID 비교
     // any 타입으로 처리하여 TypeScript 오류 회피
@@ -275,48 +277,58 @@ export async function POST(request: NextRequest) {
     
     // 3. 최소한의 기본값 설정 (total_price는 NOT NULL 필드)
     purchaseData.total_price = totalPrice;
+    console.log("💰 최종 가격 설정:", totalPrice);
     
     // total_price 유효성 검증
     if (typeof purchaseData.total_price !== 'number' || purchaseData.total_price < 0) {
-      console.error("유효하지 않은 total_price:", purchaseData.total_price);
+      console.error("❌ 유효하지 않은 total_price:", purchaseData.total_price);
       return addCorsHeaders(NextResponse.json(
         { success: false, message: "가격 정보가 올바르지 않습니다." },
         { status: 400 }
       ));
     }
     
-    // 사용자 존재 여부 확인
-    const { data: buyerExists, error: buyerError } = await adminSupabase
-      .from('users')
-      .select('id')
-      .eq('id', authUser.id)
-      .single();
+    console.log("📦 최종 구매 데이터:", purchaseData);
+
+    // 사용자 존재 여부 확인 (개발 환경에서는 건너뛰기)
+    if (process.env.NODE_ENV !== 'development') {
+      const { data: buyerExists, error: buyerError } = await adminSupabase
+        .from('users')
+        .select('id')
+        .eq('id', authUser.id)
+        .single();
+        
+      if (buyerError || !buyerExists) {
+        console.error("구매자 정보를 찾을 수 없음:", buyerError);
+        return addCorsHeaders(NextResponse.json(
+          { success: false, message: "구매자 정보를 찾을 수 없습니다." },
+          { status: 400 }
+        ));
+      }
       
-    if (buyerError || !buyerExists) {
-      console.error("구매자 정보를 찾을 수 없음:", buyerError);
-      return addCorsHeaders(NextResponse.json(
-        { success: false, message: "구매자 정보를 찾을 수 없습니다." },
-        { status: 400 }
-      ));
-    }
-    
-    const { data: sellerExists, error: sellerError } = await adminSupabase
-      .from('users')
-      .select('id')
-      .eq('id', authorId)
-      .single();
-      
-    if (sellerError || !sellerExists) {
-      console.error("판매자 정보를 찾을 수 없음:", sellerError);
-      return addCorsHeaders(NextResponse.json(
-        { success: false, message: "판매자 정보를 찾을 수 없습니다." },
-        { status: 400 }
-      ));
+      const { data: sellerExists, error: sellerError } = await adminSupabase
+        .from('users')
+        .select('id')
+        .eq('id', authorId)
+        .single();
+        
+      if (sellerError || !sellerExists) {
+        console.error("판매자 정보를 찾을 수 없음:", sellerError);
+        return addCorsHeaders(NextResponse.json(
+          { success: false, message: "판매자 정보를 찾을 수 없습니다." },
+          { status: 400 }
+        ));
+      }
+    } else {
+      console.log("개발 환경: 사용자 존재 여부 검증 건너뛰기");
+      console.log("구매자 ID:", authUser.id);
+      console.log("판매자 ID:", authorId);
     }
     
     console.log("구매 데이터:", purchaseData);
 
     // 구매 정보 생성
+    console.log("💾 구매 정보 데이터베이스 삽입 시작");
     const { data: purchase, error: createError } = await adminSupabase
       .from('purchases')
       .insert(purchaseData)
@@ -324,8 +336,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (createError) {
-      console.error("구매 정보 생성 오류:", createError);
-      console.error("삽입하려던 데이터:", purchaseData);
+      console.error("❌ 구매 정보 생성 오류:", createError);
+      console.error("📦 삽입하려던 데이터:", purchaseData);
       
       // unique constraint 위반 감지
       let errorMessage = "구매 정보 생성 중 오류가 발생했습니다.";
@@ -359,6 +371,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       ));
     }
+
+    console.log("✅ 구매 정보 생성 성공:", { id: purchase.id, order_number: purchase.order_number });
 
     // 전화번호가 제공된 경우 사용자 프로필에 저장
     if (phoneNumber) {
@@ -493,6 +507,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 구매 정보 응답
+    console.log("🎉 티켓 구매 프로세스 완료:", {
+      purchaseId: purchase.id,
+      orderNumber: purchase.order_number,
+      postId: postId,
+      buyerId: authUser.id,
+      sellerId: authorId,
+      totalPrice: totalPrice
+    });
+    
     return addCorsHeaders(NextResponse.json({
       success: true,
       message: "구매 신청이 성공적으로 처리되었습니다.",

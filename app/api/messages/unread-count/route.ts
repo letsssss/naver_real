@@ -94,94 +94,108 @@ export async function GET(req: NextRequest) {
       // 디버깅을 위해 원본 주문번호 쿼리 실행 및 결과 확인
       console.log(`📊 디버깅: 주문번호 ${orderNumber}에 대한 룸 데이터 조회 시작`);
       
+      // 변수들을 외부에서 선언
+      let roomDataOr: any = null;
+      let roomByOrderNumber: any = null;
+      let roomByOrderId: any = null;
+      
       // 방법 1: or 조건으로 조회 (기존 로직)
-      const { data: roomDataOr, error: roomErrorOr } = await supabase
-        .from('rooms')
-        .select('id')
-        .or(`order_number.eq.${orderNumber},order_id.eq.${orderNumber}`)
-        .maybeSingle();
-      
-      console.log(`📊 디버깅: OR 조건 조회 결과:`, roomDataOr || 'null', roomErrorOr ? `오류: ${roomErrorOr.message}` : '오류 없음');
-      
-      // 방법 2: 각 필드별로 개별 조회
-      const { data: roomByOrderNumber, error: orderNumError } = await supabase
-        .from('rooms')
-        .select('id')
-        .eq('order_number', orderNumber)
-        .maybeSingle();
-      
-      console.log(`📊 디버깅: order_number 조회 결과:`, roomByOrderNumber || 'null', orderNumError ? `오류: ${orderNumError.message}` : '오류 없음');
-      
-      const { data: roomByOrderId, error: orderIdError } = await supabase
-        .from('rooms')
-        .select('id')
-        .eq('order_id', orderNumber)
-        .maybeSingle();
-      
-      console.log(`📊 디버깅: order_id 조회 결과:`, roomByOrderId || 'null', orderIdError ? `오류: ${orderIdError.message}` : '오류 없음');
-      
-      // 모든 가능한 room_id 수집
-      const roomIds = [];
-      
-      if (roomDataOr?.id) {
-        roomIds.push(roomDataOr.id);
-      }
-      
-      if (roomByOrderNumber?.id && !roomIds.includes(roomByOrderNumber.id)) {
-        roomIds.push(roomByOrderNumber.id);
-      }
-      
-      if (roomByOrderId?.id && !roomIds.includes(roomByOrderId.id)) {
-        roomIds.push(roomByOrderId.id);
-      }
-      
-      console.log(`📊 수집된 room_id 목록:`, roomIds);
-      
-      // roomIds가 있는 경우, 해당 roomIds에 대한 안 읽은 메시지 카운트 조회
-      if (roomIds.length > 0) {
-        console.log(`🏠 ${roomIds.length}개의 룸이 발견됨`);
+      try {
+        const { data, error: roomErrorOr } = await supabase
+          .from('rooms')
+          .select('id')
+          .or(`order_number.eq.${orderNumber},order_id.eq.${orderNumber}`)
+          .maybeSingle();
         
-        // 찾은 모든 room_id에 대해 안 읽은 메시지 조회
-        let messagesQuery = supabase
-          .from('messages')
-          .select('id', { count: 'exact' })
-          .eq('receiver_id', userId)
-          .eq('is_read', false)
-          .in('room_id', roomIds);
+        roomDataOr = data;
+        console.log(`📊 디버깅: OR 조건 조회 결과:`, roomDataOr || 'null', roomErrorOr ? `오류: ${roomErrorOr.message}` : '오류 없음');
         
-        // 쿼리 실행
-        const { count: messageCount, error: messageError, data: messageData } = await messagesQuery;
-        
-        if (messageError) {
-          console.error('🚨 메시지 개수 조회 오류:', messageError);
-          debugInfo = { ...debugInfo, messageError: messageError.message };
-        } else {
-          count = messageCount || 0;
-          console.log(`✅ 룸 ${roomIds.join(', ')}에 대한 메시지 개수 조회 결과: ${count}`);
-          
-          // 추가 디버깅: 실제 메시지 데이터 확인 (최대 5개)
-          if (count === 0) {
-            const { data: detailMessages, error: detailError } = await supabase
-              .from('messages')
-              .select('id, content, is_read, room_id, created_at')
-              .in('room_id', roomIds)
-              .order('created_at', { ascending: false })
-              .limit(5);
-            
-            console.log(`📊 디버깅: 최근 메시지 확인:`, detailMessages || 'null', detailError ? `오류: ${detailError.message}` : '오류 없음');
-            
-            debugInfo = { 
-              ...debugInfo, 
-              recentMessages: detailMessages,
-              totalRooms: roomIds.length,
-              roomIds
-            };
-          }
+        if (roomErrorOr) {
+          console.error('❌ rooms 테이블 OR 조건 조회 오류:', roomErrorOr);
         }
-      } else {
-        console.log('⚠️ 해당 주문번호의 룸을 찾을 수 없음');
+      } catch (error) {
+        console.error('❌ rooms 테이블 OR 조건 조회 예외:', error);
+      }
+      
+      // 방법 2: order_number 필드로만 조회
+      try {
+        const { data, error: orderNumError } = await supabase
+          .from('rooms')
+          .select('id')
+          .eq('order_number', orderNumber)
+          .maybeSingle();
+        
+        roomByOrderNumber = data;
+        console.log(`📊 디버깅: order_number 조회 결과:`, roomByOrderNumber || 'null', orderNumError ? `오류: ${orderNumError.message}` : '오류 없음');
+        
+        if (orderNumError) {
+          console.error('❌ rooms 테이블 order_number 조회 오류:', orderNumError);
+        }
+      } catch (error) {
+        console.error('❌ rooms 테이블 order_number 조회 예외:', error);
+      }
+      
+      // 방법 3: order_id 필드로만 조회
+      try {
+        const { data, error: orderIdError } = await supabase
+          .from('rooms')
+          .select('id')
+          .eq('order_id', orderNumber)
+          .maybeSingle();
+        
+        roomByOrderId = data;
+        console.log(`📊 디버깅: order_id 조회 결과:`, roomByOrderId || 'null', orderIdError ? `오류: ${orderIdError.message}` : '오류 없음');
+        
+        if (orderIdError) {
+          console.error('❌ rooms 테이블 order_id 조회 오류:', orderIdError);
+        }
+      } catch (error) {
+        console.error('❌ rooms 테이블 order_id 조회 예외:', error);
+      }
+      
+      // 모든 가능한 room_id 수집 (오류가 없는 경우만)
+      const roomIds: string[] = [];
+      
+      // 성공적으로 조회된 방이 있으면 해당 방의 미읽음 메시지 개수 조회
+      try {
+        if (roomDataOr?.id) {
+          roomIds.push(roomDataOr.id);
+        }
+        if (roomByOrderNumber?.id && !roomIds.includes(roomByOrderNumber.id)) {
+          roomIds.push(roomByOrderNumber.id);
+        }
+        if (roomByOrderId?.id && !roomIds.includes(roomByOrderId.id)) {
+          roomIds.push(roomByOrderId.id);
+        }
+
+        console.log(`📊 수집된 roomIds:`, roomIds);
+
+        if (roomIds.length > 0) {
+          const { data: messages, error: messageError } = await supabase
+            .from('messages')
+            .select('id')
+            .in('room_id', roomIds)
+            .neq('user_id', userId)
+            .is('read_at', null);
+
+          if (messageError) {
+            console.error('❌ 메시지 조회 오류:', messageError);
+            count = 0;
+            debugInfo = { ...debugInfo, messageError: messageError.message };
+          } else {
+            count = messages?.length || 0;
+            console.log(`📧 주문번호 ${orderNumber}의 미읽음 메시지 개수: ${count}`);
+            debugInfo = { ...debugInfo, roomIds, messageCount: count };
+          }
+        } else {
+          console.log(`❌ 주문번호 ${orderNumber}에 해당하는 룸을 찾을 수 없음`);
+          count = 0;
+          debugInfo = { noRoomFound: true, orderNumber };
+        }
+      } catch (error) {
+        console.error('❌ 메시지 개수 조회 중 오류 발생:', error);
         count = 0;
-        debugInfo = { noRoomFound: true, orderNumber };
+        debugInfo = { ...debugInfo, totalCountError: error?.message || '알 수 없는 오류' };
       }
     } else {
       // 주문번호가 없는 경우 (전체 안 읽은 메시지 개수)
