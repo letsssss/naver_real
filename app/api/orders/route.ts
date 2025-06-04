@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase-admin"
 import { generateUniqueOrderNumber } from "@/utils/orderNumber"
 
-// Prisma 클라이언트 인스턴스 생성
-// Prisma 클라이언트 제거됨, Supabase 사용
 
-// 임시 주문 데이터베이스
 const orders = [
   { id: 1, userId: 1, ticketId: 1, quantity: 2, totalPrice: 220000, status: "pending" },
   { id: 2, userId: 2, ticketId: 2, quantity: 1, totalPrice: 99000, status: "completed" },
