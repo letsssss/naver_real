@@ -1,4 +1,4 @@
-import supabase from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 
 /**
  * 알림톡 발송 타입 정의
@@ -19,6 +19,9 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     // 1시간 전 시간 계산
     const oneHourAgo = new Date();
     oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+    
+    // Supabase 클라이언트 가져오기
+    const supabase = await getSupabaseClient();
     
     // 최근 로그 조회
     const { data, error } = await supabase
@@ -54,6 +57,9 @@ export async function updateKakaoSendLog(phoneNumber: string, messageType: Kakao
   try {
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
+    
+    // Supabase 클라이언트 가져오기
+    const supabase = await getSupabaseClient();
     
     // 발송 로그 저장
     const { error } = await supabase
