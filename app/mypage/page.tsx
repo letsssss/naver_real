@@ -242,24 +242,17 @@ export default function MyPage() {
 
       // 각 post에 대한 proposals 데이터를 별도로 가져옴
       const postsWithProposalsPromises = postsData.map(async (post) => {
-        const { data: proposalsData, error: proposalsError } = await supabaseClient
+        // 먼저 기본 proposals 데이터 조회
+        const { data: basicProposals, error: proposalsError } = await supabaseClient
           .from('proposals')
           .select(`
             id,
             status,
-            price,
+            proposed_price,
             message,
             created_at,
             proposer_id,
-            users:proposer_id (
-              id,
-              name,
-              email,
-              profile_image,
-              rating,
-              successful_sales,
-              response_rate
-            )
+            section_name
           `)
           .eq('post_id', post.id);
 
@@ -271,11 +264,66 @@ export default function MyPage() {
           };
         }
 
+        // 제안이 있으면 각 제안자의 정보를 별도로 조회
+        let proposalsWithUserInfo = [];
+        if (basicProposals && basicProposals.length > 0) {
+          proposalsWithUserInfo = await Promise.all(
+            basicProposals.map(async (proposal) => {
+              try {
+                // 1. 프로필 정보
+                const { data: profileData } = await supabaseClient
+                  .from('profiles')
+                  .select('id, name, profile_image, response_rate')
+                  .eq('id', proposal.proposer_id)
+                  .maybeSingle();
+
+                // 2. 판매자 통계
+                const { data: statsData } = await supabaseClient
+                  .from('seller_stats')
+                  .select('successful_sales')
+                  .eq('seller_id', proposal.proposer_id)
+                  .maybeSingle();
+
+                // 3. 평점 통계
+                const { data: ratingStats } = await supabaseClient
+                  .from('seller_avg_rating')
+                  .select('avg_rating, review_count')
+                  .eq('seller_id', proposal.proposer_id)
+                  .maybeSingle();
+
+                return {
+                  ...proposal,
+                  proposer: {
+                    id: profileData?.id || proposal.proposer_id,
+                    name: profileData?.name || '사용자',
+                    profile_image: profileData?.profile_image,
+                    response_rate: profileData?.response_rate,
+                    successful_sales: statsData?.successful_sales || 0,
+                    rating: ratingStats?.avg_rating || 0,
+                    review_count: ratingStats?.review_count || 0
+                  }
+                };
+              } catch (error) {
+                return {
+                  ...proposal,
+                  proposer: {
+                    id: proposal.proposer_id,
+                    name: '사용자',
+                    successful_sales: 0,
+                    rating: 0,
+                    review_count: 0
+                  }
+                };
+              }
+            })
+          );
+        }
+
         return {
           ...post,
-          proposals: proposalsData || [],
-          proposalCount: proposalsData?.length || 0,
-          acceptedProposal: proposalsData?.find(p => p.status === 'ACCEPTED')
+          proposals: proposalsWithUserInfo || [],
+          proposalCount: proposalsWithUserInfo?.length || 0,
+          acceptedProposal: proposalsWithUserInfo?.find(p => p.status === 'ACCEPTED')
         };
       });
 
@@ -299,24 +347,18 @@ export default function MyPage() {
       setIsLoadingProposals(true);
       
       const supabaseClient = await getSupabaseClient();
-      const { data, error } = await supabaseClient
+      
+      // 먼저 기본 proposals 데이터 조회
+      const { data: basicProposals, error } = await supabaseClient
         .from('proposals')
         .select(`
           id,
           status,
-          price,
+          proposed_price,
           message,
           created_at,
           proposer_id,
-          users:proposer_id (
-            id,
-            name,
-            email,
-            profile_image,
-            rating,
-            successful_sales,
-            response_rate
-          )
+          section_name
         `)
         .eq('post_id', ticketId)
         .order('created_at', { ascending: false });
@@ -325,7 +367,62 @@ export default function MyPage() {
         throw error;
       }
 
-      setProposals(data || []);
+      // 제안이 있으면 각 제안자의 정보를 별도로 조회
+      let proposalsWithUserInfo = [];
+      if (basicProposals && basicProposals.length > 0) {
+        proposalsWithUserInfo = await Promise.all(
+          basicProposals.map(async (proposal) => {
+            try {
+              // 1. 프로필 정보
+              const { data: profileData } = await supabaseClient
+                .from('profiles')
+                .select('id, name, profile_image, response_rate')
+                .eq('id', proposal.proposer_id)
+                .maybeSingle();
+
+              // 2. 판매자 통계
+              const { data: statsData } = await supabaseClient
+                .from('seller_stats')
+                .select('successful_sales')
+                .eq('seller_id', proposal.proposer_id)
+                .maybeSingle();
+
+              // 3. 평점 통계
+              const { data: ratingStats } = await supabaseClient
+                .from('seller_avg_rating')
+                .select('avg_rating, review_count')
+                .eq('seller_id', proposal.proposer_id)
+                .maybeSingle();
+
+              return {
+                ...proposal,
+                proposer: {
+                  id: profileData?.id || proposal.proposer_id,
+                  name: profileData?.name || '사용자',
+                  profile_image: profileData?.profile_image,
+                  response_rate: profileData?.response_rate,
+                  successful_sales: statsData?.successful_sales || 0,
+                  rating: ratingStats?.avg_rating || 0,
+                  review_count: ratingStats?.review_count || 0
+                }
+              };
+            } catch (error) {
+              return {
+                ...proposal,
+                proposer: {
+                  id: proposal.proposer_id,
+                  name: '사용자',
+                  successful_sales: 0,
+                  rating: 0,
+                  review_count: 0
+                }
+              };
+            }
+          })
+        );
+      }
+
+      setProposals(proposalsWithUserInfo || []);
       
     } catch (error) {
       toast.error('제안 목록을 불러오는데 실패했습니다');

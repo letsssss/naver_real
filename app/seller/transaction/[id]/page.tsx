@@ -13,6 +13,7 @@ import { TicketingStatusCard } from "@/components/ticketing-status-card"
 import { useAuth } from "@/contexts/auth-context"
 import ChatModal from "@/components/chat/ChatModal"
 import MessageButton from "@/components/MessageButton"
+import { getSupabaseClient } from '@/lib/supabase'
 
 // 기본 거래 데이터 (로딩 중에 표시할 데이터)
 const defaultTransaction = {
@@ -128,11 +129,21 @@ export default function SellerTransactionDetail() {
         const orderId = params.id
         console.log("Transaction ID:", orderId)
         
+        const supabase = await getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const accessToken = session?.access_token
+        
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        }
+        
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`
+        }
+        
         // API 경로 수정 - /api/purchase 엔드포인트 사용
         const response = await fetch(`/api/purchase/${orderId}`, {
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers,
           credentials: 'include'
         })
         
@@ -193,11 +204,21 @@ export default function SellerTransactionDetail() {
         
         // 채팅방 정보 조회
         try {
+          const supabase = await getSupabaseClient()
+          const { data: { session } } = await supabase.auth.getSession()
+          const accessToken = session?.access_token
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+          }
+          
+          if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`
+          }
+          
           const chatResponse = await fetch(`/api/chat/init-room`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers,
             body: JSON.stringify({
               orderNumber: orderId
             }),
@@ -307,24 +328,42 @@ export default function SellerTransactionDetail() {
         duration: 3000,
       });
 
-      // 취켓팅 완료 상태로 변경
-      const response = await fetch(`/api/purchase/status/${transaction.id}`, {
-        method: "POST",
-        headers: {
+      try {
+        const supabase = await getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const accessToken = session?.access_token
+        
+        const headers: Record<string, string> = {
           "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          status: "COMPLETED"
-        }),
-        credentials: 'include'
-      })
+        }
+        
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`
+        }
 
-      if (response.ok) {
-        // 상태 업데이트 성공 시 페이지 새로고침
-        window.location.reload()
-      } else {
-        const errorText = await response.text()
-        console.error("API 오류:", errorText)
+        // 취켓팅 완료 상태로 변경
+        const response = await fetch(`/api/purchase/status/${transaction.id}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            status: "COMPLETED"
+          }),
+          credentials: 'include'
+        })
+
+        if (response.ok) {
+          // 상태 업데이트 성공 시 페이지 새로고침
+          window.location.reload()
+        } else {
+          const errorText = await response.text()
+          console.error("API 오류:", errorText)
+          toast.error("상태 변경에 실패했습니다.", {
+            description: "잠시 후 다시 시도해주세요.",
+            duration: 4000,
+          });
+        }
+      } catch (error) {
+        console.error("상태 변경 중 오류:", error)
         toast.error("상태 변경에 실패했습니다.", {
           description: "잠시 후 다시 시도해주세요.",
           duration: 4000,

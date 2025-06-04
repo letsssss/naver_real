@@ -290,7 +290,12 @@ export const fetchOngoingSales = async (
       ...acceptedProposalPosts
     ];
 
-    processAndSetSalesData(allSales, setSaleStatus, setOriginalSales, setOngoingSales);
+    // 중복 제거: ID 기준으로 중복된 항목 제거 (첫 번째 항목 유지)
+    const uniqueSales = allSales.filter((sale, index, self) => 
+      index === self.findIndex(s => s.id === sale.id)
+    );
+
+    processAndSetSalesData(uniqueSales, setSaleStatus, setOriginalSales, setOngoingSales);
 
   } catch (error) {
     toast.error('판매 목록을 불러오는데 실패했습니다.');

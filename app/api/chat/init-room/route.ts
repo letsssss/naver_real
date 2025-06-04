@@ -1,8 +1,7 @@
 // 목적: 거래(orderNumber) 기반으로 채팅방을 자동 생성하거나 반환합니다.
 
 import { NextRequest, NextResponse } from 'next/server';
-// import { nanoid } from 'nanoid'; // 더 이상 사용하지 않음
-import { getSupabaseClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import type { Database } from '@/types/supabase.types';
 
 // Node.js 런타임 사용 (Edge에서는 환경변수 로딩 문제 발생)
@@ -17,8 +16,8 @@ export async function POST(request: NextRequest) {
   logDebug('API 호출됨');
   
   try {
-    // Supabase 클라이언트 생성
-    const supabase = await getSupabaseClient();
+    // Supabase 관리자 클라이언트 생성
+    const supabase = createAdminClient();
     
     // Authorization 헤더에서 토큰 추출
     const authHeader = request.headers.get('authorization');
