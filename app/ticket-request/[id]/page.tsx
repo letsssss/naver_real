@@ -432,9 +432,6 @@ export default function TicketRequestDetail() {
                     <h1 className="text-2xl font-bold mb-2">{ticketData.title}</h1>
                     <p className="text-gray-600 mb-4">요청자: {ticketData.requester}</p>
                   </div>
-                  <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-orange-500 text-white backdrop-blur-sm">
-                    긴급도: {ticketData.urgency}
-                  </div>
                 </div>
 
                 <div className="space-y-3 text-sm text-gray-500 mb-4">
