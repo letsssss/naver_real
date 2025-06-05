@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase-admin';
+import { sendPurchaseCompletedNotification } from '@/services/kakao-notification-service';
 
 // CORS 헤더 설정
 const CORS_HEADERS = {
@@ -140,6 +141,47 @@ export async function POST(
 
     if (rejectError) {
       console.error('다른 제안 거절 처리 오류:', rejectError);
+    }
+
+    // 🔔 취켓팅 수락 완료 시 판매자에게 알림톡 발송
+    try {
+      console.log("📱 취켓팅 수락 완료 - 판매자 알림톡 발송 시작");
+      
+      // 판매자 정보 조회 (제안자가 판매자)
+      const { data: sellerData, error: sellerError } = await adminSupabase
+        .from('users')
+        .select('name, phone_number')
+        .eq('id', proposal.proposer_id)
+        .single();
+      
+      if (sellerError) {
+        console.error("❌ 판매자 정보 조회 실패:", sellerError);
+      } else if (sellerData && sellerData.phone_number) {
+        const productName = post.title || post.event_name || '티켓';
+        const priceText = proposal.proposed_price > 0 ? `${proposal.proposed_price.toLocaleString()}원` : '가격 미정';
+        
+        console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 취켓팅 수락 알림톡 발송`);
+        
+        const sellerResult = await sendPurchaseCompletedNotification(
+          sellerData.phone_number,
+          sellerData.name || '판매자',
+          orderNumber,
+          `[취켓팅 수락] ${productName}`,
+          priceText
+        );
+        
+        if (sellerResult.success) {
+          console.log("✅ 판매자 취켓팅 수락 알림톡 발송 성공");
+        } else {
+          console.error("❌ 판매자 취켓팅 수락 알림톡 발송 실패:", sellerResult.error);
+        }
+      } else {
+        console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+      }
+      
+    } catch (kakaoError) {
+      console.error("❌ 취켓팅 수락 알림톡 발송 중 오류:", kakaoError);
+      // 알림톡 발송 실패해도 수락 프로세스는 계속 진행
     }
 
     return NextResponse.json({

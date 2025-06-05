@@ -1015,11 +1015,36 @@ export default function MyPage() {
                             </div>
                             
                             <div className="text-right flex flex-col items-end gap-2">
-                              {/* 상태별 배지 - 오른쪽으로 이동 */}
+                              {/* 상태별 배지 - 거래 상태에 따라 정확하게 표시 */}
                               {isAccepted ? (
-                                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                                  거래 진행중
-                                </span>
+                                (() => {
+                                  const transactionStatus = ticket.acceptedProposal?.transaction?.status;
+                                  if (transactionStatus === 'CONFIRMED') {
+                                    return (
+                                      <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
+                                        거래완료
+                                      </span>
+                                    );
+                                  } else if (transactionStatus === 'COMPLETED') {
+                                    return (
+                                      <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                                        취켓팅완료
+                                      </span>
+                                    );
+                                  } else if (transactionStatus === 'CANCELLED') {
+                                    return (
+                                      <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">
+                                        거래취소
+                                      </span>
+                                    );
+                                  } else {
+                                    return (
+                                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                                        거래 진행중
+                                      </span>
+                                    );
+                                  }
+                                })()
                               ) : hasProposals ? (
                                 <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">
                                   제안 {pendingProposalCount}개
@@ -1037,11 +1062,22 @@ export default function MyPage() {
                               
                               <div className="flex gap-2">
                                 {isAccepted ? (
-                                  // 수락된 제안: 간단한 정보 표시
+                                  // 수락된 제안: 거래 상태에 따른 정보 표시
                                   <div className="flex flex-col gap-1 text-right">
                                     <span className="text-xs text-gray-500">제안 수락됨</span>
                                     <span className="text-xs text-green-600 font-medium">
-                                      {new Date(ticket.acceptedProposal.acceptedAt).toLocaleDateString()}
+                                      {(() => {
+                                        try {
+                                          const acceptedDate = ticket.acceptedProposal?.acceptedAt || ticket.acceptedProposal?.updated_at;
+                                          if (acceptedDate) {
+                                            return new Date(acceptedDate).toLocaleDateString('ko-KR');
+                                          }
+                                          return '날짜 없음';
+                                        } catch (error) {
+                                          console.error('날짜 파싱 오류:', error);
+                                          return '날짜 오류';
+                                        }
+                                      })()}
                                     </span>
                                   </div>
                                 ) : (
