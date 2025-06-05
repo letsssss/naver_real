@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from '@/lib/supabase'
+import { useAuth } from "@/contexts/auth-context"
 
 // 하드코딩된 데이터 제거
 
@@ -26,67 +27,84 @@ export default function ConfirmedPurchasesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
 
   // 구매 내역을 불러오는 함수를 별도로 분리하여 필요할 때마다 호출할 수 있게 합니다.
   async function fetchConfirmedPurchases() {
+    // 사용자가 로그인되지 않은 경우 로그인 페이지로 리다이렉트
+    if (!user) {
+      router.push('/login?redirect=/mypage/confirmed-purchases')
+      return
+    }
+
     setLoading(true)
     try {
-      // Supabase 클라이언트에서 토큰 가져오기 (다른 파일들과 동일한 방식)
-      let token = null;
-      try {
-        const supabase = await getSupabaseClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        token = session?.access_token;
-      } catch (e) {
-        console.error('Supabase 세션 가져오기 실패:', e);
+      // 다른 마이페이지 파일들과 동일하게 Supabase 클라이언트 직접 사용
+      const supabaseClient = await getSupabaseClient();
+      
+      // 현재 사용자의 거래완료된 구매 내역 조회
+      const { data, error } = await supabaseClient
+        .from('rooms')
+        .select(`
+          id,
+          status,
+          created_at,
+          updated_at,
+          buyer_confirmed_at,
+          posts!inner (
+            id,
+            title,
+            event_date,
+            event_venue,
+            ticket_price,
+            category
+          ),
+          sellers:seller_id (
+            id,
+            name,
+            phone_number
+          )
+        `)
+        .eq('buyer_id', user.id)
+        .eq('status', 'COMPLETED')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        throw error;
       }
-      
-      // 헤더 설정
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      };
-      
-      // 토큰이 있는 경우에만 Authorization 헤더 추가
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch('/api/confirmed-purchases', {
-        headers,
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        // 인증 오류면 로그인 페이지로 리다이렉트
-        if (response.status === 401) {
-          router.push('/login?redirect=/mypage/confirmed-purchases')
-          return
-        }
-        
-        throw new Error('데이터를 불러오는데 실패했습니다.')
-      }
-      
-      const data = await response.json()
-      // API 응답 구조에 맞게 데이터 접근 방식 수정
-      if (data.success && Array.isArray(data.purchases)) {
+
+      if (data) {
+        // 백엔드 데이터를 프론트엔드 형식에 맞게 변환
+        const formattedPurchases = data.map((room: any) => {
+          const post = room.posts;
+          const seller = room.sellers;
+          
+          return {
+            id: room.id,
+            title: post?.title || '제목 없음',
+            date: post?.event_date ? new Date(post.event_date).toLocaleDateString('ko-KR') : '날짜 미정',
+            venue: post?.event_venue || '장소 미정',
+            price: post?.ticket_price ? `${post.ticket_price.toLocaleString()}원` : '가격 미정',
+            status: '거래완료',
+            seller: seller?.name || '판매자',
+            completedAt: room.buyer_confirmed_at ? 
+              new Date(room.buyer_confirmed_at).toLocaleDateString('ko-KR') : 
+              new Date(room.updated_at).toLocaleDateString('ko-KR'),
+            reviewSubmitted: false, // 일단 기본값으로 설정, 추후 리뷰 테이블과 조인하여 실제 값 가져올 수 있음
+            order_number: room.id.toString() // room id를 주문번호로 사용
+          };
+        });
+
         // 로컬 스토리지에서 리뷰 작성 완료된 주문번호 목록 가져오기
         const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
         
-        // 백엔드에서 가져온 리뷰 작성 완료 상태와 로컬 스토리지의 상태를 합쳐서 최신 상태 유지
-        const updatedPurchases = data.purchases.map((purchase: any) => {
-          // 백엔드에서 이미 reviewSubmitted가 true인 경우 또는
-          // 로컬 스토리지에 해당 주문번호가 리뷰 완료로 표시된 경우 true로 설정
-          const isReviewSubmitted = 
-            purchase.reviewSubmitted || // 혹시 백엔드가 camelCase로 주는 경우 대비
-            purchase.review_submitted || // 실제 백엔드 필드명
-            (purchase.order_number && reviewCompletedOrders[purchase.order_number]);
+        // 로컬 스토리지의 리뷰 완료 상태 반영
+        const updatedPurchases = formattedPurchases.map((purchase: any) => {
+          const isReviewSubmitted = purchase.order_number && reviewCompletedOrders[purchase.order_number];
           
           return {
             ...purchase,
-            reviewSubmitted: isReviewSubmitted // camelCase로 통일
+            reviewSubmitted: isReviewSubmitted
           };
         });
         
@@ -96,8 +114,6 @@ export default function ConfirmedPurchasesPage() {
         if (localStorage.getItem('reviewJustCompleted') === 'true') {
           localStorage.removeItem('reviewJustCompleted');
         }
-      } else {
-        throw new Error('응답 데이터 형식이 올바르지 않습니다.')
       }
     } catch (err) {
       console.error('구매 내역 로딩 오류:', err)
@@ -108,13 +124,19 @@ export default function ConfirmedPurchasesPage() {
   }
 
   useEffect(() => {
-    fetchConfirmedPurchases()
+    // 인증 로딩이 완료되고 사용자가 있을 때만 API 호출
+    if (!authLoading && user) {
+      fetchConfirmedPurchases()
+    } else if (!authLoading && !user) {
+      // 인증 로딩이 완료되었는데 사용자가 없으면 로그인 페이지로
+      router.push('/login?redirect=/mypage/confirmed-purchases')
+    }
 
     // 페이지가 focus를 얻을 때 (다른 페이지에서 돌아왔을 때) 데이터를 다시 불러옵니다.
     // 이렇게 하면 리뷰 작성 페이지에서 돌아왔을 때 최신 상태를 보여줄 수 있습니다.
     const handleFocus = () => {
       // 리뷰가 방금 완료된 경우에만 리로드 (성능 최적화)
-      if (localStorage.getItem('reviewJustCompleted') === 'true') {
+      if (localStorage.getItem('reviewJustCompleted') === 'true' && user) {
         fetchConfirmedPurchases()
       }
     }
@@ -125,7 +147,7 @@ export default function ConfirmedPurchasesPage() {
     if (typeof window !== 'undefined') {
       const handleRouteComplete = () => {
         // 리뷰가 방금 완료된 경우에만 리로드 (성능 최적화)
-        if (localStorage.getItem('reviewJustCompleted') === 'true') {
+        if (localStorage.getItem('reviewJustCompleted') === 'true' && user) {
           fetchConfirmedPurchases()
         }
       }
@@ -142,7 +164,7 @@ export default function ConfirmedPurchasesPage() {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [router])
+  }, [router, user, authLoading])
 
   // 리뷰 작성 완료 후 로컬 상태 업데이트를 위한 함수
   const handleReviewSubmit = (orderId: string) => {
