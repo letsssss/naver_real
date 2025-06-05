@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowLeft, CheckCircle2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { getSupabaseClient } from '@/lib/supabase'
 
 // 하드코딩된 데이터 제거
 
@@ -30,12 +31,17 @@ export default function ConfirmedPurchasesPage() {
   async function fetchConfirmedPurchases() {
     setLoading(true)
     try {
-      // 인증 토큰 가져오기 (순수 토큰 우선 사용)
-      const token = localStorage.getItem('supabase.auth.access_token') || 
-                   localStorage.getItem('auth-token') || 
-                   sessionStorage.getItem('auth-token');
+      // Supabase 클라이언트에서 토큰 가져오기 (다른 파일들과 동일한 방식)
+      let token = null;
+      try {
+        const supabase = await getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token;
+      } catch (e) {
+        console.error('Supabase 세션 가져오기 실패:', e);
+      }
       
-      // 헤더 설정 (토큰 ASCII 검증 추가)
+      // 헤더 설정
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -43,20 +49,9 @@ export default function ConfirmedPurchasesPage() {
         'Expires': '0'
       };
       
-      // 토큰이 있고 ASCII 문자만 포함하는 경우에만 Authorization 헤더 추가
+      // 토큰이 있는 경우에만 Authorization 헤더 추가
       if (token) {
-        try {
-          // ASCII 문자인지 검증 (한글이나 특수문자 포함 시 false)
-          if (/^[a-zA-Z0-9._-]+$/.test(token)) {
-            headers['Authorization'] = `Bearer ${token}`;
-          } else {
-            // non-ASCII 문자가 있으면 base64 인코딩 시도
-            headers['Authorization'] = `Bearer ${btoa(token)}`;
-          }
-        } catch (e) {
-          console.error('토큰 처리 실패:', e);
-          // 토큰 처리에 실패하면 토큰 없이 진행
-        }
+        headers['Authorization'] = `Bearer ${token}`;
       }
       
       const response = await fetch('/api/confirmed-purchases', {
