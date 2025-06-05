@@ -16,9 +16,14 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
     
-    // 10분 전 시간 계산
-    const tenMinutesAgo = new Date();
-    tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10);
+    // 현재 시간 (UTC)
+    const now = new Date();
+    // 10분 전 시간 계산 (밀리초로 계산하여 더 정확하게)
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+    
+    console.log(`📅 [카카오 제한 체크] ${cleanPhone} (${messageType})`);
+    console.log(`📅 현재 시간: ${now.toISOString()}`);
+    console.log(`📅 10분 전: ${tenMinutesAgo.toISOString()}`);
     
     // Supabase 클라이언트 가져오기
     const supabase = await getSupabaseClient();
@@ -33,14 +38,27 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
       .order('created_at', { ascending: false })
       .limit(1);
     
+    console.log(`📊 조회 결과: ${data?.length || 0}개의 최근 로그`);
+    if (data && data.length > 0) {
+      console.log(`📊 가장 최근 발송: ${data[0].created_at}`);
+      const lastSentTime = new Date(data[0].created_at);
+      const timeDiff = now.getTime() - lastSentTime.getTime();
+      const minutesDiff = Math.floor(timeDiff / (1000 * 60));
+      console.log(`📊 경과 시간: ${minutesDiff}분`);
+    }
+    
     if (error) {
+      console.error(`❌ 카카오 로그 조회 오류:`, error);
       // 오류 발생 시 안전하게 false 반환 (발송 제한)
       return false;
     }
     
     // 최근 10분 내 발송 기록이 없으면 true, 있으면 false
-    return data.length === 0;
+    const canSend = data.length === 0;
+    console.log(`✅ 발송 가능 여부: ${canSend}`);
+    return canSend;
   } catch (error) {
+    console.error(`❌ 카카오 제한 체크 오류:`, error);
     // 오류 발생 시 안전하게 false 반환 (발송 제한)
     return false;
   }
@@ -56,6 +74,8 @@ export async function updateKakaoSendLog(phoneNumber: string, messageType: Kakao
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
     
+    console.log(`💾 [카카오 로그 저장] ${cleanPhone} (${messageType})`);
+    
     // Supabase 클라이언트 가져오기
     const supabase = await getSupabaseClient();
     
@@ -68,9 +88,11 @@ export async function updateKakaoSendLog(phoneNumber: string, messageType: Kakao
       });
     
     if (error) {
-      // 로그 저장 실패 처리
+      console.error(`❌ 카카오 로그 저장 실패:`, error);
+    } else {
+      console.log(`✅ 카카오 로그 저장 성공`);
     }
   } catch (error) {
-    // 로그 업데이트 실패 처리
+    console.error(`❌ 카카오 로그 저장 중 오류:`, error);
   }
 } 
