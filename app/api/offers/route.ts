@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { validateRequestToken } from '@/lib/auth';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { getSupabaseClient } from '@/lib/supabase'; // 싱글톤 패턴 사용
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'; // 제거
+// import { cookies } from 'next/headers'; // 제거
 
 const adminSupabase = createAdminClient();
 
@@ -121,8 +122,19 @@ export async function POST(req: Request) {
     console.log('[Offers API] POST 요청 시작');
 
     // 1. Supabase 인증으로 사용자 확인
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+    // 서버 사이드에서는 adminSupabase를 사용하고, Authorization 헤더에서 토큰을 추출
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[Offers API] Authorization 헤더가 없습니다');
+      return NextResponse.json({ 
+        error: '로그인이 필요합니다.' 
+      }, { status: 401, headers: CORS_HEADERS });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // 토큰으로 사용자 정보 확인
+    const { data: { user }, error: sessionError } = await adminSupabase.auth.getUser(token);
 
     if (!user || sessionError) {
       console.error('[Offers API] 인증 실패:', sessionError);
@@ -201,7 +213,7 @@ export async function POST(req: Request) {
       quantity: parseInt(quantity)
     };
 
-    const { data: postData, error: postError } = await supabase
+    const { data: postData, error: postError } = await adminSupabase
       .from('posts')
       .insert({
         title: concertTitle,
@@ -234,7 +246,7 @@ export async function POST(req: Request) {
 
     // 5. offers 테이블에 등록
     console.log('[Offers API] 2단계: offers 테이블에 티켓 요청 등록');
-    const { data: offerData, error: offerError } = await supabase
+    const { data: offerData, error: offerError } = await adminSupabase
       .from('offers')
       .insert({
         post_id: postData.id,
