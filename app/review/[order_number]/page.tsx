@@ -33,7 +33,7 @@ export default function WriteReview() {
           
         console.log("리뷰 페이지 로딩 - 주문번호:", orderNumber)
         
-        const response = await fetch(`/api/transactions/${orderNumber}`)
+        const response = await fetch(`/api/purchase/${orderNumber}`)
         
         if (!response.ok) {
           if (response.status === 401) {
@@ -46,10 +46,10 @@ export default function WriteReview() {
         const data = await response.json()
         console.log("트랜잭션 데이터 응답:", data)
         
-        // API 응답 구조에 맞게 데이터 매핑
-        if (data.success && data.transaction) {
-          // 리뷰 작성 여부 확인
-          const hasReview = data.transaction.review != null || data.transaction.ratings?.length > 0;
+        // /api/purchase API 응답 구조에 맞게 데이터 매핑
+        if (data) {
+          // 리뷰 작성 여부 확인 (purchase API에서는 review 정보가 없을 수 있음)
+          const hasReview = false; // 임시로 false 설정
           
           if (hasReview) {
             console.log("이미 리뷰가 작성된 거래입니다.");
@@ -61,22 +61,22 @@ export default function WriteReview() {
             localStorage.setItem('reviewCompletedOrders', JSON.stringify(reviewCompletedOrders));
           }
           
-          // confirmed-purchases API와 동일한 구조로 매핑
-          const ticketTitle = data.transaction?.ticket?.title || "";
+          // purchase API 응답을 리뷰 페이지 형태로 매핑
+          const ticketTitle = data.post?.title || data.ticket_title || "";
           console.log("제목 변환 전:", ticketTitle, "타입:", typeof ticketTitle, "길이:", ticketTitle.length);
           
           const mappedData = {
-            id: data.transaction.id,
+            id: data.id,
             order_number: orderNumber, // 주문번호 저장
             title: ticketTitle.trim() ? ticketTitle.trim() : "제목 없음",
-            date: data.transaction.ticket.date || '날짜 정보 없음',
-            venue: data.transaction.ticket.venue || '장소 정보 없음',
-            price: data.transaction.price ? `${data.transaction.price.toLocaleString()}원` : '가격 정보 없음',
-            status: data.transaction.status,
-            seller: data.transaction.seller?.name || "판매자 없음",
-            completedAt: data.transaction.stepDates?.confirmed || new Date().toISOString(),
+            date: data.post?.event_date || data.event_date || '날짜 정보 없음',
+            venue: data.post?.event_venue || data.event_venue || '장소 정보 없음',
+            price: data.total_price ? `${Number(data.total_price).toLocaleString()}원` : '가격 정보 없음',
+            status: data.status,
+            seller: data.seller?.name || data.post?.author?.name || "판매자 없음",
+            completedAt: data.updated_at || new Date().toISOString(),
             reviewSubmitted: hasReview, // 리뷰 작성 여부 설정
-            sellerId: data.transaction.seller?.id || "",
+            sellerId: data.seller?.id || data.post?.author?.id || "",
           }
           console.log("매핑 후 제목:", mappedData.title);
           setPurchase(mappedData)

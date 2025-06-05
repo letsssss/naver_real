@@ -22,10 +22,10 @@ export async function OPTIONS() {
 }
 
 export async function GET(
-  req: Request,
-  { params }: { params: { order_number: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ order_number: string }> }
 ) {
-  const { order_number } = params
+  const { order_number } = await params
   
   if (!order_number) {
     return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { 
@@ -110,23 +110,23 @@ export async function GET(
 } 
 
 export async function POST(
-  req: Request,
-  { params }: { params: { order_number: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ order_number: string }> }
 ) {
-  const { order_number } = params
-  
-  // 요청 시작 시점 로깅
-  console.log("🔄 구매확정 API POST 요청 시작 - order_number:", order_number);
-  
-  if (!order_number) {
-    return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { 
-      status: 400,
-      headers: corsHeaders
-    })
-  }
-
   try {
-    const body = await req.json()
+    const { order_number } = await params
+  
+    // 요청 시작 시점 로깅
+    console.log("🔄 구매확정 API POST 요청 시작 - order_number:", order_number);
+    
+    if (!order_number) {
+      return NextResponse.json({ error: "주문번호가 제공되지 않았습니다." }, { 
+        status: 400,
+        headers: corsHeaders
+      })
+    }
+
+    const body = await request.json()
     // 디버깅: 원본 body 로깅
     console.log("🔎 원본 요청 body:", body);
     

@@ -39,62 +39,47 @@ export default function ConfirmedPurchasesPage() {
 
     setLoading(true)
     try {
-      // 다른 마이페이지 파일들과 동일하게 Supabase 클라이언트 직접 사용
-      const supabaseClient = await getSupabaseClient();
+      console.log("📋 구매 확정 내역 조회 시작:", user.id);
       
-      // 현재 사용자의 거래완료된 구매 내역 조회 (status 필드 제거)
-      const { data, error } = await supabaseClient
-        .from('rooms')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          buyer_confirmed_at,
-          post_id,
-          seller_id
-        `)
-        .eq('buyer_id', user.id)
-        .not('buyer_confirmed_at', 'is', null) // buyer_confirmed_at이 null이 아닌 거래 (완료된 거래)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        throw error;
+      // 구매 확정된 거래 내역 조회 (status가 CONFIRMED인 것들)
+      const response = await fetch(`/api/purchase?userId=${user.id}&status=CONFIRMED`)
+      
+      if (!response.ok) {
+        throw new Error('구매 내역을 불러오는데 실패했습니다.')
       }
 
-      if (data && data.length > 0) {
-        // 각 거래에 대해 별도로 posts와 seller 정보 가져오기
-        const formattedPurchases = await Promise.all(
-          data.map(async (room: any) => {
-            // 포스트 정보 가져오기
-            const { data: postData } = await supabaseClient
-              .from('posts')
-              .select('id, title, event_date, event_venue, ticket_price, category')
-              .eq('id', room.post_id)
-              .single();
+      const data = await response.json()
+      console.log("📋 API 응답:", data);
 
-            // 판매자 정보 가져오기
-            const { data: sellerData } = await supabaseClient
-              .from('profiles')
-              .select('id, name, phone_number')
-              .eq('id', room.seller_id)
-              .single();
-            
-            return {
-              id: room.id,
-              title: postData?.title || '제목 없음',
-              date: postData?.event_date ? new Date(postData.event_date).toLocaleDateString('ko-KR') : '날짜 미정',
-              venue: postData?.event_venue || '장소 미정',
-              price: postData?.ticket_price ? `${postData.ticket_price.toLocaleString()}원` : '가격 미정',
-              status: '거래완료',
-              seller: sellerData?.name || '판매자',
-              completedAt: room.buyer_confirmed_at ? 
-                new Date(room.buyer_confirmed_at).toLocaleDateString('ko-KR') : 
-                new Date(room.updated_at).toLocaleDateString('ko-KR'),
-              reviewSubmitted: false, // 일단 기본값으로 설정, 추후 리뷰 테이블과 조인하여 실제 값 가져올 수 있음
-              order_number: room.id.toString() // room id를 주문번호로 사용
-            };
-          })
-        );
+      if (data && Array.isArray(data) && data.length > 0) {
+        // 각 거래 데이터를 확인하고 포맷팅
+        const formattedPurchases = data.map((purchase: any) => {
+          console.log("💾 거래 데이터 포맷팅:", purchase);
+          
+          const postData = purchase.post || purchase.posts;
+          const productName = postData?.title || postData?.event_name || purchase.ticket_title || '제목 없음';
+          const eventDate = postData?.event_date || purchase.event_date;
+          const eventVenue = postData?.event_venue || purchase.event_venue || '장소 정보 없음';
+          const ticketPrice = purchase.total_price || postData?.ticket_price || purchase.ticket_price;
+          const sellerName = purchase.seller?.name || postData?.author?.name || '판매자';
+          
+          return {
+            id: purchase.id,
+            title: productName,
+            date: eventDate ? new Date(eventDate).toLocaleDateString('ko-KR') : '날짜 미정',
+            venue: eventVenue,
+            price: ticketPrice ? `${Number(ticketPrice).toLocaleString()}원` : '가격 정보 없음',
+            status: '거래완료',
+            seller: sellerName,
+            completedAt: purchase.updated_at ? 
+              new Date(purchase.updated_at).toLocaleDateString('ko-KR') : 
+              new Date().toLocaleDateString('ko-KR'),
+            reviewSubmitted: false, // 기본값으로 설정
+            order_number: purchase.order_number || purchase.id.toString()
+          };
+        });
+
+        console.log("✅ 포맷팅된 구매 내역:", formattedPurchases);
 
         // 로컬 스토리지에서 리뷰 작성 완료된 주문번호 목록 가져오기
         const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
@@ -115,6 +100,9 @@ export default function ConfirmedPurchasesPage() {
         if (localStorage.getItem('reviewJustCompleted') === 'true') {
           localStorage.removeItem('reviewJustCompleted');
         }
+      } else {
+        console.log("📭 구매 확정 내역이 없습니다.");
+        setPurchases([]);
       }
     } catch (err) {
       console.error('구매 내역 로딩 오류:', err)

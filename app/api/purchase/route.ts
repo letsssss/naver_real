@@ -25,9 +25,12 @@ export async function OPTIONS() {
 // GET 핸들러 - 구매자 구매 내역 조회
 export async function GET(request: NextRequest) {
   try {
-    // URL에서 userId 파라미터 가져오기
+    // URL에서 파라미터 가져오기
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
+    const status = url.searchParams.get('status'); // status 파라미터 추가
+    
+    console.log("📋 구매 내역 조회 요청:", { userId, status });
     
     if (!userId) {
       return addCorsHeaders(
@@ -37,17 +40,25 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // ✅ 구매자 ID로 구매 목록 조회 (취소 제외)
-    const { data, error } = await supabase
+    // 쿼리 빌더 시작
+    let query = supabase
       .from('purchases')
       .select(`
         *,
-        post:posts(*),
-        seller:users!purchases_seller_id_fkey(id, name, email)
+        post:posts(*, author:users!posts_author_id_fkey(*)),
+        buyer:users!purchases_buyer_id_fkey(*),
+        seller:users!purchases_seller_id_fkey(*)
       `)
       .eq('buyer_id', userId)
-      .neq('status', 'CANCELLED')
-      .order('created_at', { ascending: false });
+      .neq('status', 'CANCELLED');
+
+    // status 파라미터가 있으면 필터링 추가
+    if (status) {
+      query = query.eq('status', status);
+      console.log("📋 상태 필터링 적용:", status);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('구매 목록 조회 오류:', error);
@@ -56,11 +67,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("📋 조회된 구매 내역 수:", data?.length || 0);
+
+    // 배열 형태로 반환 (confirmed-purchases 페이지에서 기대하는 형태)
     return addCorsHeaders(
-      NextResponse.json({
-        success: true,
-        purchases: data || [],
-      })
+      NextResponse.json(data || [])
     );
   } catch (err: any) {
     console.error('예외 발생:', err);

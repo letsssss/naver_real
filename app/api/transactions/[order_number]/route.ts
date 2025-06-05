@@ -20,10 +20,12 @@ export async function OPTIONS() {
 // GET 요청 처리 - 특정 거래 정보 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { order_number: string } }
+  { params }: { params: Promise<{ order_number: string }> }
 ) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const { order_number } = await params;
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
 
     const {
       data: { session },
@@ -36,7 +38,7 @@ export async function GET(
     const userId = session.user.id;
     console.log('인증된 사용자 ID:', userId);
     
-    const orderNumber = params.order_number;
+    const orderNumber = order_number;
     console.log(`거래 상세 정보 API 호출됨 - ID/주문번호: ${orderNumber}`);
 
     // 거래 정보 조회 (purchases 테이블에서)

@@ -437,12 +437,16 @@ export function useMyPageData(user: User | null, apiBaseUrl: string) {
       }
       
       const data = await response.json();
-      if (!data.purchases || !Array.isArray(data.purchases)) {
+      console.log("📋 마이페이지 구매 API 응답:", data);
+      
+      // ✅ API가 배열을 직접 반환하는 새로운 구조에 맞게 수정
+      if (!Array.isArray(data)) {
+        console.log("📭 구매 내역이 배열이 아닙니다:", typeof data);
         setOngoingPurchases([]);
         return;
       }
       
-      processPurchaseData(data.purchases);
+      processPurchaseData(data);
     } catch (error) {
       console.error('구매 목록 로딩 오류:', error);
       toast.error('구매 목록을 불러오는데 실패했습니다.');

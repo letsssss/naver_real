@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createAdminClient } from '@/lib/supabase-admin';
 import type { Database } from '@/types/supabase.types';
 
 // CORS 헤더 추가 유틸리티 함수
@@ -19,154 +18,86 @@ const ratingSchema = z.object({
   comment: z.string().max(500).optional(),
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // 인증된 사용자 정보 가져오기 (createRouteHandlerClient 방식으로 통일)
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const body = await request.json();
+    const { transactionId, rating, comment } = body;
 
-    if (!session || !session.user) {
-      return addCorsHeaders(
-        NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
-      );
-    }
+    console.log("리뷰 등록 요청:", { transactionId, rating, comment });
 
-    const reviewerId = session.user.id;
+    // 관리자 권한으로 Supabase 클라이언트 생성
+    const supabase = createAdminClient();
 
-    // 요청 본문 파싱
-    const body = await req.json();
-    const parsed = ratingSchema.safeParse(body);
-    
-    if (!parsed.success) {
-      return addCorsHeaders(
-        NextResponse.json({ 
-          error: '유효하지 않은 요청 데이터입니다.', 
-          details: parsed.error.format() 
-        }, { status: 400 })
-      );
-    }
-
-    const { transactionId, rating, comment } = parsed.data;
-
-    // 1. 거래 내역 확인 (본인의 거래인지, 상태는 CONFIRMED인지)
-    const { data: purchase, error: purchaseError } = await supabase
+    // 1. 거래 정보 확인
+    const { data: transaction, error: transactionError } = await supabase
       .from('purchases')
-      .select('id, buyer_id, seller_id, status')
+      .select('*')
       .eq('id', transactionId)
       .single();
 
-    if (purchaseError || !purchase) {
-      console.error('거래 조회 오류:', purchaseError);
-      return addCorsHeaders(
-        NextResponse.json({ error: '거래를 찾을 수 없습니다.' }, { status: 404 })
+    if (transactionError || !transaction) {
+      console.error('거래 조회 오류:', transactionError);
+      return NextResponse.json(
+        { error: '해당 거래를 찾을 수 없습니다.' },
+        { status: 404 }
       );
     }
 
-    if (purchase.buyer_id !== reviewerId) {
-      return addCorsHeaders(
-        NextResponse.json({ error: '본인의 거래만 평가할 수 있습니다.' }, { status: 403 })
-      );
-    }
-
-    if (purchase.status !== 'CONFIRMED') {
-      return addCorsHeaders(
-        NextResponse.json({ error: '완료된 거래만 평가할 수 있습니다.' }, { status: 400 })
-      );
-    }
-
-    // 2. 이미 평점이 있는지 확인
-    const { data: existing, error: existingError } = await supabase
+    // 2. 이미 리뷰가 존재하는지 확인
+    const { data: existingRating, error: existingError } = await supabase
       .from('ratings')
       .select('id')
       .eq('transaction_id', transactionId)
       .maybeSingle();
 
     if (existingError) {
-      console.error('기존 평점 조회 오류:', existingError);
-      return addCorsHeaders(
-        NextResponse.json({ error: '평점 조회 중 오류가 발생했습니다.' }, { status: 500 })
+      console.error('기존 리뷰 확인 오류:', existingError);
+      return NextResponse.json(
+        { error: '리뷰 확인 중 오류가 발생했습니다.' },
+        { status: 500 }
       );
     }
 
-    if (existing) {
-      return addCorsHeaders(
-        NextResponse.json({ error: '이미 평가가 완료된 거래입니다.' }, { status: 409 })
+    if (existingRating) {
+      console.log('이미 리뷰가 존재함:', existingRating);
+      return NextResponse.json(
+        { error: '이미 이 거래에 대한 리뷰를 작성하셨습니다.' },
+        { status: 409 }
       );
     }
 
-    // 필수 값 체크 추가
-    if (!reviewerId || !purchase?.seller_id || !transactionId) {
-      console.error('필수 값 누락:', { reviewerId, seller_id: purchase?.seller_id, transactionId });
-      return addCorsHeaders(
-        NextResponse.json({ error: '필수 값 누락' }, { status: 400 })
-      );
-    }
-
-    // 삽입 직전 데이터 로깅
-    console.log("리뷰 삽입 데이터 →", {
-      transaction_id: transactionId,
-      reviewer_id: reviewerId,
-      seller_id: purchase.seller_id,
-      rating,
-      comment,
-    });
-
-    // 3. 평점 저장
-    const { error: insertError } = await supabase.from('ratings').insert({
-      transaction_id: transactionId,
-      reviewer_id: reviewerId,
-      seller_id: purchase.seller_id,
-      rating,
-      comment,
-      created_at: new Date().toISOString()
-    });
+    // 3. 새 리뷰 등록
+    const { data: newRating, error: insertError } = await supabase
+      .from('ratings')
+      .insert({
+        transaction_id: transactionId,
+        rating: rating,
+        comment: comment,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
 
     if (insertError) {
-      console.error('평점 저장 오류:', insertError);
-      return addCorsHeaders(
-        NextResponse.json({ error: '평가 저장 중 오류가 발생했습니다.' }, { status: 500 })
+      console.error('리뷰 등록 오류:', insertError);
+      return NextResponse.json(
+        { error: '리뷰 등록에 실패했습니다.' },
+        { status: 500 }
       );
     }
 
-    // 4. 판매자의 평균 평점 업데이트 (선택적)
-    // 판매자의 모든 평점을 가져와서 평균 계산
-    const { data: sellerRatings, error: ratingsError } = await supabase
-      .from('ratings')
-      .select('rating')
-      .eq('seller_id', purchase.seller_id);
+    console.log('리뷰 등록 성공:', newRating);
 
-    if (!ratingsError && sellerRatings && sellerRatings.length > 0) {
-      // 평균 평점 계산
-      const totalRating = sellerRatings.reduce((sum, item) => sum + (item.rating || 0), 0);
-      const averageRating = totalRating / sellerRatings.length;
-      
-      // 사용자 테이블에 평균 평점 업데이트 (users 테이블에 rating 필드가 있는 경우)
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ rating: averageRating })
-        .eq('id', purchase.seller_id);
-      
-      if (updateError) {
-        console.warn('판매자 평균 평점 업데이트 실패:', updateError);
-        // 경고만 기록하고 실패 처리는 하지 않음 (비필수 기능)
-      }
-    }
+    return NextResponse.json({
+      message: '리뷰가 성공적으로 등록되었습니다.',
+      rating: newRating
+    });
 
-    return addCorsHeaders(
-      NextResponse.json({ 
-        success: true, 
-        message: '평가가 성공적으로 등록되었습니다.' 
-      }, { status: 201 })
-    );
-  } catch (error: any) {
-    console.error('평점 등록 중 오류 발생:', error);
-    return addCorsHeaders(
-      NextResponse.json({ 
-        error: '서버 오류가 발생했습니다.', 
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined 
-      }, { status: 500 })
+  } catch (error) {
+    console.error('리뷰 등록 처리 오류:', error);
+    return NextResponse.json(
+      { error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
     );
   }
 }

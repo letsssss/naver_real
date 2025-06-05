@@ -392,8 +392,11 @@ export const fetchOngoingPurchases = async (
     }
 
     const data = await response.json();
+    console.log("📋 구매 API 응답:", data);
 
-    if (!data.purchases || !Array.isArray(data.purchases)) {
+    // ✅ API가 배열을 직접 반환하는 새로운 구조에 맞게 수정
+    if (!Array.isArray(data)) {
+      console.log("📭 구매 내역이 배열이 아닙니다:", typeof data);
       setOngoingPurchases([]);
       return;
     }
@@ -407,7 +410,7 @@ export const fetchOngoingPurchases = async (
       거래취소: 0,
     };
 
-    const processed = data.purchases.map((purchase: any) => {
+    const processed = data.map((purchase: any) => {
       const status = purchase.status || "";
       const statusText = getStatusText(status);
       
@@ -433,9 +436,15 @@ export const fetchOngoingPurchases = async (
         price: (purchase.total_price || purchase.post?.ticket_price || 0).toLocaleString() + "원",
         status: statusText,
         sortPriority: getStatusPriority(status),
-        seller: purchase.seller?.name || "판매자 정보 없음"
+        seller: purchase.seller?.name || "판매자 정보 없음",
+        quantity: purchase.quantity || 1,
+        createdAt: purchase.created_at || new Date().toISOString(),
+        updatedAt: purchase.updated_at || purchase.created_at || new Date().toISOString()
       };
     });
+
+    console.log("📋 처리된 구매 데이터:", processed.length, "개");
+    console.log("📋 상태별 카운트:", newPurchaseStatus);
 
     // 상태에 따라 정렬 - getStatusPriority 함수 사용
     const sortedPurchases = [...processed].sort((a, b) => a.sortPriority - b.sortPriority);
@@ -446,6 +455,7 @@ export const fetchOngoingPurchases = async (
     setOngoingPurchases(filtered);
     setPurchaseStatus(newPurchaseStatus);
   } catch (error) {
+    console.error("구매 목록 로딩 오류:", error);
     toast.error('구매 목록을 불러오는데 실패했습니다.');
     setOngoingPurchases([]);
   } finally {
