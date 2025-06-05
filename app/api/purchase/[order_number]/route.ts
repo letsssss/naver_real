@@ -39,10 +39,15 @@ export async function GET(
 
   const supabase = createAdminClient()
 
-  // 1. 먼저 기존 purchases 테이블에서 조회
+  // 1. 먼저 기존 purchases 테이블에서 조회 (판매자 정보 포함)
   const { data: purchaseData, error: purchaseError } = await supabase
     .from("purchases")
-    .select("*, post:posts(*), buyer:users!purchases_buyer_id_fkey(*)")
+    .select(`
+      *,
+      post:posts(*, author:users!posts_author_id_fkey(*)),
+      buyer:users!purchases_buyer_id_fkey(*),
+      seller:users!purchases_seller_id_fkey(*)
+    `)
     .eq("order_number", order_number)
     .maybeSingle()
 
@@ -61,7 +66,7 @@ export async function GET(
     .from("proposal_transactions")
     .select(`
       *,
-      posts!proposal_transactions_post_id_fkey(*),
+      posts!proposal_transactions_post_id_fkey(*, author:users!posts_author_id_fkey(*)),
       buyer:users!proposal_transactions_buyer_id_fkey(*),
       seller:users!proposal_transactions_seller_id_fkey(*)
     `)

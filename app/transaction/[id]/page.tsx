@@ -218,13 +218,13 @@ export default function TransactionDetail() {
             id: data.buyer?.id || "",
             name: data.buyer?.name || "구매자",
             profileImage: data.buyer?.profile_image || "/placeholder.svg?height=50&width=50",
-            contactNumber: data.phone_number || "연락처 정보 없음"
+            contactNumber: data.buyer?.phone_number || "연락처 정보 없음"
           },
           seller: {
             id: data.seller?.id || data.post?.author_id || "",
-            name: data.seller?.name || "판매자", 
-            profileImage: data.seller?.profile_image || "/placeholder.svg?height=50&width=50",
-            contactNumber: data.seller?.phone_number || "연락처 정보 없음"
+            name: data.seller?.name || data.post?.author?.name || "판매자", 
+            profileImage: data.seller?.profile_image || data.post?.author?.profile_image || "/placeholder.svg?height=50&width=50",
+            contactNumber: data.seller?.phone_number || data.post?.author?.phone_number || "연락처 정보 없음"
           },
         }
         
