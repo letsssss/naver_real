@@ -14,9 +14,16 @@ const PKCE_SESSION_KEY = 'supabase.auth.session';
 // 세션 저장 헬퍼 함수
 const saveSessionToStorage = (session: any) => {
   try {
-    sessionStorage.setItem('token', session.access_token);
-    sessionStorage.setItem('auth-token', session.access_token);
-    sessionStorage.setItem('refresh_token', session.refresh_token);
+    // 기본 토큰 저장 (ASCII 안전)
+    if (session.access_token) {
+      sessionStorage.setItem('token', session.access_token);
+      sessionStorage.setItem('auth-token', session.access_token);
+      localStorage.setItem('auth-token', session.access_token);
+    }
+    if (session.refresh_token) {
+      sessionStorage.setItem('refresh_token', session.refresh_token);
+      localStorage.setItem('refresh_token', session.refresh_token);
+    }
     
     const sessionData = {
       access_token: session.access_token,
@@ -27,8 +34,15 @@ const saveSessionToStorage = (session: any) => {
       user: session.user
     };
     
+    // JSON으로 저장 (전체 세션 정보)
     localStorage.setItem('supabase.auth.token', JSON.stringify(sessionData));
     sessionStorage.setItem('supabase.auth.token', JSON.stringify(sessionData));
+    
+    // 순수 토큰만 별도 저장 (헤더 사용용)
+    if (session.access_token) {
+      localStorage.setItem('supabase.auth.access_token', session.access_token);
+      sessionStorage.setItem('supabase.auth.access_token', session.access_token);
+    }
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];

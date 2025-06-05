@@ -634,10 +634,10 @@ export default function MyPage() {
   // 판매자 통계 정보 업데이트 함수
   const updateSellerStats = async (sellerId: string, completedSales: number) => {
     try {
-      if (!sellerId) return;
-      
-      // 토큰 가져오기
-      const token = localStorage.getItem("supabase.auth.token");
+      // 순수 토큰 가져오기
+      const token = localStorage.getItem('supabase.auth.access_token') || 
+                   localStorage.getItem('auth-token') || 
+                   sessionStorage.getItem('auth-token');
       if (!token) {
         return;
       }

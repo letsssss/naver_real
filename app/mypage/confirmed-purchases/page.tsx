@@ -30,17 +30,37 @@ export default function ConfirmedPurchasesPage() {
   async function fetchConfirmedPurchases() {
     setLoading(true)
     try {
-      // 인증 토큰 가져오기
-      const token = localStorage.getItem('supabase.auth.token');
+      // 인증 토큰 가져오기 (순수 토큰 우선 사용)
+      const token = localStorage.getItem('supabase.auth.access_token') || 
+                   localStorage.getItem('auth-token') || 
+                   sessionStorage.getItem('auth-token');
+      
+      // 헤더 설정 (토큰 ASCII 검증 추가)
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      };
+      
+      // 토큰이 있고 ASCII 문자만 포함하는 경우에만 Authorization 헤더 추가
+      if (token) {
+        try {
+          // ASCII 문자인지 검증 (한글이나 특수문자 포함 시 false)
+          if (/^[a-zA-Z0-9._-]+$/.test(token)) {
+            headers['Authorization'] = `Bearer ${token}`;
+          } else {
+            // non-ASCII 문자가 있으면 base64 인코딩 시도
+            headers['Authorization'] = `Bearer ${btoa(token)}`;
+          }
+        } catch (e) {
+          console.error('토큰 처리 실패:', e);
+          // 토큰 처리에 실패하면 토큰 없이 진행
+        }
+      }
       
       const response = await fetch('/api/confirmed-purchases', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
+        headers,
         credentials: 'include'
       });
       
