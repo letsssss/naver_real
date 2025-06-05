@@ -323,7 +323,36 @@ export default function MyPage() {
           ...post,
           proposals: proposalsWithUserInfo || [],
           proposalCount: proposalsWithUserInfo?.length || 0,
-          acceptedProposal: proposalsWithUserInfo?.find(p => p.status === 'ACCEPTED')
+          acceptedProposal: await (async () => {
+            const accepted = proposalsWithUserInfo?.find(p => p.status === 'ACCEPTED');
+            if (accepted) {
+              // 수락된 제안에 대한 거래 정보 가져오기
+              try {
+                const { data: purchaseData } = await supabaseClient
+                  .from('purchases')
+                  .select('id, order_number, status, created_at')
+                  .eq('post_id', post.id)
+                  .eq('seller_id', accepted.proposer_id)
+                  .eq('buyer_id', user.id)
+                  .order('created_at', { ascending: false })
+                  .maybeSingle();
+
+                return {
+                  ...accepted,
+                  transaction: purchaseData ? {
+                    id: purchaseData.id,
+                    orderNumber: purchaseData.order_number,
+                    status: purchaseData.status,
+                    createdAt: purchaseData.created_at
+                  } : null
+                };
+              } catch (error) {
+                console.error('거래 정보 조회 오류:', error);
+                return accepted;
+              }
+            }
+            return null;
+          })()
         };
       });
 
@@ -434,24 +463,40 @@ export default function MyPage() {
   // 제안 수락하기
   const handleAcceptProposal = async (proposalId: number) => {
     try {
+      // Supabase 세션에서 토큰 가져오기
       const supabaseClient = await getSupabaseClient();
-      const { error } = await supabaseClient
-        .from('proposals')
-        .update({ status: 'ACCEPTED' })
-        .eq('id', proposalId);
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = session?.access_token;
 
-      if (error) {
-        throw error;
+      if (!token) {
+        toast.error('로그인이 필요합니다');
+        return;
+      }
+
+      // 새로운 제안 수락 API 호출
+      const response = await fetch(`/api/proposals/${proposalId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '제안 수락에 실패했습니다');
       }
       
-      toast.success('제안이 수락되었습니다!');
+      toast.success(result.message || '제안이 수락되었습니다!');
       
       // 모달 닫기 및 데이터 새로고침
       setIsProposalModalOpen(false);
       fetchRequestedTickets();
       
     } catch (error) {
-      toast.error('제안 수락에 실패했습니다');
+      console.error('제안 수락 오류:', error);
+      toast.error(error instanceof Error ? error.message : '제안 수락에 실패했습니다');
     }
   };
 
@@ -550,26 +595,38 @@ export default function MyPage() {
     }
   };
 
-  // 요청중인 취켓팅 삭제 핸들러 추가
+  // 요청중인 취켓팅 삭제 핸들러 - API 방식으로 변경
   const handleDeleteRequest = async (requestId: number) => {
     try {
-      const supabaseClient = await getSupabaseClient();
-      const { error } = await supabaseClient
-        .from('posts')
-        .delete()
-        .eq('id', requestId);
-
-      if (error) {
-        throw error;
+      // 현재 사용자 ID 확인
+      if (!user?.id) {
+        toast.error('로그인이 필요합니다');
+        return;
       }
-      
-      toast.success('요청이 성공적으로 삭제되었습니다');
+
+      // API를 통해 게시물 삭제 (권한 확인 및 연관 데이터 처리 포함)
+      const response = await fetch(`/api/posts/${requestId}?userId=${user.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || '요청 삭제에 실패했습니다');
+      }
+
+      toast.success(result.message || '요청이 성공적으로 삭제되었습니다');
       
       // 요청 목록 새로고침
       fetchRequestedTickets();
       
     } catch (error) {
-      toast.error('요청 삭제에 실패했습니다');
+      console.error('요청 삭제 오류:', error);
+      toast.error(error instanceof Error ? error.message : '요청 삭제에 실패했습니다');
     }
   };
 

@@ -241,6 +241,34 @@ export async function DELETE(
             console.log("관련 댓글 삭제 완료");
           }
           
+          // 2-1. TICKET_REQUEST 카테고리인 경우 proposals 삭제
+          if (existingPost.category === 'TICKET_REQUEST') {
+            console.log("TICKET_REQUEST 카테고리 - proposals 삭제 시작");
+            const { error: proposalsError } = await supabase
+              .from('proposals')
+              .delete()
+              .eq('post_id', postId);
+            
+            if (proposalsError) {
+              console.error("proposals 삭제 오류:", proposalsError);
+            } else {
+              console.log("관련 proposals 삭제 완료");
+            }
+            
+            // offers 테이블도 삭제
+            console.log("TICKET_REQUEST 카테고리 - offers 삭제 시작");
+            const { error: offersError } = await supabase
+              .from('offers')
+              .delete()
+              .eq('post_id', postId);
+            
+            if (offersError) {
+              console.error("offers 삭제 오류:", offersError);
+            } else {
+              console.log("관련 offers 삭제 완료");
+            }
+          }
+          
           // 3. 관련 좋아요 삭제
           const { error: likesError } = await supabase
             .from('likes')
@@ -382,6 +410,34 @@ export async function DELETE(
       console.error("댓글 삭제 오류:", commentsError);
     } else {
       console.log("관련 댓글 삭제 완료");
+    }
+    
+    // 2-1. TICKET_REQUEST 카테고리인 경우 proposals 삭제
+    if (existingPost.category === 'TICKET_REQUEST') {
+      console.log("TICKET_REQUEST 카테고리 - proposals 삭제 시작");
+      const { error: proposalsError } = await supabase
+        .from('proposals')
+        .delete()
+        .eq('post_id', postId);
+      
+      if (proposalsError) {
+        console.error("proposals 삭제 오류:", proposalsError);
+      } else {
+        console.log("관련 proposals 삭제 완료");
+      }
+      
+      // offers 테이블도 삭제
+      console.log("TICKET_REQUEST 카테고리 - offers 삭제 시작");
+      const { error: offersError } = await supabase
+        .from('offers')
+        .delete()
+        .eq('post_id', postId);
+      
+      if (offersError) {
+        console.error("offers 삭제 오류:", offersError);
+      } else {
+        console.log("관련 offers 삭제 완료");
+      }
     }
     
     // 3. 관련 좋아요 삭제
