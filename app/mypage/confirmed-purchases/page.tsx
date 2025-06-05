@@ -42,12 +42,11 @@ export default function ConfirmedPurchasesPage() {
       // 다른 마이페이지 파일들과 동일하게 Supabase 클라이언트 직접 사용
       const supabaseClient = await getSupabaseClient();
       
-      // 현재 사용자의 거래완료된 구매 내역 조회
+      // 현재 사용자의 거래완료된 구매 내역 조회 (status 필드 제거)
       const { data, error } = await supabaseClient
         .from('rooms')
         .select(`
           id,
-          status,
           created_at,
           updated_at,
           buyer_confirmed_at,
@@ -55,7 +54,7 @@ export default function ConfirmedPurchasesPage() {
           seller_id
         `)
         .eq('buyer_id', user.id)
-        .eq('status', 'COMPLETED')
+        .not('buyer_confirmed_at', 'is', null) // buyer_confirmed_at이 null이 아닌 거래 (완료된 거래)
         .order('updated_at', { ascending: false });
 
       if (error) {
