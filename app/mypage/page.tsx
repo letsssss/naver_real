@@ -437,7 +437,7 @@ export default function MyPage() {
       const supabaseClient = await getSupabaseClient();
       const { error } = await supabaseClient
         .from('proposals')
-        .update({ status: 'accepted' })
+        .update({ status: 'ACCEPTED' })
         .eq('id', proposalId);
 
       if (error) {
