@@ -672,7 +672,7 @@ export default function TicketCancellationDetail() {
                     className="object-cover"
                   />
                   <div className="absolute top-4 right-4">
-                    <SuccessRateBadge staticRate={ticketData.successRate} />
+                    <SuccessRateBadge sellerId={ticketData.seller.id} />
                   </div>
                 </div>
               </div>
