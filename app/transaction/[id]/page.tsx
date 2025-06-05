@@ -18,7 +18,7 @@ import MessageButton from "@/components/MessageButton"
 const defaultTransaction = {
   id: "",
   order_number: "",
-  type: "sale",
+  type: "purchase", // 기본값을 구매로 변경
   status: "로딩 중...",
   currentStep: "",
   stepDates: {
@@ -39,8 +39,14 @@ const defaultTransaction = {
   paymentMethod: "",
   paymentStatus: "",
   ticketingStatus: "",
-  ticketingInfo: "취소표 발생 시 알림을 보내드립니다. 취소표 발생 시 빠르게 예매를 진행해 드립니다.",
+  ticketingInfo: "로딩 중...",
   buyer: {
+    id: "",
+    name: "",
+    profileImage: "/placeholder.svg?height=50&width=50",
+    contactNumber: ""
+  },
+  seller: {
     id: "",
     name: "",
     profileImage: "/placeholder.svg?height=50&width=50",
@@ -103,7 +109,7 @@ const getTicketingStatusText = (status: string) => {
   }
 }
 
-export default function SellerTransactionDetail() {
+export default function TransactionDetail() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const { user: currentUser } = useAuth() // 로그인한 사용자 정보
@@ -113,6 +119,7 @@ export default function SellerTransactionDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [chatRoomId, setChatRoomId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<'buyer' | 'seller' | null>(null) // 사용자 역할 상태 추가
 
   // 실제 구현에서는 이 부분에서 API를 호출하여 거래 정보를 가져와야 합니다
   useEffect(() => {
@@ -125,8 +132,13 @@ export default function SellerTransactionDetail() {
           throw new Error("주문번호가 없습니다.")
         }
         
+        if (!currentUser?.id) {
+          throw new Error("로그인이 필요합니다.")
+        }
+        
         const orderId = params.id
         console.log("Transaction ID:", orderId)
+        console.log("Current User ID:", currentUser.id)
         
         // API 경로 수정 - /api/purchase 엔드포인트 사용
         const response = await fetch(`/api/purchase/${orderId}`, {
@@ -150,12 +162,31 @@ export default function SellerTransactionDetail() {
         }
         
         const data = await response.json()
+        console.log("API 응답 데이터:", data)
         
-        // API 응답을 UI용 데이터로 변환
+        // 🔍 현재 사용자가 구매자인지 판매자인지 판단
+        const isBuyer = data.buyer?.id === currentUser.id
+        const isSeller = data.post?.author_id === currentUser.id || data.seller?.id === currentUser.id
+        
+        console.log("역할 판단:", { 
+          isBuyer, 
+          isSeller, 
+          buyerId: data.buyer?.id, 
+          sellerId: data.seller?.id || data.post?.author_id,
+          currentUserId: currentUser.id 
+        })
+        
+        if (!isBuyer && !isSeller) {
+          throw new Error("이 거래에 접근할 권한이 없습니다.")
+        }
+        
+        setUserRole(isBuyer ? 'buyer' : 'seller')
+        
+        // API 응답을 UI용 데이터로 변환 (사용자 역할에 따라 다르게)
         const formattedData = {
           id: data.id.toString(),
           order_number: data.order_number || params.id,
-          type: "sale", // 판매자 관점
+          type: isBuyer ? "purchase" : "sale", // 🔄 구매자면 purchase, 판매자면 sale
           status: getStatusText(data.status),
           currentStep: getCurrentStep(data.status),
           stepDates: {
@@ -180,12 +211,20 @@ export default function SellerTransactionDetail() {
           paymentMethod: data.payment_method || "신용카드",
           paymentStatus: "결제 완료",
           ticketingStatus: getTicketingStatusText(data.status),
-          ticketingInfo: "취소표 발생 시 알림을 보내드립니다. 취소표 발생 시 빠르게 예매를 진행해 드립니다.",
+          ticketingInfo: isBuyer 
+            ? "판매자가 취켓팅을 진행하고 있습니다. 완료되면 알림을 보내드립니다."
+            : "취소표 발생 시 알림을 보내드립니다. 취소표 발생 시 빠르게 예매를 진행해 드립니다.",
           buyer: {
             id: data.buyer?.id || "",
             name: data.buyer?.name || "구매자",
             profileImage: data.buyer?.profile_image || "/placeholder.svg?height=50&width=50",
             contactNumber: data.phone_number || "연락처 정보 없음"
+          },
+          seller: {
+            id: data.seller?.id || data.post?.author_id || "",
+            name: data.seller?.name || "판매자", 
+            profileImage: data.seller?.profile_image || "/placeholder.svg?height=50&width=50",
+            contactNumber: data.seller?.phone_number || "연락처 정보 없음"
           },
         }
         
@@ -226,7 +265,7 @@ export default function SellerTransactionDetail() {
     }
     
     fetchTransaction()
-  }, [params])
+  }, [params, currentUser])
 
   // 거래 단계 정의 - 4단계로 수정
   const transactionSteps = [
@@ -290,49 +329,95 @@ export default function SellerTransactionDetail() {
       return
     }
 
-    if (transaction.currentStep === "ticketing_started") {
-      // 취켓팅 성공 시 confetti 효과 추가
-      import('canvas-confetti').then((confetti) => {
-        confetti.default({
-          particleCount: 150,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ["#4CAF50", "#2196F3", "#FFC107"],
+    if (userRole === 'buyer') {
+      // 구매자 액션
+      if (transaction.currentStep === "ticketing_completed") {
+        // 구매 확정
+        import('canvas-confetti').then((confetti) => {
+          confetti.default({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ["#4CAF50", "#2196F3", "#FFC107"],
+          });
         });
-      });
 
-      // 성공 토스트 메시지
-      toast.success("취켓팅 완료 처리되었습니다!", {
-        description: "구매자의 확정을 기다리고 있습니다.",
-        duration: 3000,
-      });
-
-      // 취켓팅 완료 상태로 변경
-      const response = await fetch(`/api/purchase/status/${transaction.id}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          status: "COMPLETED"
-        }),
-        credentials: 'include'
-      })
-
-      if (response.ok) {
-        // 상태 업데이트 성공 시 페이지 새로고침
-        window.location.reload()
-      } else {
-        const errorText = await response.text()
-        console.error("API 오류:", errorText)
-        toast.error("상태 변경에 실패했습니다.", {
-          description: "잠시 후 다시 시도해주세요.",
-          duration: 4000,
+        toast.success("구매 확정 처리되었습니다!", {
+          description: "거래가 완료되었습니다.",
+          duration: 3000,
         });
+
+        const response = await fetch(`/api/purchase/${transaction.order_number}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            status: "CONFIRMED"
+          }),
+          credentials: 'include'
+        })
+
+        if (response.ok) {
+          window.location.reload()
+        } else {
+          const errorText = await response.text()
+          console.error("API 오류:", errorText)
+          toast.error("구매 확정에 실패했습니다.", {
+            description: "잠시 후 다시 시도해주세요.",
+            duration: 4000,
+          });
+        }
+      } else if (transaction.currentStep === "confirmed") {
+        // 리뷰 작성 페이지로 이동
+        router.push(`/review/${transaction.order_number}?role=buyer`)
       }
-    } else if (transaction.currentStep === "confirmed") {
-      // 구매자에 대한 리뷰 작성 페이지로 이동
-      router.push(`/review/${transaction.order_number}?role=seller`)
+    } else {
+      // 판매자 액션
+      if (transaction.currentStep === "ticketing_started") {
+        // 취켓팅 성공 시 confetti 효과 추가
+        import('canvas-confetti').then((confetti) => {
+          confetti.default({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ["#4CAF50", "#2196F3", "#FFC107"],
+          });
+        });
+
+        // 성공 토스트 메시지
+        toast.success("취켓팅 완료 처리되었습니다!", {
+          description: "구매자의 확정을 기다리고 있습니다.",
+          duration: 3000,
+        });
+
+        // 취켓팅 완료 상태로 변경
+        const response = await fetch(`/api/purchase/status/${transaction.id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            status: "COMPLETED"
+          }),
+          credentials: 'include'
+        })
+
+        if (response.ok) {
+          // 상태 업데이트 성공 시 페이지 새로고침
+          window.location.reload()
+        } else {
+          const errorText = await response.text()
+          console.error("API 오류:", errorText)
+          toast.error("상태 변경에 실패했습니다.", {
+            description: "잠시 후 다시 시도해주세요.",
+            duration: 4000,
+          });
+        }
+      } else if (transaction.currentStep === "confirmed") {
+        // 구매자에 대한 리뷰 작성 페이지로 이동
+        router.push(`/review/${transaction.order_number}?role=seller`)
+      }
     }
   }
 
@@ -343,17 +428,30 @@ export default function SellerTransactionDetail() {
   }
   const closeChat = () => setIsChatOpen(false)
 
-  // 현재 단계에 따른 버튼 텍스트 결정 (판매자용)
+  // 현재 단계에 따른 버튼 텍스트 결정 (역할에 따라 다르게)
   const getActionButtonText = () => {
-    switch (transaction.currentStep) {
-      case "ticketing_started":
-        return "취켓팅 성공 확정"
-      case "ticketing_completed":
-        return "구매자 확정 대기 중"
-      case "confirmed":
-        return "구매자 리뷰 작성"
-      default:
-        return "다음 단계로"
+    if (userRole === 'buyer') {
+      // 구매자 버튼
+      switch (transaction.currentStep) {
+        case "ticketing_completed":
+          return "구매 확정하기"
+        case "confirmed":
+          return "리뷰 작성하기"
+        default:
+          return "취켓팅 대기 중"
+      }
+    } else {
+      // 판매자 버튼
+      switch (transaction.currentStep) {
+        case "ticketing_started":
+          return "취켓팅 성공 확정"
+        case "ticketing_completed":
+          return "구매자 확정 대기 중"
+        case "confirmed":
+          return "구매자 리뷰 작성"
+        default:
+          return "다음 단계로"
+      }
     }
   }
 
@@ -372,10 +470,10 @@ export default function SellerTransactionDetail() {
           <h3 className="text-lg font-medium">오류가 발생했습니다</h3>
           <p>{error}</p>
           <button
-            onClick={() => router.push("/seller/dashboard")}
+            onClick={() => router.push(userRole === 'buyer' ? "/mypage" : "/seller/dashboard")}
             className="mt-4 px-4 py-2 bg-teal-100 text-teal-700 rounded-md hover:bg-teal-200"
           >
-            판매자 대시보드로 돌아가기
+            {userRole === 'buyer' ? "마이페이지로 돌아가기" : "판매자 대시보드로 돌아가기"}
           </button>
         </div>
       </div>
@@ -387,13 +485,15 @@ export default function SellerTransactionDetail() {
       <header className="bg-white shadow-sm">
         <div className="container mx-auto px-4 py-6">
           <Link
-            href="/seller/dashboard"
+            href={userRole === 'buyer' ? "/mypage" : "/seller/dashboard"}
             className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            <span>판매자 대시보드로 돌아가기</span>
+            <span>{userRole === 'buyer' ? "마이페이지로 돌아가기" : "판매자 대시보드로 돌아가기"}</span>
           </Link>
-          <h1 className="text-3xl font-bold mt-4">판매 거래 상세</h1>
+          <h1 className="text-3xl font-bold mt-4">
+            {userRole === 'buyer' ? "구매 거래 상세" : "판매 거래 상세"}
+          </h1>
         </div>
       </header>
 
@@ -456,7 +556,7 @@ export default function SellerTransactionDetail() {
                   <div className="flex items-center p-4 bg-gray-50 rounded-lg">
                     <CreditCard className="h-5 w-5 mr-3 text-teal-500" />
                     <div>
-                      <span className="text-xs text-gray-500 block">판매 금액</span>
+                      <span className="text-xs text-gray-500 block">{userRole === 'buyer' ? "구매 금액" : "판매 금액"}</span>
                       <span className="font-medium">{transaction.price.toLocaleString()}원</span>
                     </div>
                   </div>
@@ -504,14 +604,20 @@ export default function SellerTransactionDetail() {
             </div>
 
             <div className="mt-10 border-t pt-8">
-              <h3 className="text-xl font-semibold mb-6 text-gray-800">취켓팅 정보</h3>
+              <h3 className="text-xl font-semibold mb-6 text-gray-800">
+                {userRole === 'buyer' ? "취켓팅 현황" : "취켓팅 정보"}
+              </h3>
 
               <TicketingStatusCard
                 status={transaction.currentStep === "ticketing_completed" ? "completed" : "in_progress"}
                 message={
-                  transaction.currentStep === "ticketing_completed"
-                    ? "취켓팅이 완료되었습니다. 구매자의 구매 확정을 기다리고 있습니다."
-                    : "취소표 발생 시 즉시 예매를 진행해 드립니다. 취소표를 발견하면 '취켓팅 성공 확정' 버튼을 눌러주세요."
+                  userRole === 'buyer'
+                    ? (transaction.currentStep === "ticketing_completed"
+                        ? "취켓팅이 완료되었습니다! 구매를 확정해주세요."
+                        : "판매자가 취켓팅을 진행하고 있습니다. 완료되면 알림을 보내드립니다.")
+                    : (transaction.currentStep === "ticketing_completed"
+                        ? "취켓팅이 완료되었습니다. 구매자의 구매 확정을 기다리고 있습니다."
+                        : "취소표 발생 시 즉시 예매를 진행해 드립니다. 취소표를 발견하면 '취켓팅 성공 확정' 버튼을 눌러주세요.")
                 }
                 updatedAt={
                   transaction.currentStep === "ticketing_completed" && transaction.stepDates.ticketing_completed
@@ -528,17 +634,25 @@ export default function SellerTransactionDetail() {
                   </span>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-500 block mb-1">구매자 정보</span>
-                  <span className="font-medium">{transaction.buyer.name}</span>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    {userRole === 'buyer' ? "판매자 정보" : "구매자 정보"}
+                  </span>
+                  <span className="font-medium">
+                    {userRole === 'buyer' ? transaction.seller.name : transaction.buyer.name}
+                  </span>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-500 block mb-1">구매자 연락처</span>
-                  <span className="font-medium">{transaction.buyer.contactNumber}</span>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    {userRole === 'buyer' ? "판매자 연락처" : "구매자 연락처"}
+                  </span>
+                  <span className="font-medium">
+                    {userRole === 'buyer' ? transaction.seller.contactNumber : transaction.buyer.contactNumber}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* 판매자용 버튼 영역 */}
+            {/* 액션 버튼 영역 */}
             <div className="mt-10 flex justify-end gap-4">
               <MessageButton
                 orderNumber={params.id}
@@ -546,34 +660,72 @@ export default function SellerTransactionDetail() {
                 className="justify-center rounded-md disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 shadow-sm text-sm flex items-center gap-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium"
               />
 
-              {/* 취켓팅 성공 확정 버튼 (취켓팅 시작 단계일 때만 활성화) */}
-              {transaction.currentStep === "ticketing_started" && (
-                <Button
-                  onClick={handleAction}
-                  className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
-                >
-                  취켓팅 성공 확정
-                </Button>
-              )}
+              {userRole === 'seller' ? (
+                // 판매자용 버튼들
+                <>
+                  {/* 취켓팅 성공 확정 버튼 (취켓팅 시작 단계일 때만 활성화) */}
+                  {transaction.currentStep === "ticketing_started" && (
+                    <Button
+                      onClick={handleAction}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
+                    >
+                      취켓팅 성공 확정
+                    </Button>
+                  )}
 
-              {/* 구매자 확정 대기 중 (취켓팅 완료 단계일 때) */}
-              {transaction.currentStep === "ticketing_completed" && (
-                <Button
-                  disabled
-                  className="bg-gray-300 text-gray-700 font-semibold px-6 py-3 rounded-lg shadow-md cursor-not-allowed"
-                >
-                  구매자 확정 대기 중
-                </Button>
-              )}
+                  {/* 구매자 확정 대기 중 (취켓팅 완료 단계일 때) */}
+                  {transaction.currentStep === "ticketing_completed" && (
+                    <Button
+                      disabled
+                      className="bg-gray-300 text-gray-700 font-semibold px-6 py-3 rounded-lg shadow-md cursor-not-allowed"
+                    >
+                      구매자 확정 대기 중
+                    </Button>
+                  )}
 
-              {/* 구매자 리뷰 작성 (구매 확정 단계일 때) */}
-              {transaction.currentStep === "confirmed" && (
-                <Button
-                  onClick={handleAction}
-                  className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
-                >
-                  구매자 리뷰 작성
-                </Button>
+                  {/* 리뷰 작성 (구매 확정 단계일 때) */}
+                  {transaction.currentStep === "confirmed" && (
+                    <Button
+                      onClick={handleAction}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
+                    >
+                      리뷰 작성하기
+                    </Button>
+                  )}
+                </>
+              ) : (
+                // 구매자용 버튼들
+                <>
+                  {/* 취켓팅 대기 중 (취켓팅 시작 단계일 때) */}
+                  {transaction.currentStep === "ticketing_started" && (
+                    <Button
+                      disabled
+                      className="bg-gray-300 text-gray-700 font-semibold px-6 py-3 rounded-lg shadow-md cursor-not-allowed"
+                    >
+                      취켓팅 대기 중
+                    </Button>
+                  )}
+
+                  {/* 구매 확정하기 버튼 (취켓팅 완료 단계일 때) */}
+                  {transaction.currentStep === "ticketing_completed" && (
+                    <Button
+                      onClick={handleAction}
+                      className="bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
+                    >
+                      구매 확정하기
+                    </Button>
+                  )}
+
+                  {/* 리뷰 작성 (구매 확정 단계일 때) */}
+                  {transaction.currentStep === "confirmed" && (
+                    <Button
+                      onClick={handleAction}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md"
+                    >
+                      리뷰 작성하기
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -584,11 +736,17 @@ export default function SellerTransactionDetail() {
           <div className="container mx-auto flex justify-end">
             <button
               onClick={handleAction}
-              disabled={transaction.currentStep === "ticketing_completed"}
+              disabled={
+                (userRole === 'seller' && transaction.currentStep === "ticketing_completed") ||
+                (userRole === 'buyer' && transaction.currentStep === "ticketing_started")
+              }
               className={`px-6 py-3 rounded-lg font-medium ${
-                transaction.currentStep === "ticketing_completed"
+                ((userRole === 'seller' && transaction.currentStep === "ticketing_completed") ||
+                 (userRole === 'buyer' && transaction.currentStep === "ticketing_started"))
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-teal-500 text-white hover:bg-teal-600 transition-colors"
+                  : (userRole === 'buyer' && transaction.currentStep === "ticketing_completed")
+                    ? "bg-green-500 text-white hover:bg-green-600 transition-colors"
+                    : "bg-teal-500 text-white hover:bg-teal-600 transition-colors"
               }`}
             >
               {getActionButtonText()}
