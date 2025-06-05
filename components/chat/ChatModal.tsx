@@ -478,6 +478,11 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
   // 연결 상태 UI 표시
   const renderConnectionStatus = () => {
+    // 초기 로딩 상태에서는 연결 상태 메시지를 표시하지 않음
+    if (isLoading || !isSessionChecked || isConnected === null) {
+      return null;
+    }
+    
     if (isReconnecting) {
       return (
         <div className="text-center py-2 bg-yellow-50 text-yellow-700">
@@ -485,13 +490,16 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
         </div>
       );
     }
-    if (!isConnected) {
+    
+    // 에러가 있고 실제로 연결이 끊어진 경우에만 표시
+    if (error && isConnected === false) {
       return (
         <div className="text-center py-2 bg-red-50 text-red-700">
           연결이 끊어졌습니다
         </div>
       );
     }
+    
     return null;
   };
 

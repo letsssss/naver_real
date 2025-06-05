@@ -17,7 +17,7 @@ export function useRealtimeMessages(
   roomId: string | null,
   onNewMessage?: (message: any) => void
 ) {
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null); // null: 초기상태, true: 연결됨, false: 끊어짐
   const [error, setError] = useState<string | null>(null);
   
   // refs for managing subscription state
