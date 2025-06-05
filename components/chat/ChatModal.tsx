@@ -24,12 +24,16 @@ interface Message {
   clientId?: string;
 }
 
+interface ExtendedUser extends UserRow {
+  phone_number?: string;
+}
+
 interface RoomWithUsers {
   id: string;
   buyer_id: string;
   seller_id: string;
-  buyer: UserRow;
-  seller: UserRow;
+  buyer: ExtendedUser;
+  seller: ExtendedUser;
   created_at?: string;
   updated_at?: string;
 }
@@ -93,14 +97,18 @@ class ChatModalManager {
     return this.currentUser;
   }
 
-  public async loadRoomData(roomId: string): Promise<{ room: RoomWithUsers; otherUser: UserRow }> {
+  public async loadRoomData(roomId: string): Promise<{ room: RoomWithUsers; otherUser: ExtendedUser }> {
     if (!this.isReady()) {
       throw new Error('ChatModalManager가 초기화되지 않았습니다.');
     }
 
     const { data: roomData, error: roomError } = await this.supabase
       .from('rooms')
-      .select('*, buyer:users!rooms_buyer_id_fkey(*), seller:users!rooms_seller_id_fkey(*)')
+      .select(`
+        *,
+        buyer:users!rooms_buyer_id_fkey(id, name, email, profile_image, phone_number, created_at, updated_at),
+        seller:users!rooms_seller_id_fkey(id, name, email, profile_image, phone_number, created_at, updated_at)
+      `)
       .eq('id', roomId)
       .single();
 
@@ -244,7 +252,7 @@ class ChatModalManager {
 export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) {
   const { user: authUser, loading: authLoading } = useAuth();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [otherUser, setOtherUser] = useState<User | null>(null);
+  const [otherUser, setOtherUser] = useState<ExtendedUser | null>(null);
   const [otherUserRole, setOtherUserRole] = useState<string>('사용자');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -402,6 +410,43 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
         setMessages(prev => 
           prev.map(msg => msg.id === tempId ? { ...sentMessage, status: 'sent' } : msg)
         );
+
+        // 🔔 메시지 전송 성공 시 카카오 알림톡 발송
+        if (otherUser?.phone_number) {
+          try {
+            console.log('📱 카카오 알림톡 발송 시작:', {
+              to: otherUser.phone_number,
+              name: otherUser.name,
+              message: messageContent
+            });
+            
+            const notifyResponse = await fetch('/api/kakao/notify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                to: otherUser.phone_number,
+                name: otherUser.name,
+                message: messageContent
+              }),
+            });
+            
+            const notifyResult = await notifyResponse.json();
+            
+            if (notifyResult.success) {
+              console.log('✅ 카카오 알림톡 전송 성공:', notifyResult);
+            } else if (notifyResult.reason === 'cooldown') {
+              console.log('⏱️ 카카오 알림톡 제한 (1시간 내 발송됨):', notifyResult.error);
+            } else {
+              console.error('⚠️ 카카오 알림톡 전송 실패:', notifyResult.error);
+            }
+          } catch (notifyError) {
+            console.error('❌ 카카오 알림톡 전송 중 오류:', notifyError);
+          }
+        } else {
+          console.log('📱 상대방 전화번호 없음: 알림톡 발송 건너뜀');
+        }
       } catch (error) {
         console.error(`[채팅] 메시지 전송 오류 (시도 ${currentRetry + 1}/${maxRetries}):`, error);
         
