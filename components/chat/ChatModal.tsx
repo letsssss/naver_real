@@ -245,6 +245,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
   const { user: authUser, loading: authLoading } = useAuth();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
+  const [otherUserRole, setOtherUserRole] = useState<string>('사용자');
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -339,11 +340,24 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
         console.log(`🔄 ChatModal - 채팅 데이터 불러오기 시작 (roomId: ${roomId})`);
 
         // Load room data and messages using ChatModalManager
-        const { otherUser: otherUserData } = await chatManager.current.loadRoomData(roomId);
+        const { room, otherUser: otherUserData } = await chatManager.current.loadRoomData(roomId);
         const messagesData = await chatManager.current.loadMessages(roomId);
 
         setOtherUser(otherUserData);
         setMessages(messagesData);
+        
+        // 현재 사용자가 구매자인지 판매자인지에 따라 상대방 역할 결정
+        if (currentUser.id === room.buyer_id) {
+          // 현재 사용자가 구매자라면, 상대방은 판매자
+          setOtherUserRole('판매자');
+        } else if (currentUser.id === room.seller_id) {
+          // 현재 사용자가 판매자라면, 상대방은 구매자
+          setOtherUserRole('구매자');
+        } else {
+          // 혹시 모를 경우 기본값
+          setOtherUserRole('사용자');
+        }
+        
         setError(null);
       } catch (error) {
         console.error('[채팅] 데이터 로드 오류:', error);
@@ -441,14 +455,22 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center">
               <span className="text-white font-bold text-lg">
-                {otherUser?.name?.charAt(0) || '김'}
+                {isLoading 
+                  ? '?' 
+                  : (otherUser?.name?.charAt(0)?.toUpperCase() || '?')
+                }
               </span>
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                {otherUser?.name || '김대기'}
+                {isLoading 
+                  ? '로딩 중...' 
+                  : (otherUser?.name || '사용자')
+                }
               </h2>
-              <p className="text-sm text-gray-500">구매자</p>
+              <p className="text-sm text-gray-500">
+                {isLoading ? '...' : otherUserRole}
+              </p>
             </div>
           </div>
           <button
