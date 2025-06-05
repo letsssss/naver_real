@@ -193,6 +193,53 @@ function createDefaultUserInfo(authUser: User): UserInfo {
   }
 }
 
+// users 테이블에 사용자 생성하는 함수
+async function ensureUserInDatabase(authUser: User) {
+  try {
+    const supabase = await getSupabaseClient();
+    
+    // 1. 먼저 users 테이블에 해당 사용자가 있는지 확인
+    const { data: existingUser, error: selectError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (selectError && selectError.code !== 'PGRST116') {
+      // PGRST116은 "no rows found" 에러 (정상)
+      console.error('❌ 사용자 확인 중 오류:', selectError);
+      return;
+    }
+
+    // 2. 사용자가 없으면 생성
+    if (!existingUser) {
+      const newUser = {
+        id: authUser.id,
+        email: authUser.email || null,
+        name: authUser.user_metadata?.name || authUser.user_metadata?.full_name || '사용자',
+        profile_image: authUser.user_metadata?.profile_image || authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+        role: 'USER',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([newUser]);
+
+      if (insertError) {
+        console.error('❌ users 테이블 삽입 오류:', insertError);
+      } else {
+        console.log('✅ users 테이블에 새 사용자 생성:', authUser.id);
+      }
+    } else {
+      console.log('✅ 사용자가 이미 users 테이블에 존재:', authUser.id);
+    }
+  } catch (error) {
+    console.error('❌ users 테이블 처리 중 오류:', error);
+  }
+}
+
 // 컨텍스트 프로바이더 컴포넌트
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(() => getInitialUser());
@@ -305,6 +352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const supabase = await getSupabaseClient()
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
+          // users 테이블에 사용자 정보 확인/생성
+          await ensureUserInDatabase(session.user);
+          
           // users 테이블 조회 건너뛰고 바로 기본 사용자 정보 생성
           const defaultUser: UserInfo = {
             id: session.user.id,
@@ -326,6 +376,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
             safeLocalStorageRemove('user');
           } else if (event === 'SIGNED_IN' && session) {
+            // 🔥 로그인 시 users 테이블에 사용자 생성/확인
+            await ensureUserInDatabase(session.user);
+            
             const userInfo = createDefaultUserInfo(session.user);
             setUser(userInfo);
             safeLocalStorageSet('user', JSON.stringify(userInfo));
