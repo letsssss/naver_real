@@ -49,7 +49,7 @@ const concertData: Concert[] = [
 ]
 
 export default function TicketRequestPage() {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   
   const [concertTitle, setConcertTitle] = useState("")
@@ -64,7 +64,6 @@ export default function TicketRequestPage() {
   const [isTermsAgreed, setIsTermsAgreed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [sections, setSections] = useState<SeatSection[]>([])
-  const supabase = getSupabaseClient()
 
   // 구역 추가 함수
   const addSection = () => {
@@ -104,11 +103,11 @@ export default function TicketRequestPage() {
 
   // 인증 확인
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!loading && !user) {
       alert("로그인이 필요합니다.")
       router.push("/login")
     }
-  }, [user, isLoading, router])
+  }, [user, loading, router])
 
   // 기본 구역 추가 (페이지 로드 시)
   useEffect(() => {
@@ -182,8 +181,9 @@ export default function TicketRequestPage() {
       console.log("취켓팅 구해요 요청:", requestData)
       
       // ✅ Supabase 세션에서 직접 토큰 가져오기 (sell 페이지와 동일한 방식)
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
+      const supabase = await getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
 
       if (!token) {
         console.error('세션에서 토큰을 찾을 수 없습니다.')
@@ -220,7 +220,7 @@ export default function TicketRequestPage() {
     }
   }
 
-  if (isLoading) {
+  if (loading) {
     return <div>로딩 중...</div>
   }
 
