@@ -160,21 +160,31 @@ export async function POST(
     const supabase = createAdminClient()
     console.log("✅ Supabase Admin 클라이언트 생성 완료");
     
-    // 1. 먼저 purchases 테이블에서 조회
+    // 1. 먼저 purchases 테이블에서 조회 (구매자와 판매자 정보 포함)
     const { data: purchase, error: purchaseError } = await supabase
       .from("purchases")
-      .select("*")
+      .select(`
+        *,
+        post:posts(*, author:users!posts_author_id_fkey(*)),
+        buyer:users!purchases_buyer_id_fkey(*),
+        seller:users!purchases_seller_id_fkey(*)
+      `)
       .eq("order_number", order_number)
       .maybeSingle()
 
     let transactionData = purchase;
     let isProposalTransaction = false;
 
-    // 2. purchases에서 못 찾았으면 proposal_transactions에서 조회
+    // 2. purchases에서 못 찾았으면 proposal_transactions에서 조회 (구매자와 판매자 정보 포함)
     if (!purchase && !purchaseError) {
       const { data: proposalTransaction, error: proposalError } = await supabase
         .from("proposal_transactions")
-        .select("*")
+        .select(`
+          *,
+          posts!proposal_transactions_post_id_fkey(*, author:users!posts_author_id_fkey(*)),
+          buyer:users!proposal_transactions_buyer_id_fkey(*),
+          seller:users!proposal_transactions_seller_id_fkey(*)
+        `)
         .eq("order_number", order_number)
         .maybeSingle()
 
@@ -253,15 +263,21 @@ export async function POST(
     if (updatedStatus === 'CONFIRMED') {
       try {
         console.log("📱 구매 확정 알림톡 발송 시작");
+        console.log("🔍 거래 데이터 구조:", JSON.stringify(transactionData, null, 2));
         
-        const buyerData = transactionData.buyer;
-        const sellerData = transactionData.seller;
-        const postData = transactionData.post;
+        // 구매자와 판매자 정보 추출
+        const buyerData = transactionData?.buyer;
+        const sellerData = transactionData?.seller;
+        const postData = transactionData?.post || transactionData?.posts;
         const productName = postData?.title || postData?.event_name || '티켓';
         
+        console.log("👤 구매자 정보:", buyerData);
+        console.log("🏪 판매자 정보:", sellerData);
+        console.log("🎫 상품 정보:", { productName, postData });
+        
         // 구매자에게 구매 확정 알림톡 발송
-        if (buyerData && buyerData.phone_number) {
-          console.log(`📞 구매자 ${buyerData.name}(${buyerData.phone_number})에게 구매 확정 알림톡 발송`);
+        if (buyerData?.phone_number) {
+          console.log(`📞 구매자 ${buyerData.name || '구매자'}(${buyerData.phone_number})에게 구매 확정 알림톡 발송`);
           
           const buyerResult = await sendOrderConfirmedNotification(
             buyerData.phone_number,
@@ -276,12 +292,12 @@ export async function POST(
             console.error("❌ 구매자 구매 확정 알림톡 발송 실패:", buyerResult.error);
           }
         } else {
-          console.log("⚠️ 구매자 전화번호 없음: 구매자 알림톡 발송 건너뜀");
+          console.log("⚠️ 구매자 전화번호 없음:", buyerData);
         }
         
         // 판매자에게 구매 확정 알림톡 발송
-        if (sellerData && sellerData.phone_number) {
-          console.log(`📞 판매자 ${sellerData.name}(${sellerData.phone_number})에게 구매 확정 알림톡 발송`);
+        if (sellerData?.phone_number) {
+          console.log(`📞 판매자 ${sellerData.name || '판매자'}(${sellerData.phone_number})에게 구매 확정 알림톡 발송`);
           
           const sellerResult = await sendOrderConfirmedNotification(
             sellerData.phone_number,
@@ -296,7 +312,7 @@ export async function POST(
             console.error("❌ 판매자 구매 확정 알림톡 발송 실패:", sellerResult.error);
           }
         } else {
-          console.log("⚠️ 판매자 전화번호 없음: 판매자 알림톡 발송 건너뜀");
+          console.log("⚠️ 판매자 전화번호 없음:", sellerData);
         }
         
       } catch (kakaoError) {
