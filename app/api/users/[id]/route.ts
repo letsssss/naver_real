@@ -13,10 +13,12 @@ function addCorsHeaders(response: NextResponse) {
 // 특정 ID의 사용자 정보를 가져오는 API
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = await params.id;
+    // Next.js 15: params를 await 해야 함
+    const resolvedParams = await params;
+    const id = resolvedParams.id;
     console.log(`사용자 정보 조회 API 호출됨 - ID: ${id}`);
     
     // ID가 숫자인지 확인

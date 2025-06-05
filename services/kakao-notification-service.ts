@@ -76,7 +76,8 @@ export async function sendKakaoNotification(
 export async function sendNewMessageNotification(to: string, name: string) {
   const phoneNumber = to.replace(/-/g, '');
 
-  // 1단계: 10분 내 발송 제한 확인
+  // 1단계: 10분 내 발송 제한 확인 - 주석처리 (10분 제한 해제)
+  /*
   const canSend = await canSendKakao(phoneNumber, 'NEW_MESSAGE');
   
   if (!canSend.canSend) {
@@ -86,6 +87,10 @@ export async function sendNewMessageNotification(to: string, name: string) {
     }
     return { success: false, reason: 'cooldown', debugInfo: canSend.debugInfo };
   }
+  */
+
+  // 10분 제한 없이 바로 발송
+  console.log(`📱 카카오 알림톡 발송 (제한 해제): ${phoneNumber}`);
 
   const result = await sendKakaoNotification(
     to,
@@ -96,6 +101,7 @@ export async function sendNewMessageNotification(to: string, name: string) {
     }
   );
 
+  // 로그 저장은 유지 (통계용)
   if (result.success) {
     await updateKakaoSendLog(phoneNumber, 'NEW_MESSAGE');
   }

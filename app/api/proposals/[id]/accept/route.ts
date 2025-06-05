@@ -24,10 +24,12 @@ async function createSimpleOrderNumber() {
 // POST: 제안 수락
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const proposalId = parseInt(params.id);
+    // Next.js 15: params를 await 해야 함
+    const resolvedParams = await params;
+    const proposalId = parseInt(resolvedParams.id);
     
     // Authorization 헤더에서 토큰 추출
     const authHeader = req.headers.get('Authorization');
@@ -88,12 +90,12 @@ export async function POST(
     // 3. 트랜잭션으로 제안 수락 및 거래 생성
     const orderNumber = `ORDER-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     
-    // 제안 상태 업데이트
+    // 제안 상태 업데이트 (accepted_at 컬럼 제거 - 테이블에 없음)
     const { error: updateError } = await adminSupabase
       .from('proposals')
       .update({ 
         status: 'ACCEPTED',
-        accepted_at: new Date().toISOString()
+        updated_at: new Date().toISOString()
       })
       .eq('id', proposalId);
 
@@ -101,7 +103,7 @@ export async function POST(
       throw updateError;
     }
 
-    // 거래 생성 (purchases 테이블)
+    // 거래 생성 (purchases 테이블) - ticket_info 컬럼 제거
     const { data: purchase, error: purchaseError } = await adminSupabase
       .from('purchases')
       .insert({
@@ -112,12 +114,7 @@ export async function POST(
         quantity: 1,
         total_price: proposal.proposed_price,
         status: 'PENDING_PAYMENT',
-        ticket_info: {
-          section: proposal.section_name,
-          price: proposal.proposed_price,
-          event_date: post.event_date,
-          event_venue: post.event_venue
-        },
+        selected_seats: proposal.section_name, // 좌석 정보는 selected_seats 컬럼에 저장
         created_at: new Date().toISOString()
       })
       .select()

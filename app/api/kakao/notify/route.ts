@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { sendNewMessageNotification } from '@/services/kakao-notification-service';
 
 // 반환 타입을 정의하여 타입 에러 해결
@@ -18,12 +19,19 @@ export const runtime = 'nodejs';
 console.log('🌐 카카오 알림 API 진입');
 
 // 카카오 알림톡 전송 함수
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   console.log('📣 카카오 알림 POST 함수 호출됨:', new Date().toISOString());
   
+  // 환경 변수 디버깅 정보 추가
+  console.log('🔑 환경 변수 확인:');
+  console.log('SOLAPI_API_KEY 존재:', !!process.env.SOLAPI_API_KEY);
+  console.log('SOLAPI_API_KEY 길이:', process.env.SOLAPI_API_KEY?.length || 0);
+  console.log('SOLAPI_API_SECRET 존재:', !!process.env.SOLAPI_API_SECRET);
+  console.log('SOLAPI_API_SECRET 길이:', process.env.SOLAPI_API_SECRET?.length || 0);
+
   try {
     // 요청 파싱
-    const body = await request.json();
+    const body = await req.json();
     console.log('📩 요청 데이터:', JSON.stringify(body, null, 2));
     
     const { to, name, message } = body;
@@ -38,7 +46,10 @@ export async function POST(request: Request) {
     console.log('🧪 name 변수 타입:', typeof name);
     console.log('🧪 name 변수 값:', name);
     console.log('🧪 message 미리보기:', message ? message.substring(0, 30) : '없음');
-    console.log('🔗 URL 변수 추가됨: www.easyticket82.com/ticket-cancellation');
+    
+    // URL 변수 추가
+    const url = 'www.easyticket82.com/ticket-cancellation';
+    console.log('🔗 URL 변수 추가됨:', url);
     
     // 새 메시지 알림 서비스 호출 - 메시지 정보도 활용
     // sendNewMessageNotification는 message 파라미터를 받지 않으므로

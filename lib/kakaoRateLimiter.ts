@@ -21,6 +21,19 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     recordsFound: number;
   };
 }> {
+  // 10분 제한 해제: 항상 true 반환
+  console.log(`📱 [카카오 제한 해제] ${phoneNumber.replace(/-/g, '')} (${messageType}) - 제한 없이 발송 허용`);
+  
+  return { 
+    canSend: true,
+    debugInfo: {
+      currentTime: new Date().toISOString(),
+      tenMinutesAgo: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      recordsFound: 0
+    }
+  };
+
+  /* 원래 제한 로직 (주석처리)
   try {
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
@@ -89,6 +102,7 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     // 오류 발생 시 안전하게 false 반환 (발송 제한)
     return { canSend: false };
   }
+  */
 }
 
 /**

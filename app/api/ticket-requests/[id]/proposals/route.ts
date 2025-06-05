@@ -16,13 +16,15 @@ export async function OPTIONS() {
 // POST: 티켓 요청에 제안 생성
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  console.log('[🎯 제안 API] POST 요청 시작 - 티켓 요청 ID:', params.id);
+  // Next.js 15: params를 await 해야 함
+  const resolvedParams = await params;
+  console.log('[🎯 제안 API] POST 요청 시작 - 티켓 요청 ID:', resolvedParams.id);
   
   try {
     const supabase = createAdminClient();
-    const requestId = params.id;
+    const requestId = resolvedParams.id;
     
     if (!requestId) {
       return NextResponse.json(
@@ -145,13 +147,15 @@ export async function POST(
 // GET: 티켓 요청의 제안 목록 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  console.log('[🎯 제안 API] GET 요청 시작 - 티켓 요청 ID:', params.id);
+  // Next.js 15: params를 await 해야 함
+  const resolvedParams = await params;
+  console.log('[🎯 제안 API] GET 요청 시작 - 티켓 요청 ID:', resolvedParams.id);
   
   try {
     const supabase = createAdminClient();
-    const requestId = params.id;
+    const requestId = resolvedParams.id;
     
     if (!requestId) {
       return NextResponse.json(
