@@ -3,9 +3,10 @@ import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function GET(
   req: Request,
-  { params }: { params: { post_id: string } }
+  { params }: { params: Promise<{ post_id: string }> }
 ) {
-  const postId = Number(params.post_id);
+  const resolvedParams = await params;
+  const postId = Number(resolvedParams.post_id);
 
   if (isNaN(postId)) {
     return NextResponse.json({ error: "post_id가 숫자가 아닙니다." }, { status: 400 });

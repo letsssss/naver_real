@@ -13,14 +13,14 @@ function addCorsHeaders(response: NextResponse) {
 // 특정 게시글 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createAdminClient();
     
-    // params.id 비동기적으로 처리 (await 사용)
-    const paramsId = await params.id;
-    const id = parseInt(paramsId);
+    // params를 먼저 await하고 그 다음 id에 접근
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id);
     
     if (isNaN(id)) {
       return addCorsHeaders(NextResponse.json(
@@ -137,13 +137,14 @@ export async function GET(
 // 게시글 삭제
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createAdminClient();
     
-    // params.id 비동기적으로 처리 - await 추가
-    const paramsId = await params.id;
+    // params를 먼저 await하고 그 다음 id에 접근
+    const resolvedParams = await params;
+    const paramsId = resolvedParams.id;
     console.log("게시물 삭제 API 호출됨 - ID:", paramsId);
     
     // 현재 인증된 사용자 정보 가져오기

@@ -576,23 +576,37 @@ export default function MyPage() {
   // 게시물 삭제 핸들러
   const handleDeletePost = async (postId: number) => {
     try {
-      const supabaseClient = await getSupabaseClient();
-      const { error } = await supabaseClient
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-
-      if (error) {
-        throw error;
+      // 현재 사용자 ID 가져오기
+      if (!user?.id) {
+        toast.error('로그인이 필요합니다');
+        return;
       }
 
-      toast.success('게시글이 삭제되었습니다');
+      // API를 통해 게시물 삭제 (권한 확인 포함)
+      const response = await fetch(`/api/posts/${postId}?userId=${user.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || '게시글 삭제에 실패했습니다');
+      }
+
+      toast.success(result.message || '게시글이 삭제되었습니다');
       
-      // 목록 새로고침
-      fetchRequestedTickets();
+      // 판매 목록 새로고침
+      if (user) {
+        fetchOngoingSales(user, setSaleStatus, setOngoingSales, setOriginalSales, setIsLoadingSales);
+      }
       
     } catch (error) {
-      toast.error('게시글 삭제에 실패했습니다');
+      console.error('게시글 삭제 오류:', error);
+      toast.error(error instanceof Error ? error.message : '게시글 삭제에 실패했습니다');
     }
   };
 

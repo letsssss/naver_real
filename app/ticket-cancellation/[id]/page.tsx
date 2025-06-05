@@ -220,9 +220,9 @@ export default function TicketCancellationDetail() {
           if (contentObj.sections && Array.isArray(contentObj.sections)) {
             seatOptions = contentObj.sections.map((section: any) => ({
               id: section.id || String(Math.random()),
-              label: section.name || '알 수 없는 구역',
+              label: section.label || section.name || '알 수 없는 구역',
               price: section.price || eventPrice,
-              available: true
+              available: section.available !== false
             }));
           }
         } catch (error) {
