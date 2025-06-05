@@ -435,16 +435,27 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold">채팅</h2>
+        <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-lg">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-lg">
+                {otherUser?.name?.charAt(0) || '김'}
+              </span>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                {otherUser?.name || '김대기'}
+              </h2>
+              <p className="text-sm text-gray-500">구매자</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-400 hover:text-gray-600 p-1"
           >
-            <span className="sr-only">닫기</span>
-            ✕
+            <X className="h-6 w-6" />
           </button>
         </div>
 
@@ -452,7 +463,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
         {renderConnectionStatus()}
 
         {/* 채팅 내용 */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50" style={{ minHeight: '400px', maxHeight: '500px' }}>
           {error ? (
             <div className="text-center text-red-600 py-4">
               {error}
@@ -465,27 +476,28 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
             <div className="space-y-3">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[70%] rounded-lg p-3 ${
-                    message.isMine
-                      ? 'bg-teal-500 text-white rounded-tr-none'
-                      : 'bg-gray-200 text-gray-800 rounded-tl-none'
-                  }`}>
-                    <p className="text-sm break-words">{message.text}</p>
-                    <div className="flex items-center justify-end mt-1 space-x-1">
-                      <span className="text-xs opacity-80">
+                  <div className={`max-w-[80%] ${message.isMine ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
+                    <div className={`rounded-2xl px-4 py-2 ${
+                      message.isMine
+                        ? 'bg-teal-500 text-white'
+                        : 'bg-white text-gray-800 border border-gray-200'
+                    }`}>
+                      <p className="text-sm break-words">{message.text}</p>
+                    </div>
+                    <div className="flex items-center mt-1 space-x-1">
+                      <span className="text-xs text-gray-500">
                         {new Date(message.timestamp).toLocaleTimeString('ko-KR', { 
                           hour: '2-digit', 
                           minute: '2-digit',
                           hour12: true,
                           timeZone: 'Asia/Seoul' 
-                        })}
+                        }).replace('AM', '오전').replace('PM', '오후')} 전송됨
                       </span>
                       {message.isMine && (
-                        <span className="text-xs">
+                        <span className="text-xs text-gray-400">
                           {message.status === 'sending' && '전송 중...'}
                           {message.status === 'failed' && '⚠️'}
-                          {message.status === 'sent' && (message.isRead ? '읽음' : '전송됨')}
-                          {!message.status && (message.isRead ? '읽음' : '전송됨')}
+                          {(message.status === 'sent' || !message.status) && ''}
                         </span>
                       )}
                     </div>
@@ -497,7 +509,8 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
           )}
         </div>
 
-        <div className="p-4 border-t bg-white">
+        {/* 메시지 입력 영역 */}
+        <div className="p-4 border-t bg-white rounded-b-lg">
           <div className="flex items-center space-x-2">
             <input
               ref={inputRef}
@@ -511,16 +524,16 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
                 }
               }}
               placeholder="메시지를 입력하세요..."
-              className="flex-1 py-2 px-4 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="flex-1 py-3 px-4 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm"
               disabled={isLoading || !!error}
             />
-            <Button
+            <button
               onClick={handleSendMessage}
               disabled={isLoading || !!error || !newMessage.trim()}
-              className="rounded-full w-10 h-10 flex items-center justify-center p-0"
+              className="rounded-full w-12 h-12 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 flex items-center justify-center text-white transition-colors"
             >
               <Send className="h-5 w-5" />
-            </Button>
+            </button>
           </div>
         </div>
       </div>
