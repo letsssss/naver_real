@@ -51,19 +51,8 @@ export default function ConfirmedPurchasesPage() {
           created_at,
           updated_at,
           buyer_confirmed_at,
-          posts!inner (
-            id,
-            title,
-            event_date,
-            event_venue,
-            ticket_price,
-            category
-          ),
-          sellers:seller_id (
-            id,
-            name,
-            phone_number
-          )
+          post_id,
+          seller_id
         `)
         .eq('buyer_id', user.id)
         .eq('status', 'COMPLETED')
@@ -73,27 +62,40 @@ export default function ConfirmedPurchasesPage() {
         throw error;
       }
 
-      if (data) {
-        // 백엔드 데이터를 프론트엔드 형식에 맞게 변환
-        const formattedPurchases = data.map((room: any) => {
-          const post = room.posts;
-          const seller = room.sellers;
-          
-          return {
-            id: room.id,
-            title: post?.title || '제목 없음',
-            date: post?.event_date ? new Date(post.event_date).toLocaleDateString('ko-KR') : '날짜 미정',
-            venue: post?.event_venue || '장소 미정',
-            price: post?.ticket_price ? `${post.ticket_price.toLocaleString()}원` : '가격 미정',
-            status: '거래완료',
-            seller: seller?.name || '판매자',
-            completedAt: room.buyer_confirmed_at ? 
-              new Date(room.buyer_confirmed_at).toLocaleDateString('ko-KR') : 
-              new Date(room.updated_at).toLocaleDateString('ko-KR'),
-            reviewSubmitted: false, // 일단 기본값으로 설정, 추후 리뷰 테이블과 조인하여 실제 값 가져올 수 있음
-            order_number: room.id.toString() // room id를 주문번호로 사용
-          };
-        });
+      if (data && data.length > 0) {
+        // 각 거래에 대해 별도로 posts와 seller 정보 가져오기
+        const formattedPurchases = await Promise.all(
+          data.map(async (room: any) => {
+            // 포스트 정보 가져오기
+            const { data: postData } = await supabaseClient
+              .from('posts')
+              .select('id, title, event_date, event_venue, ticket_price, category')
+              .eq('id', room.post_id)
+              .single();
+
+            // 판매자 정보 가져오기
+            const { data: sellerData } = await supabaseClient
+              .from('profiles')
+              .select('id, name, phone_number')
+              .eq('id', room.seller_id)
+              .single();
+            
+            return {
+              id: room.id,
+              title: postData?.title || '제목 없음',
+              date: postData?.event_date ? new Date(postData.event_date).toLocaleDateString('ko-KR') : '날짜 미정',
+              venue: postData?.event_venue || '장소 미정',
+              price: postData?.ticket_price ? `${postData.ticket_price.toLocaleString()}원` : '가격 미정',
+              status: '거래완료',
+              seller: sellerData?.name || '판매자',
+              completedAt: room.buyer_confirmed_at ? 
+                new Date(room.buyer_confirmed_at).toLocaleDateString('ko-KR') : 
+                new Date(room.updated_at).toLocaleDateString('ko-KR'),
+              reviewSubmitted: false, // 일단 기본값으로 설정, 추후 리뷰 테이블과 조인하여 실제 값 가져올 수 있음
+              order_number: room.id.toString() // room id를 주문번호로 사용
+            };
+          })
+        );
 
         // 로컬 스토리지에서 리뷰 작성 완료된 주문번호 목록 가져오기
         const reviewCompletedOrders = JSON.parse(localStorage.getItem('reviewCompletedOrders') || '{}');
