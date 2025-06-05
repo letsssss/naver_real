@@ -9,9 +9,18 @@ type KakaoMessageType = 'NEW_MESSAGE' | 'PURCHASE' | 'TICKET';
  * 특정 전화번호/메시지 타입 조합에 대해 카카오 알림톡을 발송할 수 있는지 확인
  * @param phoneNumber 전화번호
  * @param messageType 메시지 타입
- * @returns 발송 가능 여부
+ * @returns 발송 가능 여부와 디버깅 정보
  */
-export async function canSendKakao(phoneNumber: string, messageType: KakaoMessageType): Promise<boolean> {
+export async function canSendKakao(phoneNumber: string, messageType: KakaoMessageType): Promise<{
+  canSend: boolean;
+  debugInfo?: {
+    currentTime: string;
+    tenMinutesAgo: string;
+    lastSentTime?: string;
+    minutesElapsed?: number;
+    recordsFound: number;
+  };
+}> {
   try {
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
@@ -39,28 +48,46 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
       .limit(1);
     
     console.log(`📊 조회 결과: ${data?.length || 0}개의 최근 로그`);
+    
+    const debugInfo: {
+      currentTime: string;
+      tenMinutesAgo: string;
+      recordsFound: number;
+      lastSentTime?: string;
+      minutesElapsed?: number;
+    } = {
+      currentTime: now.toISOString(),
+      tenMinutesAgo: tenMinutesAgo.toISOString(),
+      recordsFound: data?.length || 0
+    };
+    
     if (data && data.length > 0) {
-      console.log(`📊 가장 최근 발송: ${data[0].created_at}`);
       const lastSentTime = new Date(data[0].created_at);
       const timeDiff = now.getTime() - lastSentTime.getTime();
       const minutesDiff = Math.floor(timeDiff / (1000 * 60));
+      
+      debugInfo.lastSentTime = data[0].created_at;
+      debugInfo.minutesElapsed = minutesDiff;
+      
+      console.log(`📊 가장 최근 발송: ${data[0].created_at}`);
       console.log(`📊 경과 시간: ${minutesDiff}분`);
     }
     
     if (error) {
       console.error(`❌ 카카오 로그 조회 오류:`, error);
       // 오류 발생 시 안전하게 false 반환 (발송 제한)
-      return false;
+      return { canSend: false };
     }
     
     // 최근 10분 내 발송 기록이 없으면 true, 있으면 false
     const canSend = data.length === 0;
     console.log(`✅ 발송 가능 여부: ${canSend}`);
-    return canSend;
+    
+    return { canSend, debugInfo };
   } catch (error) {
     console.error(`❌ 카카오 제한 체크 오류:`, error);
     // 오류 발생 시 안전하게 false 반환 (발송 제한)
-    return false;
+    return { canSend: false };
   }
 }
 

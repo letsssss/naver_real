@@ -862,9 +862,10 @@ export default function MyPage() {
                 ) : (
                   <div className="space-y-4">
                     {requestedTickets.map((ticket) => {
-                      // 요청 상태에 따른 UI 결정
-                      const isAccepted = ticket.requestStatus === 'ACCEPTED';
-                      const hasProposals = ticket.requestStatus === 'HAS_PROPOSALS';
+                      // 요청 상태에 따른 UI 결정 - 실제 데이터를 기반으로 계산
+                      const isAccepted = !!ticket.acceptedProposal;
+                      const hasProposals = ticket.proposalCount > 0 && !isAccepted;
+                      const pendingProposalCount = ticket.proposals?.filter(p => p.status === 'PENDING').length || 0;
                       
                       return (
                         <div key={ticket.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
@@ -964,7 +965,7 @@ export default function MyPage() {
                                 </span>
                               ) : hasProposals ? (
                                 <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">
-                                  제안 {ticket.pendingProposalCount}개
+                                  제안 {pendingProposalCount}개
                                   {hasNewProposals(ticket.id, ticket.proposalCount) && (
                                     <span className="ml-1 bg-red-500 text-white px-1.5 py-0.5 rounded-full text-xs animate-pulse">
                                       NEW

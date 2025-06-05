@@ -76,10 +76,15 @@ export async function sendKakaoNotification(
 export async function sendNewMessageNotification(to: string, name: string) {
   const phoneNumber = to.replace(/-/g, '');
 
+  // 1단계: 10분 내 발송 제한 확인
   const canSend = await canSendKakao(phoneNumber, 'NEW_MESSAGE');
-  if (!canSend) {
-    console.log('⏱️ [NEW_MESSAGE] 최근 10분 내 발송 기록 있음 → 생략');
-    return { success: false, reason: 'cooldown' };
+  
+  if (!canSend.canSend) {
+    console.log(`⏱️ 카카오 알림톡 제한 (10분 내 발송됨): ${phoneNumber}`);
+    if (canSend.debugInfo) {
+      console.log(`🔍 디버깅 정보:`, canSend.debugInfo);
+    }
+    return { success: false, reason: 'cooldown', debugInfo: canSend.debugInfo };
   }
 
   const result = await sendKakaoNotification(

@@ -8,6 +8,7 @@ interface KakaoNotificationResult {
   data?: any;
   error?: string;
   reason?: 'cooldown'; // rate limiting을 위한 추가 필드
+  debugInfo?: any;
 }
 
 // Node.js 런타임으로 설정 (환경 변수 접근을 위해 필수)
@@ -52,11 +53,17 @@ export async function POST(request: Request) {
         data: result
       });
     } else if (result.reason === 'cooldown') {
-      // 제한 응답 (10분에 1회)
+      // 제한 응답 (10분에 1회) - 디버깅 정보 추가
       return NextResponse.json({
         success: false,
         error: '최근 10분 내 이미 알림톡이 발송되었습니다.',
-        reason: 'cooldown'
+        reason: 'cooldown',
+        debug: result.debugInfo || {
+          currentTime: new Date().toISOString(),
+          tenMinutesAgo: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+          phoneNumber: to.replace(/-/g, ''),
+          messageType: 'NEW_MESSAGE'
+        }
       }, { status: 429 }); // 429 Too Many Requests
     } else {
       // 서비스 실패 응답 - 반환 값 구조에 맞게 수정
