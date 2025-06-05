@@ -239,14 +239,14 @@ export default function TicketCancellationDetail() {
             const { data: ratingData, error: ratingError } = await supabaseClient
               .from('seller_avg_rating')
               .select('avg_rating, review_count')
-              .eq('seller_id', authorId)
-              .single();
+              .eq('seller_id', authorId);
 
             if (ratingError) {
               console.error('판매자 평점 조회 실패:', ratingError);
-            } else if (ratingData) {
-              sellerRating = ratingData.avg_rating || 0;
-              reviewCount = ratingData.review_count || 0;
+            } else if (ratingData && ratingData.length > 0) {
+              // 첫 번째 결과 사용 (일반적으로 하나의 결과만 있을 것임)
+              sellerRating = ratingData[0].avg_rating || 0;
+              reviewCount = ratingData[0].review_count || 0;
             }
           } catch (error) {
             console.error('판매자 평점 조회 중 오류:', error);
