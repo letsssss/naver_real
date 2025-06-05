@@ -437,7 +437,7 @@ export default function ChatModal({ roomId, onClose, onError }: ChatModalProps) 
             if (notifyResult.success) {
               console.log('✅ 카카오 알림톡 전송 성공:', notifyResult);
             } else if (notifyResult.reason === 'cooldown') {
-              console.log('⏱️ 카카오 알림톡 제한 (1시간 내 발송됨):', notifyResult.error);
+              console.log('⏱️ 카카오 알림톡 제한 (10분 내 발송됨):', notifyResult.error);
             } else {
               console.error('⚠️ 카카오 알림톡 전송 실패:', notifyResult.error);
             }

@@ -78,7 +78,7 @@ export async function sendNewMessageNotification(to: string, name: string) {
 
   const canSend = await canSendKakao(phoneNumber, 'NEW_MESSAGE');
   if (!canSend) {
-    console.log('⏱️ [NEW_MESSAGE] 최근 1시간 내 발송 기록 있음 → 생략');
+    console.log('⏱️ [NEW_MESSAGE] 최근 10분 내 발송 기록 있음 → 생략');
     return { success: false, reason: 'cooldown' };
   }
 

@@ -16,9 +16,9 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
     // 하이픈 제거된 번호 사용
     const cleanPhone = phoneNumber.replace(/-/g, '');
     
-    // 1시간 전 시간 계산
-    const oneHourAgo = new Date();
-    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+    // 10분 전 시간 계산
+    const tenMinutesAgo = new Date();
+    tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10);
     
     // Supabase 클라이언트 가져오기
     const supabase = await getSupabaseClient();
@@ -29,7 +29,7 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
       .select('*')
       .eq('phone_number', cleanPhone)
       .eq('message_type', messageType)
-      .gt('created_at', oneHourAgo.toISOString())
+      .gt('created_at', tenMinutesAgo.toISOString())
       .order('created_at', { ascending: false })
       .limit(1);
     
@@ -38,7 +38,7 @@ export async function canSendKakao(phoneNumber: string, messageType: KakaoMessag
       return false;
     }
     
-    // 최근 1시간 내 발송 기록이 없으면 true, 있으면 false
+    // 최근 10분 내 발송 기록이 없으면 true, 있으면 false
     return data.length === 0;
   } catch (error) {
     // 오류 발생 시 안전하게 false 반환 (발송 제한)

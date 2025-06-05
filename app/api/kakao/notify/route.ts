@@ -52,10 +52,10 @@ export async function POST(request: Request) {
         data: result
       });
     } else if (result.reason === 'cooldown') {
-      // 제한 응답 (1시간에 1회)
+      // 제한 응답 (10분에 1회)
       return NextResponse.json({
         success: false,
-        error: '최근 1시간 내 이미 알림톡이 발송되었습니다.',
+        error: '최근 10분 내 이미 알림톡이 발송되었습니다.',
         reason: 'cooldown'
       }, { status: 429 }); // 429 Too Many Requests
     } else {
