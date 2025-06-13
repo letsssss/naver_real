@@ -55,6 +55,7 @@ interface PopularTicket {
   date: string;
   venue: string;
 }
+
 export default function TicketCancellationPage() {
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
@@ -66,6 +67,12 @@ export default function TicketCancellationPage() {
   const [error, setError] = useState("")
   const [popularTickets, setPopularTickets] = useState<PopularTicket[]>([])
   const [successRate, setSuccessRate] = useState<number | string>(90)
+  
+  // 페이지네이션 상태 추가
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const itemsPerPage = 12 // 한 페이지에 표시할 티켓 수
 
   useEffect(() => {
     setMounted(true)
@@ -105,15 +112,22 @@ export default function TicketCancellationPage() {
     ])
   }, [])
 
-  // 취켓팅 가능 티켓 가져오기
+  // 페이지 변경 시 데이터 다시 가져오기
+  useEffect(() => {
+    if (mounted) {
+      fetchCancellationTickets()
+    }
+  }, [currentPage, mounted])
+
+  // 취켓팅 가능 티켓 가져오기 (페이지네이션 적용)
   const fetchCancellationTickets = async () => {
     try {
       setLoading(true);
       setError("");
 
-      let apiUrl = '/api/available-posts';
+      let apiUrl = `/api/available-posts?page=${currentPage}&limit=${itemsPerPage}`;
       const timestamp = Date.now();
-      apiUrl = `${apiUrl}?t=${timestamp}`;
+      apiUrl = `${apiUrl}&t=${timestamp}`;
 
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -127,7 +141,19 @@ export default function TicketCancellationPage() {
       });
 
       const data = await response.json();
+      console.log('API 응답 데이터:', data); // 디버깅용
+      
       const posts = data.posts || [];
+      
+      // 페이지네이션 정보 설정
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages || 1);
+        setTotalCount(data.pagination.totalCount || 0);
+      } else {
+        // 기존 구조 지원
+        setTotalPages(Math.ceil(posts.length / itemsPerPage));
+        setTotalCount(posts.length);
+      }
 
       if (posts.length === 0) {
         setTickets([]);
@@ -417,7 +443,7 @@ export default function TicketCancellationPage() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {loading ? (
               // 로딩 상태 표시
-              Array(4).fill(0).map((_, index) => (
+              Array(itemsPerPage).fill(0).map((_, index) => (
                 <div key={index} className="bg-white rounded-xl shadow-md overflow-hidden p-4 animate-pulse">
                   <div className="w-full h-48 bg-gray-200 rounded mb-4"></div>
                   <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
@@ -559,6 +585,26 @@ export default function TicketCancellationPage() {
               })
             )}
           </div>
+
+          {/* 페이지네이션 UI */}
+          {!loading && totalPages > 1 && (
+            <div className="flex justify-center space-x-2 mt-8">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={currentPage === pageNum ? 'bg-blue-500 text-white' : ''}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
