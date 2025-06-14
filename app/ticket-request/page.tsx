@@ -400,8 +400,8 @@ export default function TicketRequestPage() {
                             />
                             
                             <div className="flex items-center gap-2">
-                  <Input
-                    type="text"
+                              <Input
+                                type="text"
                                 value={formatPrice(section.price)}
                                 onChange={(e) => handleSectionPriceChange(section.id, e.target.value)}
                                 placeholder="가격 (최소 1,000원)"
@@ -409,6 +409,7 @@ export default function TicketRequestPage() {
                               />
                               <span className="text-gray-500 whitespace-nowrap text-sm">원</span>
                             </div>
+                            <p className="text-xs text-gray-500 mt-1">※ 티켓값이 포함된 가격으로 입력해주세요</p>
                           </div>
                         </div>
                       ))}
