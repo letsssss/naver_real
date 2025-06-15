@@ -59,6 +59,18 @@ export type Like = {
 }
 
 /**
+ * 피드백 테이블 구조 (feedback)
+ */
+export type Feedback = {
+  id: number;
+  content: string;
+  created_at: string;
+  updated_at?: string | null;
+  status: 'pending' | 'reviewed' | 'resolved';
+  admin_notes?: string;
+}
+
+/**
  * API 응답용 게시물 타입 (camelCase)
  */
 export type PostResponse = {
@@ -148,6 +160,29 @@ export interface Database {
           profile_image?: string;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      feedback: {
+        Row: {
+          id: number;
+          content: string;
+          created_at: string;
+          updated_at?: string;
+          status: 'pending' | 'reviewed' | 'resolved';
+          admin_notes?: string;
+        };
+        Insert: {
+          content: string;
+          created_at?: string;
+          updated_at?: string;
+          status?: 'pending' | 'reviewed' | 'resolved';
+          admin_notes?: string;
+        };
+        Update: {
+          content?: string;
+          updated_at?: string;
+          status?: 'pending' | 'reviewed' | 'resolved';
+          admin_notes?: string;
         };
       };
       chats: {
