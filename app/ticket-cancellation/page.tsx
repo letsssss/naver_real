@@ -378,33 +378,33 @@ export default function TicketCancellationPage() {
 
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-visible">
-        <section className="container mx-auto flex flex-col items-center justify-center py-16 px-4 relative z-10">
-          <div className="mb-4 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm">
+        <section className="container mx-auto flex flex-col items-center justify-center py-16 px-4 relative z-10 max-[640px]:py-8 max-[640px]:px-3">
+          <div className="mb-4 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm max-[640px]:mb-3 max-[640px]:px-2 max-[640px]:py-0.5 max-[640px]:text-xs">
             취소표 예매 성공률 {typeof successRate === 'number' ? `${successRate}%` : successRate}
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold text-white text-center mb-4 leading-tight">
+          <h1 className="text-5xl font-bold text-white text-center mb-4 leading-tight max-[640px]:text-2xl max-[640px]:mb-3">
             놓친 티켓, 취소표로 다시 잡자!
           </h1>
-          <p className="text-base md:text-lg text-white/90 text-center mb-8 max-w-xl">
+          <p className="text-lg text-white/90 text-center mb-8 max-w-xl max-[640px]:text-sm max-[640px]:mb-6 max-[640px]:max-w-sm">
             안전하고 빠르게 예매 완료!  
             <br />
             안전한 입장까지 도와드립니다.
           </p>
-          <form onSubmit={handleSearch} className="w-full max-w-md flex flex-col sm:flex-row gap-2">
+          <form onSubmit={handleSearch} className="w-full max-w-md flex flex-col sm:flex-row gap-2 max-[640px]:max-w-sm max-[640px]:gap-2">
             <Input
               type="search"
               placeholder="이벤트, 아티스트, 팀 검색"
-              className="flex-1 h-12 rounded-lg sm:rounded-r-none border-0 bg-white text-black placeholder:text-gray-500"
+              className="flex-1 h-12 rounded-lg sm:rounded-r-none border-0 bg-white text-black placeholder:text-gray-500 max-[640px]:h-10 max-[640px]:text-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="검색어 입력"
             />
             <Button
               type="submit"
-              className="h-12 px-8 rounded-none sm:rounded-l-none bg-[#FFD600] hover:bg-[#FFE600] text-black font-medium transition-colors"
+              className="h-12 px-8 rounded-none sm:rounded-l-none bg-[#FFD600] hover:bg-[#FFE600] text-black font-medium transition-colors max-[640px]:h-10 max-[640px]:px-6 max-[640px]:text-sm"
               style={{ borderTopRightRadius: '0.5rem', borderBottomRightRadius: '0.5rem', borderTopLeftRadius: '0', borderBottomLeftRadius: '0' }}
             >
-              <Search className="w-5 h-5 mr-2" />
+              <Search className="w-5 h-5 mr-2 max-[640px]:w-4 max-[640px]:h-4 max-[640px]:mr-1" />
               검색
             </Button>
           </form>
