@@ -623,18 +623,18 @@ export default function TicketCancellationPage() {
       {/* 취켓팅 서비스 설명 섹션 */}
       <section className="py-12 bg-gray-50">
         <div className="container mx-auto px-4">
-          <div className="bg-white rounded-xl shadow-sm p-8">
-            <h2 className="text-2xl font-bold mb-6">취켓팅 서비스란?</h2>
-            <div className="grid md:grid-cols-3 gap-8">
+          <div className="bg-white rounded-xl shadow-sm p-8 max-[640px]:p-4">
+            <h2 className="text-2xl font-bold mb-6 max-[640px]:text-xl max-[640px]:mb-4">취켓팅 서비스란?</h2>
+            <div className="grid grid-cols-3 gap-8 max-[640px]:gap-4">
               <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                  <Calendar className="h-8 w-8 text-[#0061FF]" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 max-[640px]:w-12 max-[640px]:h-12 max-[640px]:mb-2">
+                  <Calendar className="h-8 w-8 text-[#0061FF] max-[640px]:h-5 max-[640px]:w-5" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">안전한 입장</h3>
-                <p className="text-gray-600">본인 인증으로부터 안전하게 입장할 수 있습니다.</p>
+                <h3 className="text-lg font-semibold mb-2 max-[640px]:text-sm max-[640px]:mb-1">안전한 입장</h3>
+                <p className="text-gray-600 max-[640px]:text-xs">본인 인증으로부터 안전하게 입장할 수 있습니다.</p>
               </div>
               <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 max-[640px]:w-12 max-[640px]:h-12 max-[640px]:mb-2">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"
@@ -645,7 +645,7 @@ export default function TicketCancellationPage() {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-8 w-8 text-[#0061FF]"
+                    className="h-8 w-8 text-[#0061FF] max-[640px]:h-5 max-[640px]:w-5"
                   >
                     <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
                     <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
@@ -655,11 +655,11 @@ export default function TicketCancellationPage() {
                     <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">안전한 예매 대행</h3>
-                <p className="text-gray-600">100% 후입금 제도로 안심하고 진행하실 수 있습니다.</p>
+                <h3 className="text-lg font-semibold mb-2 max-[640px]:text-sm max-[640px]:mb-1">안전한 예매 대행</h3>
+                <p className="text-gray-600 max-[640px]:text-xs">100% 후입금 제도로 안심하고 진행하실 수 있습니다.</p>
               </div>
               <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 max-[640px]:w-12 max-[640px]:h-12 max-[640px]:mb-2">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="24"
@@ -670,13 +670,13 @@ export default function TicketCancellationPage() {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-8 w-8 text-[#0061FF]"
+                    className="h-8 w-8 text-[#0061FF] max-[640px]:h-5 max-[640px]:w-5"
                   >
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">높은 성공률</h3>
-                <p className="text-gray-600">
+                <h3 className="text-lg font-semibold mb-2 max-[640px]:text-sm max-[640px]:mb-1">높은 성공률</h3>
+                <p className="text-gray-600 max-[640px]:text-xs">
                   {typeof successRate === 'number' 
                     ? `${successRate}% 이상의 높은 예매 성공률을 자랑합니다.`
                     : '높은 예매 성공률을 자랑합니다.'}
