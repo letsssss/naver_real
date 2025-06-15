@@ -12,6 +12,8 @@ import { getSupabaseClient } from '@/lib/supabase'
 import { fetchTicketingSuccessRate } from "@/services/statistics-service"
 import SuccessRateBadge from "@/components/SuccessRateBadge"
 import RequestBadge from "@/components/RequestBadge"
+import { useIsMobile } from "@/hooks/useMediaQuery"
+import MobileHeader from "@/components/mobile/MobileHeader"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -73,6 +75,8 @@ export default function TicketCancellationPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const itemsPerPage = 12 // 한 페이지에 표시할 티켓 수
+
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     setMounted(true)
@@ -305,64 +309,72 @@ export default function TicketCancellationPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="w-full bg-white shadow-sm">
-        <div className="container mx-auto px-4 overflow-x-auto">
-          <div className="flex h-16 items-center justify-between min-w-[768px]">
-            <div className="flex items-center space-x-6">
-              <Link href="/" className="text-2xl font-bold text-[#0061FF] whitespace-nowrap">
-                이지티켓
-              </Link>
-              <Link
-                href="/proxy-ticketing"
-                className="text-gray-700 hover:text-[#0061FF] transition-colors border-r pr-6 whitespace-nowrap"
-              >
-                대리티켓팅
-              </Link>
-              <Link
-                href="/ticket-cancellation"
-                className="text-[#0061FF] transition-colors border-r pr-6 whitespace-nowrap font-medium"
-              >
-                취켓팅
-              </Link>
-              <Link href="/tickets" className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap">
-                티켓 구매/판매
-              </Link>
-            </div>
-            <div className="flex items-center space-x-6">
-              {mounted && user ? (
-                <>
-                  <div className="text-gray-700">
-                    <span className="font-medium text-[#0061FF]">{user.name}</span>님 환영합니다
-                  </div>
-                  <NotificationDropdown />
+      {/* 모바일 헤더 */}
+      <div className="block md:hidden">
+        <MobileHeader mounted={mounted} />
+      </div>
+
+      {/* 데스크톱 헤더 */}
+      <div className="hidden md:block">
+        <header className="w-full bg-white shadow-sm">
+          <div className="container mx-auto px-4 overflow-x-auto">
+            <div className="flex h-16 items-center justify-between min-w-[768px]">
+              <div className="flex items-center space-x-6">
+                <Link href="/" className="text-2xl font-bold text-[#0061FF] whitespace-nowrap">
+                  이지티켓
+                </Link>
+                <Link
+                  href="/proxy-ticketing"
+                  className="text-gray-700 hover:text-[#0061FF] transition-colors border-r pr-6 whitespace-nowrap"
+                >
+                  대리티켓팅
+                </Link>
+                <Link
+                  href="/ticket-cancellation"
+                  className="text-[#0061FF] transition-colors border-r pr-6 whitespace-nowrap font-medium"
+                >
+                  취켓팅
+                </Link>
+                <Link href="/tickets" className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap">
+                  티켓 구매/판매
+                </Link>
+              </div>
+              <div className="flex items-center space-x-6">
+                {mounted && user ? (
+                  <>
+                    <div className="text-gray-700">
+                      <span className="font-medium text-[#0061FF]">{user.name}</span>님 환영합니다
+                    </div>
+                    <NotificationDropdown />
+                    <AuthButtons />
+                    <Link href="/cart" className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap">
+                      장바구니
+                    </Link>
+                  </>
+                ) : mounted ? (
                   <AuthButtons />
-                  <Link href="/cart" className="text-gray-700 hover:text-[#0061FF] transition-colors whitespace-nowrap">
-                    장바구니
-                  </Link>
-                </>
-              ) : mounted ? (
-                <AuthButtons />
-              ) : (
-                // 마운트되기 전에는 아무것도 렌더링하지 않음
-                <div className="invisible">로딩 중...</div>
-              )}
-              <button
-                onClick={() => router.push("/ticket-request")}
-                className="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors whitespace-nowrap"
-                style={{ backgroundColor: '#ec4899' }}
-              >
-                취켓팅 구해요
-              </button>
-              <button
-                onClick={() => router.push("/sell")}
-                className="px-4 py-2 bg-[#0061FF] text-white rounded-xl hover:bg-[#0052D6] transition-colors whitespace-nowrap"
-              >
-                취켓팅 등록
-              </button>
+                ) : (
+                  // 마운트되기 전에는 아무것도 렌더링하지 않음
+                  <div className="invisible">로딩 중...</div>
+                )}
+                <button
+                  onClick={() => router.push("/ticket-request")}
+                  className="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors whitespace-nowrap"
+                  style={{ backgroundColor: '#ec4899' }}
+                >
+                  취켓팅 구해요
+                </button>
+                <button
+                  onClick={() => router.push("/sell")}
+                  className="px-4 py-2 bg-[#0061FF] text-white rounded-xl hover:bg-[#0052D6] transition-colors whitespace-nowrap"
+                >
+                  취켓팅 등록
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-[#0061FF] to-[#60A5FA] relative overflow-visible">
