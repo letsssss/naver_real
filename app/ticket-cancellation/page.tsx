@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Search, Calendar, MapPin, Clock, ArrowRight, Star, AlertCircle, RefreshCw, TicketX } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from '@/lib/supabase'
 import { fetchTicketingSuccessRate } from "@/services/statistics-service"
@@ -62,6 +62,7 @@ export default function TicketCancellationPage() {
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState("all")
   const [mounted, setMounted] = useState(false)
   const [tickets, setTickets] = useState<Post[]>([])
@@ -78,8 +79,17 @@ export default function TicketCancellationPage() {
 
   const isMobile = useIsMobile()
 
+  // URL 파라미터에서 검색어 가져오기
+  const urlSearchQuery = searchParams?.get("query") || ""
+
   useEffect(() => {
     setMounted(true)
+    
+    // URL에서 검색어가 있으면 검색 입력창에 설정
+    if (urlSearchQuery) {
+      setSearchQuery(urlSearchQuery)
+    }
+    
     fetchCancellationTickets()
     fetchSuccessRate()
     
@@ -114,24 +124,30 @@ export default function TicketCancellationPage() {
         venue: "예술의전당 오페라극장",
       },
     ])
-  }, [])
+  }, [urlSearchQuery])
 
   // 페이지 변경 시 데이터 다시 가져오기
   useEffect(() => {
     if (mounted) {
       fetchCancellationTickets()
     }
-  }, [currentPage, mounted])
+  }, [currentPage, mounted, urlSearchQuery])
 
-  // 취켓팅 가능 티켓 가져오기 (페이지네이션 적용)
+  // 취켓팅 가능 티켓 가져오기 (페이지네이션 및 검색 적용)
   const fetchCancellationTickets = async () => {
     try {
       setLoading(true);
       setError("");
 
-      let apiUrl = `/api/available-posts?page=${currentPage}&limit=${itemsPerPage}`;
+      // 검색어가 있으면 검색 API 사용, 없으면 페이지네이션 API 사용
+      let apiUrl = urlSearchQuery 
+        ? `/api/available-posts?search=${encodeURIComponent(urlSearchQuery)}&limit=1000`
+        : `/api/available-posts?page=${currentPage}&limit=${itemsPerPage}`;
+      
       const timestamp = Date.now();
       apiUrl = `${apiUrl}&t=${timestamp}`;
+
+      console.log(`API 호출: ${apiUrl}`);
 
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -145,18 +161,19 @@ export default function TicketCancellationPage() {
       });
 
       const data = await response.json();
-      console.log('API 응답 데이터:', data); // 디버깅용
+      console.log('API 응답 데이터:', data);
       
       const posts = data.posts || [];
       
-      // 페이지네이션 정보 설정
-      if (data.pagination) {
-        setTotalPages(data.pagination.totalPages || 1);
-        setTotalCount(data.pagination.totalCount || 0);
-      } else {
-        // 기존 구조 지원
-        setTotalPages(Math.ceil(posts.length / itemsPerPage));
-        setTotalCount(posts.length);
+      // 검색 모드가 아닐 때만 페이지네이션 정보 설정
+      if (!urlSearchQuery) {
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages || 1);
+          setTotalCount(data.pagination.totalCount || 0);
+        } else {
+          setTotalPages(Math.ceil(posts.length / itemsPerPage));
+          setTotalCount(posts.length);
+        }
       }
 
       if (posts.length === 0) {
@@ -227,8 +244,14 @@ export default function TicketCancellationPage() {
       return
     }
     
-    // 카테고리 및 검색어를 포함하여 검색 페이지로 이동
-    router.push(`/search?query=${encodeURIComponent(searchQuery)}&category=ticket-cancellation`)
+    // 현재 페이지에서 검색 파라미터 추가
+    router.push(`/ticket-cancellation?query=${encodeURIComponent(searchQuery)}`)
+  }
+
+  // 검색 초기화 함수
+  const handleClearSearch = () => {
+    setSearchQuery("")
+    router.push("/ticket-cancellation")
   }
 
   const handleLogin = () => {
@@ -432,25 +455,63 @@ export default function TicketCancellationPage() {
       <section className="py-12">
         <div className="container mx-auto px-4">
           <div className="mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold">
-              취켓팅 <span className="text-[#FF2F6E]">가능</span> 공연
-            </h2>
-            <p className="text-gray-600 mt-2">취소표 예매 서비스로 놓친 티켓을 다시 잡으세요!</p>
+            {urlSearchQuery ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-bold">
+                    &quot;{urlSearchQuery}&quot; 검색 결과
+                  </h2>
+                  <p className="text-gray-600 mt-2">
+                    {tickets.length}개의 검색 결과를 찾았습니다
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleClearSearch}
+                  className="flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6L6 18" />
+                    <path d="M6 6l12 12" />
+                  </svg>
+                  검색 초기화
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-2xl md:text-3xl font-bold">
+                  취켓팅 <span className="text-[#FF2F6E]">가능</span> 공연
+                </h2>
+                <p className="text-gray-600 mt-2">취소표 예매 서비스로 놓친 티켓을 다시 잡으세요!</p>
+              </>
+            )}
           </div>
 
-          <Tabs defaultValue="all" className="mb-8">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
-              <TabsTrigger value="all" onClick={() => setActiveTab("all")}>
-                전체
-              </TabsTrigger>
-              <TabsTrigger value="concert" onClick={() => setActiveTab("concert")}>
-                콘서트
-              </TabsTrigger>
-              <TabsTrigger value="musical" onClick={() => setActiveTab("musical")}>
-                뮤지컬/연극
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {!urlSearchQuery && (
+            <Tabs defaultValue="all" className="mb-8">
+              <TabsList className="grid w-full max-w-md grid-cols-3">
+                <TabsTrigger value="all" onClick={() => setActiveTab("all")}>
+                  전체
+                </TabsTrigger>
+                <TabsTrigger value="concert" onClick={() => setActiveTab("concert")}>
+                  콘서트
+                </TabsTrigger>
+                <TabsTrigger value="musical" onClick={() => setActiveTab("musical")}>
+                  뮤지컬/연극
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {loading ? (
@@ -484,125 +545,150 @@ export default function TicketCancellationPage() {
               <div className="col-span-full text-center py-12">
                 <div className="text-gray-500 mb-4">
                   <TicketX className="w-16 h-16 mx-auto mb-4" />
-                  <p className="text-xl font-medium">현재 판매 중인 티켓이 없습니다</p>
-                  <p className="text-gray-400 mt-2">나중에 다시 확인해주세요</p>
+                  {urlSearchQuery ? (
+                    <>
+                      <p className="text-xl font-medium">검색 결과가 없습니다</p>
+                      <p className="text-gray-400 mt-2">다른 검색어로 다시 시도해보세요</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xl font-medium">현재 판매 중인 티켓이 없습니다</p>
+                      <p className="text-gray-400 mt-2">나중에 다시 확인해주세요</p>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
-              // 실제 티켓 데이터 표시
-              tickets.map((ticket) => {
-                // 디버깅: 작성자 정보 로깅
-                // console.log(`=== 티켓 ${ticket.id}의 작성자 정보 ===`);
-                // console.log('전체 티켓 데이터:', ticket);
-                // console.log('작성자 객체 유무:', !!ticket.author);
-                // console.log('작성자 정보:', ticket.author);
-                // if (ticket.author) {
-                //   console.log('작성자 필드:', Object.keys(ticket.author).join(', '));
-                //   console.log('작성자 이름:', ticket.author.name);
-                //   console.log('작성자 이메일:', ticket.author.email);
-                //   console.log('작성자 평점:', ticket.author.rating);
-                //   console.log('작성자 이미지:', ticket.author.profileImage);
-                // }
+              // 검색 모드일 때는 클라이언트 사이드 페이지네이션 적용
+              (() => {
+                const displayTickets = urlSearchQuery 
+                  ? tickets.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                  : tickets;
                 
-                return (
-                  <div
-                    key={ticket.id}
-                    className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all transform hover:-translate-y-1"
-                  >
-                    <div className="relative">
-                      <Link href={
-                        ticket.category === 'TICKET_REQUEST' 
-                          ? `/ticket-request/${ticket.id}` 
-                          : `/ticket-cancellation/${ticket.id}`
-                      }>
-                        <Image
-                          src={"/placeholder.svg"}
-                          alt={ticket.title}
-                          width={400}
-                          height={200}
-                          className="w-full h-48 object-cover"
-                        />
-                      </Link>
-                      <div className="absolute top-3 right-3">
-                        {(() => {
-                          //console.log(`티켓 ${ticket.id} 카테고리:`, ticket.category);
-                          return ticket.category === 'TICKET_REQUEST' ? (
-                            <RequestBadge />
+                // 검색 모드일 때 총 페이지 수 계산
+                if (urlSearchQuery) {
+                  const searchTotalPages = Math.ceil(tickets.length / itemsPerPage);
+                  if (searchTotalPages !== totalPages) {
+                    setTotalPages(searchTotalPages);
+                  }
+                }
+
+                return displayTickets.map((ticket) => {
+                  return (
+                    <div
+                      key={ticket.id}
+                      className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all transform hover:-translate-y-1"
+                    >
+                      <div className="relative">
+                        <Link href={
+                          ticket.category === 'TICKET_REQUEST' 
+                            ? `/ticket-request/${ticket.id}` 
+                            : `/ticket-cancellation/${ticket.id}`
+                        }>
+                          <Image
+                            src={"/placeholder.svg"}
+                            alt={ticket.title}
+                            width={400}
+                            height={200}
+                            className="w-full h-48 object-cover"
+                          />
+                        </Link>
+                        <div className="absolute top-3 right-3">
+                          {(() => {
+                            return ticket.category === 'TICKET_REQUEST' ? (
+                              <RequestBadge />
+                            ) : (
+                              <SuccessRateBadge sellerId={ticket.author?.id} />
+                            );
+                          })()}
+                        </div>
+                        <div className="absolute bottom-3 left-3">
+                          <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
+                            {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '날짜 정보 없음'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <Link href={
+                          ticket.category === 'TICKET_REQUEST' 
+                            ? `/ticket-request/${ticket.id}` 
+                            : `/ticket-cancellation/${ticket.id}`
+                        }>
+                          <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
+                        </Link>
+                        <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <span>{ticket.category === 'TICKET_REQUEST' ? '구매자' : '판매자'}:</span>
+                          {ticket.author?.name ? (
+                            <Link
+                              href={`/seller/${ticket.author.id || 'unknown'}`}
+                              className="text-blue-600 hover:underline flex items-center"
+                            >
+                              {ticket.author.name}
+                              <div className="flex items-center ml-2 text-yellow-500">
+                                <Star className="h-3 w-3 fill-current" />
+                                <span className="text-xs ml-0.5">{ticket.author.rating?.toFixed(1) || '4.5'}</span>
+                              </div>
+                            </Link>
                           ) : (
-                        <SuccessRateBadge sellerId={ticket.author?.id} />
-                          );
-                        })()}
-                      </div>
-                      <div className="absolute bottom-3 left-3">
-                        <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-black/50 text-white backdrop-blur-sm">
-                          {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '날짜 정보 없음'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <Link href={
-                        ticket.category === 'TICKET_REQUEST' 
-                          ? `/ticket-request/${ticket.id}` 
-                          : `/ticket-cancellation/${ticket.id}`
-                      }>
-                        <h3 className="text-lg font-semibold mb-2 line-clamp-1">{ticket.title}</h3>
-                      </Link>
-                      <p className="text-gray-600 mb-2">{ticket.eventName || ticket.title}</p>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>판매자:</span>
-                        {ticket.author?.name ? (
-                          <Link
-                            href={`/seller/${ticket.author.id || 'unknown'}`}
-                            className="text-blue-600 hover:underline flex items-center"
-                          >
-                            {ticket.author.name}
-                            <div className="flex items-center ml-2 text-yellow-500">
-                              <Star className="h-3 w-3 fill-current" />
-                              <span className="text-xs ml-0.5">{ticket.author.rating?.toFixed(1) || '4.5'}</span>
-                            </div>
-                          </Link>
-                        ) : (
-                          <span className="text-gray-500">판매자 정보 없음</span>
-                        )}
-                      </div>
-                      <div className="space-y-2 text-sm text-gray-500 mb-3">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>{ticket.eventDate || '날짜 정보 없음'}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                          <span className="line-clamp-1">{ticket.eventVenue || '장소 정보 없음'}</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <span className="font-medium text-[#FF2F6E] text-lg">{Number(getTicketPrice(ticket)).toLocaleString()}원</span>
-                        </div>
-                        <Button
-                          className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium w-28 flex items-center justify-center transition-all"
-                          onClick={() => router.push(
-                            ticket.category === 'TICKET_REQUEST' 
-                              ? `/ticket-request/${ticket.id}` 
-                              : `/ticket-cancellation/${ticket.id}`
+                            <span className="text-gray-500">정보 없음</span>
                           )}
-                        >
-                          신청하기
-                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                        </Button>
+                        </div>
+                        <div className="space-y-2 text-sm text-gray-500 mb-3">
+                          <div className="flex items-center">
+                            <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                            <span>{ticket.eventDate || '날짜 정보 없음'}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                            <span className="line-clamp-1">{ticket.eventVenue || '장소 정보 없음'}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="font-medium text-[#FF2F6E] text-lg">{Number(getTicketPrice(ticket)).toLocaleString()}원</span>
+                          </div>
+                          <Button
+                            className="bg-[#FFD600] hover:bg-[#FFE600] text-black rounded-xl px-3 py-1.5 text-sm font-medium flex items-center justify-center transition-all"
+                            onClick={() => router.push(
+                              ticket.category === 'TICKET_REQUEST' 
+                                ? `/ticket-request/${ticket.id}` 
+                                : `/ticket-cancellation/${ticket.id}`
+                            )}
+                          >
+                            {ticket.category === 'TICKET_REQUEST' ? '상세보기' : '신청하기'}
+                            <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })
+                  )
+                });
+              })()
             )}
           </div>
 
-          {/* 페이지네이션 UI */}
+          {/* 페이지네이션 UI - 검색 모드와 일반 모드 모두 지원 */}
           {!loading && totalPages > 1 && (
             <div className="flex justify-center space-x-2 mt-8">
+              {/* 이전 페이지 버튼 */}
+              {currentPage > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                >
+                  이전
+                </Button>
+              )}
+              
+              {/* 페이지 번호 버튼들 */}
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                const pageNum = i + 1;
+                const startPage = Math.max(1, currentPage - 2);
+                const pageNum = startPage + i;
+                
+                if (pageNum > totalPages) return null;
+                
                 return (
                   <Button
                     key={pageNum}
@@ -615,6 +701,17 @@ export default function TicketCancellationPage() {
                   </Button>
                 );
               })}
+              
+              {/* 다음 페이지 버튼 */}
+              {currentPage < totalPages && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                >
+                  다음
+                </Button>
+              )}
             </div>
           )}
         </div>

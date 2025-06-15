@@ -89,6 +89,8 @@ export async function GET(req: NextRequest) {
     // const category = url.searchParams.get('category');
     const search = url.searchParams.get('search');
     
+    console.log(`[검색 API] 요청 파라미터: search="${search}", page=${page}, limit=${limit}`);
+    
     // 페이지네이션 계산
     const offset = (page - 1) * limit;
     
@@ -102,7 +104,10 @@ export async function GET(req: NextRequest) {
       .from('available_posts_with_author')
       .select('*');
     
+    console.log(`[검색 API] 전체 구매 가능한 게시물 수: ${availablePosts?.length || 0}`);
+    
     if (rpcError) {
+      console.error(`[검색 API] RPC 오류:`, rpcError);
       return addCorsHeaders(NextResponse.json({
         success: false,
         message: '구매 가능한 게시물 목록을 조회하는 중 오류가 발생했습니다.',
@@ -112,6 +117,21 @@ export async function GET(req: NextRequest) {
     
     // 함수에서 반환된 게시물에 필터 적용
     let filteredPosts = availablePosts || [];
+    
+    // 검색어가 있는 경우 로그 출력
+    if (search) {
+      console.log(`[검색 API] 검색어 필터링 전 게시물 수: ${filteredPosts.length}`);
+      console.log(`[검색 API] 검색어: "${search}"`);
+      
+      // 검색 전 몇 개 게시물의 제목 확인
+      console.log(`[검색 API] 처음 5개 게시물 제목:`, 
+        filteredPosts.slice(0, 5).map(post => ({ 
+          id: post.id, 
+          title: post.title, 
+          event_name: post.event_name 
+        }))
+      );
+    }
     
     // 카테고리 필터링 비활성화
     /*
@@ -126,7 +146,17 @@ export async function GET(req: NextRequest) {
       const searchLower = search.toLowerCase();
       filteredPosts = filteredPosts.filter((post: any) => 
         (post.title && post.title.toLowerCase().includes(searchLower)) || 
-        (post.content && post.content.toLowerCase().includes(searchLower))
+        (post.content && post.content.toLowerCase().includes(searchLower)) ||
+        (post.event_name && post.event_name.toLowerCase().includes(searchLower))
+      );
+      
+      console.log(`[검색 API] 검색어 필터링 후 게시물 수: ${filteredPosts.length}`);
+      console.log(`[검색 API] 필터링된 게시물 제목들:`, 
+        filteredPosts.map(post => ({ 
+          id: post.id, 
+          title: post.title, 
+          event_name: post.event_name 
+        }))
       );
     }
     
