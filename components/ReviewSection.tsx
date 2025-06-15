@@ -80,11 +80,11 @@ export function ReviewSection() {
           <p className="text-gray-600">실제 고객들의 생생한 이용 후기를 확인해보세요</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-[640px]:!flex max-[640px]:!grid-cols-none max-[640px]:overflow-x-auto max-[640px]:gap-4 max-[640px]:pb-4 max-[640px]:-mx-4 max-[640px]:px-4">
           {dummyReviews.map((review, index) => (
             <div
               key={index}
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow max-[640px]:flex-shrink-0 max-[640px]:w-80"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-blue-600">
